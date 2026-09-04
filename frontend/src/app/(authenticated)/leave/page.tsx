@@ -478,12 +478,14 @@ function LeaveApprovalsTab() {
               {requests?.map((req) => (
                 <tr key={req.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3 font-medium text-slate-800">
-                    {req.employeeName || req.employeeId}
+                    {req.employeeName || (typeof req.employeeId === 'object' ? (req.employeeId as any)?.name || (req.employeeId as any)?._id : req.employeeId)}
                     <span className="block text-xs text-slate-500">
                       {req.employeeCode} · {req.department}
                     </span>
                   </td>
-                  <td className="px-4 py-3 font-medium text-slate-800">{req.leaveTypeName || req.leaveTypeId}</td>
+                  <td className="px-4 py-3 font-medium text-slate-800">
+                    {req.leaveTypeName || (typeof req.leaveTypeId === 'object' ? (req.leaveTypeId as any)?.name || (req.leaveTypeId as any)?._id : req.leaveTypeId)}
+                  </td>
                   <td className="px-4 py-3 text-slate-600">
                     {new Date(req.fromDate).toLocaleDateString()} - {new Date(req.toDate).toLocaleDateString()}
                   </td>
