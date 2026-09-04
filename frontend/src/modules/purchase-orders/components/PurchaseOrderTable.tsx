@@ -86,7 +86,7 @@ export default function PurchaseOrderTable({
                 </td>
 
                 <td className="px-5 py-4 text-sm text-[#667085]">
-                  {order.lineItems.length}
+                  {order.lineItems?.length ?? 0}
                 </td>
 
                 <td className="px-5 py-4 text-sm font-bold text-[#1F2937]">

@@ -35,6 +35,7 @@ import { useAuth } from '../auth/auth-context';
 import { ROLE_LABELS } from '../auth/types';
 import { Button, cx } from '../ui';
 import { type LucideIcon } from 'lucide-react';
+import NotificationBell from './NotificationBell';
 
 interface NavGroup {
   label: string;
@@ -213,10 +214,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </form>
             
             <div className="flex items-center gap-x-4 lg:gap-x-6">
-              <button type="button" className="-m-2.5 p-2.5 text-[#687280] hover:text-[#1F2937] rounded-full border border-[#E6E8EC] shadow-sm ml-2 h-10 w-10 flex items-center justify-center">
-                <span className="sr-only">View notifications</span>
-                <Bell className="h-5 w-5" />
-              </button>
+              <NotificationBell />
 
               <div className="flex items-center gap-3 ml-2 border border-[#E6E8EC] rounded-full p-1 pr-3 shadow-sm cursor-pointer hover:bg-slate-50 transition-colors">
                 <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary-100 text-primary font-bold text-sm shrink-0">

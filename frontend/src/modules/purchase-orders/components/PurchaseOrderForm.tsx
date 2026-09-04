@@ -8,6 +8,8 @@ import type {
   PurchaseOrderLineItem,
 } from "../types";
 
+import { getVendors } from "@/modules/vendors/api";
+
 interface Props {
   order: PurchaseOrder | null;
   saving: boolean;
@@ -16,6 +18,14 @@ interface Props {
   onSubmit: (
     data: PurchaseOrderFormData,
   ) => Promise<boolean>;
+}
+
+interface VendorOption {
+  _id: string;
+  name: string;
+  state?: string;
+  city?: string;
+  status?: "Active" | "Inactive";
 }
 
 const emptyItem = (): PurchaseOrderLineItem => ({
@@ -40,6 +50,12 @@ export default function PurchaseOrderForm({
   const [vendorId, setVendorId] =
     useState("");
 
+  const [vendors, setVendors] =
+    useState<VendorOption[]>([]);
+
+  const [loadingVendors, setLoadingVendors] =
+    useState(false);
+
   const [lineItems, setLineItems] =
     useState<PurchaseOrderLineItem[]>([
       emptyItem(),
@@ -47,39 +63,118 @@ export default function PurchaseOrderForm({
 
   const [error, setError] = useState("");
 
+  /**
+   * Load active vendors
+   */
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadVendors() {
+      try {
+        setLoadingVendors(true);
+
+        const response = await getVendors({
+          status: "Active",
+        });
+
+        if (!mounted) return;
+
+        const data = Array.isArray(response.data)
+          ? response.data
+          : [];
+
+        const activeVendors: VendorOption[] =
+          data
+            .filter(
+              (vendor: any) =>
+                vendor?.status === "Active",
+            )
+            .map((vendor: any) => ({
+              _id: String(vendor._id),
+              name: vendor.name || "Unnamed Vendor",
+              state: vendor.state,
+              city: vendor.city,
+              status: vendor.status,
+            }));
+
+        setVendors(activeVendors);
+      } catch (err) {
+        console.error(
+          "Failed to load vendors:",
+          err,
+        );
+
+        if (mounted) {
+          setVendors([]);
+        }
+      } finally {
+        if (mounted) {
+          setLoadingVendors(false);
+        }
+      }
+    }
+
+    loadVendors();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  /**
+   * Populate form when editing
+   */
   useEffect(() => {
     if (!order) {
       setCampaignId("");
       setVendorId("");
       setLineItems([emptyItem()]);
+      setError("");
       return;
     }
 
-    setCampaignId(
-      typeof order.campaignId === "string"
-        ? order.campaignId
-        : order.campaignId._id,
-    );
+    const resolvedCampaignId =
+      !order.campaignId
+        ? ""
+        : typeof order.campaignId === "string"
+          ? order.campaignId
+          : String((order.campaignId as any)._id || "");
 
-    setVendorId(
-      typeof order.vendorId === "string"
-        ? order.vendorId
-        : order.vendorId._id,
-    );
+    const resolvedVendorId =
+      !order.vendorId
+        ? ""
+        : typeof order.vendorId === "string"
+          ? order.vendorId
+          : String((order.vendorId as any)._id || "");
 
-    setLineItems(
-      order.lineItems.map((item) => ({
-        ...item,
-        from: item.from
-          ? item.from.slice(0, 10)
-          : "",
-        to: item.to
-          ? item.to.slice(0, 10)
-          : "",
-      })),
-    );
+    setCampaignId(resolvedCampaignId);
+    setVendorId(resolvedVendorId);
+
+    const rawLineItems = Array.isArray(order.lineItems) ? order.lineItems : [];
+    const formattedLineItems =
+      rawLineItems.length > 0
+        ? rawLineItems.map((item: any) => ({
+            ...item,
+            siteId:
+              typeof item.siteId === "string"
+                ? item.siteId
+                : String(item.siteId?._id || ""),
+            from: item.from ? String(item.from).slice(0, 10) : "",
+            to: item.to ? String(item.to).slice(0, 10) : "",
+            negotiatedRatePerDay: Number(item.negotiatedRatePerDay) || 0,
+            days: Number(item.days) || 0,
+            amount: Number(item.amount) || 0,
+          }))
+        : [emptyItem()];
+
+    setLineItems(formattedLineItems);
+
+    setError("");
   }, [order]);
 
+  /**
+   * Update line item
+   */
   function updateItem(
     index: number,
     field: keyof PurchaseOrderLineItem,
@@ -87,7 +182,9 @@ export default function PurchaseOrderForm({
   ) {
     setLineItems((items) =>
       items.map((item, i) => {
-        if (i !== index) return item;
+        if (i !== index) {
+          return item;
+        }
 
         const updated = {
           ...item,
@@ -123,6 +220,9 @@ export default function PurchaseOrderForm({
     );
   }
 
+  /**
+   * Add new site line item
+   */
   function addItem() {
     setLineItems((items) => [
       ...items,
@@ -130,18 +230,27 @@ export default function PurchaseOrderForm({
     ]);
   }
 
+  /**
+   * Remove site line item
+   */
   function removeItem(index: number) {
     setLineItems((items) =>
       items.length === 1
         ? items
-        : items.filter((_, i) => i !== index),
+        : items.filter(
+            (_, i) => i !== index,
+          ),
     );
   }
 
+  /**
+   * Submit form
+   */
   async function handleSubmit(
-    event: React.FormEvent,
+    event: React.FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
+
     setError("");
 
     if (!campaignId.trim()) {
@@ -188,9 +297,14 @@ export default function PurchaseOrderForm({
       ),
     });
 
-    if (success) onSuccess();
+    if (success) {
+      onSuccess();
+    }
   }
 
+  /**
+   * Calculate total
+   */
   const total = lineItems.reduce(
     (sum, item) => sum + item.amount,
     0,
@@ -199,10 +313,10 @@ export default function PurchaseOrderForm({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+        {/* Header */}
         <div className="flex items-center justify-between border-b border-[#EEEEF3] px-6 py-5">
           <div>
-
-            <h2 className="mt-3 text-xl font-bold text-[#1F2937]">
+            <h2 className="text-xl font-bold text-[#1F2937]">
               {order
                 ? "Edit Purchase Order"
                 : "Create Purchase Order"}
@@ -216,17 +330,20 @@ export default function PurchaseOrderForm({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-3 py-1 text-2xl font-bold text-gray-500 hover:bg-[#F9DADA] hover:text-[#8B2424]"
+            disabled={saving}
+            className="rounded-lg px-3 py-1 text-2xl font-bold text-gray-500 hover:bg-[#F9DADA] hover:text-[#8B2424] disabled:opacity-50"
           >
             ×
           </button>
         </div>
 
+        {/* Form */}
         <form
           onSubmit={handleSubmit}
           className="flex-1 overflow-y-auto"
         >
           <div className="space-y-6 p-6">
+            {/* Error */}
             {error && (
               <div className="rounded-xl border border-red-200 bg-red-50 p-4">
                 <p className="text-sm font-semibold text-red-700">
@@ -235,12 +352,14 @@ export default function PurchaseOrderForm({
               </div>
             )}
 
+            {/* Purchase Order Information */}
             <section className="rounded-2xl border border-[#E8E8EC] p-5">
               <h3 className="mb-4 text-sm font-bold text-[#1F2937]">
                 Purchase Order Information
               </h3>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {/* Campaign ID */}
                 <Field
                   label="Campaign ID"
                   value={campaignId}
@@ -248,15 +367,54 @@ export default function PurchaseOrderForm({
                   onChange={setCampaignId}
                 />
 
-                <Field
-                  label="Vendor ID"
-                  value={vendorId}
-                  placeholder="Enter vendor ID"
-                  onChange={setVendorId}
-                />
+                {/* Vendor */}
+                <div>
+                  <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#667085]">
+                    Vendor
+                  </label>
+
+                  <select
+                    value={vendorId}
+                    onChange={(e) =>
+                      setVendorId(e.target.value)
+                    }
+                    disabled={
+                      loadingVendors || saving
+                    }
+                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-900 outline-none transition focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA] disabled:cursor-not-allowed disabled:bg-[#F7F8FA]"
+                  >
+                    <option value="">
+                      {loadingVendors
+                        ? "Loading vendors..."
+                        : vendors.length === 0
+                          ? "No active vendors found"
+                          : "Select Active Vendor"}
+                    </option>
+
+                    {vendors.map((vendor) => (
+                      <option
+                        key={vendor._id}
+                        value={vendor._id}
+                      >
+                        {vendor.name}
+                        {vendor.city
+                          ? ` — ${vendor.city}`
+                          : ""}
+                      </option>
+                    ))}
+                  </select>
+
+                  {!loadingVendors &&
+                    vendors.length > 0 && (
+                      <p className="mt-1 text-xs text-[#667085]">
+                        Only active vendors are shown.
+                      </p>
+                    )}
+                </div>
               </div>
             </section>
 
+            {/* Site Line Items */}
             <section className="rounded-2xl border border-[#E8E8EC] p-5">
               <div className="mb-4 flex items-center justify-between">
                 <div>
@@ -273,7 +431,8 @@ export default function PurchaseOrderForm({
                 <button
                   type="button"
                   onClick={addItem}
-                  className="rounded-lg bg-[#F9DADA] px-4 py-2 text-xs font-bold text-[#8B2424] hover:bg-[#8B2424] hover:text-white"
+                  disabled={saving}
+                  className="rounded-lg bg-[#F9DADA] px-4 py-2 text-xs font-bold text-[#8B2424] hover:bg-[#8B2424] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   + Add Site
                 </button>
@@ -282,7 +441,7 @@ export default function PurchaseOrderForm({
               <div className="space-y-4">
                 {lineItems.map((item, index) => (
                   <div
-                    key={index}
+                    key={`${item.siteId || "new-site"}-${index}`}
                     className="rounded-xl border border-[#E8E8EC] bg-[#FAFAFB] p-4"
                   >
                     <div className="mb-4 flex items-center justify-between">
@@ -296,7 +455,8 @@ export default function PurchaseOrderForm({
                           onClick={() =>
                             removeItem(index)
                           }
-                          className="text-xs font-bold text-[#8B2424] hover:underline"
+                          disabled={saving}
+                          className="text-xs font-bold text-[#8B2424] hover:underline disabled:opacity-50"
                         >
                           Remove
                         </button>
@@ -304,6 +464,7 @@ export default function PurchaseOrderForm({
                     </div>
 
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+                      {/* Site ID */}
                       <Field
                         label="Site ID"
                         value={item.siteId}
@@ -317,6 +478,7 @@ export default function PurchaseOrderForm({
                         }
                       />
 
+                      {/* From */}
                       <Field
                         label="From Date"
                         type="date"
@@ -330,6 +492,7 @@ export default function PurchaseOrderForm({
                         }
                       />
 
+                      {/* To */}
                       <Field
                         label="To Date"
                         type="date"
@@ -343,6 +506,7 @@ export default function PurchaseOrderForm({
                         }
                       />
 
+                      {/* Rate */}
                       <Field
                         label="Rate / Day"
                         type="number"
@@ -360,6 +524,7 @@ export default function PurchaseOrderForm({
                         }
                       />
 
+                      {/* Amount */}
                       <div>
                         <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#667085]">
                           Amount
@@ -374,6 +539,7 @@ export default function PurchaseOrderForm({
                       </div>
                     </div>
 
+                    {/* Days calculation */}
                     {item.days > 0 && (
                       <p className="mt-3 text-xs font-semibold text-[#667085]">
                         {item.days} day
@@ -390,18 +556,23 @@ export default function PurchaseOrderForm({
                 ))}
               </div>
 
+              {/* Total */}
               <div className="mt-5 flex items-center justify-between border-t border-[#EEEEF3] pt-5">
                 <span className="text-sm font-bold text-[#1F2937]">
                   Total Amount
                 </span>
 
                 <span className="text-xl font-bold text-[#8B2424]">
-                  ₹{total.toLocaleString("en-IN")}
+                  ₹
+                  {total.toLocaleString(
+                    "en-IN",
+                  )}
                 </span>
               </div>
             </section>
           </div>
 
+          {/* Footer */}
           <div className="flex justify-end gap-3 border-t border-[#EEEEF3] bg-[#FAFAFB] px-6 py-4">
             <button
               type="button"
@@ -414,7 +585,11 @@ export default function PurchaseOrderForm({
 
             <button
               type="submit"
-              disabled={saving}
+              disabled={
+                saving ||
+                loadingVendors ||
+                !vendorId
+              }
               className="rounded-xl bg-[#8B2424] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#A8383B] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {saving
@@ -430,6 +605,9 @@ export default function PurchaseOrderForm({
   );
 }
 
+/**
+ * Reusable Field component
+ */
 function Field({
   label,
   value,

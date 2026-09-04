@@ -1,15 +1,35 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
-interface Props {
+import type {
+  SiteStatus,
+  SiteType,
+} from "../types";
+
+interface SiteFiltersProps {
   city: string;
-  type: string;
-  status: string;
+  type: SiteType | "";
+  status: SiteStatus | "";
   onCityChange: (value: string) => void;
-  onTypeChange: (value: string) => void;
-  onStatusChange: (value: string) => void;
+  onTypeChange: (value: SiteType | "") => void;
+  onStatusChange: (value: SiteStatus | "") => void;
 }
+
+const TYPES: SiteType[] = [
+  "Airport",
+  "Highway",
+  "Mall",
+  "Metro",
+  "Market",
+  "Other",
+];
+
+const STATUSES: SiteStatus[] = [
+  "Active",
+  "Maintenance",
+  "Inactive",
+];
 
 export default function SiteFilters({
   city,
@@ -18,178 +38,132 @@ export default function SiteFilters({
   onCityChange,
   onTypeChange,
   onStatusChange,
-}: Props) {
+}: SiteFiltersProps) {
   const [typeOpen, setTypeOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
 
-  const typeRef = useRef<HTMLDivElement>(null);
-  const statusRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleOutsideClick(event: MouseEvent) {
-      const target = event.target as Node;
-
-      if (
-        typeRef.current &&
-        !typeRef.current.contains(target)
-      ) {
-        setTypeOpen(false);
-      }
-
-      if (
-        statusRef.current &&
-        !statusRef.current.contains(target)
-      ) {
-        setStatusOpen(false);
-      }
-    }
-
-    document.addEventListener(
-      "mousedown",
-      handleOutsideClick
-    );
-
-    return () => {
-      document.removeEventListener(
-        "mousedown",
-        handleOutsideClick
-      );
-    };
-  }, []);
-
-  const typeOptions = [
-    "Airport",
-    "Highway",
-    "Mall",
-    "Metro",
-    "Market",
-    "Other",
-  ];
-
-  const statusOptions = [
-    "Active",
-    "Maintenance",
-    "Inactive",
-  ];
-
   return (
-    <div className="grid grid-cols-1 gap-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm md:grid-cols-3">
+    <div className="rounded-xl border border-[#E8E8EC] bg-white p-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
 
-      {/* City */}
-      <input
-        type="text"
-        value={city}
-        onChange={(e) =>
-          onCityChange(e.target.value)
-        }
-        placeholder="Search city..."
-        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder:text-gray-500 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
-      />
+        {/* City */}
+        <div>
+          <label className="mb-2 block text-sm font-medium text-[#1F2937]">
+            City
+          </label>
 
-      {/* Type */}
-      <div
-        ref={typeRef}
-        className="relative"
-      >
-        <button
-          type="button"
-          onClick={() => {
-            setTypeOpen(!typeOpen);
-            setStatusOpen(false);
-          }}
-          className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
-        >
-          <span>
-            {type || "All Types"}
-          </span>
+          <input
+            type="text"
+            value={city}
+            onChange={(e) =>
+              onCityChange(e.target.value)
+            }
+            placeholder="Search city..."
+            className="w-full rounded-lg border border-[#E8E8EC] px-3 py-2.5 text-sm text-[#1F2937] outline-none placeholder:text-[#98A2B3] transition focus:border-[#A8383B] focus:ring-1 focus:ring-[#A8383B]"
+          />
+        </div>
 
-          <span className="text-gray-500">
-            ▾
-          </span>
-        </button>
+        {/* Type */}
+        <div className="relative">
+          <label className="mb-2 block text-sm font-medium text-[#1F2937]">
+            Type
+          </label>
 
-        {typeOpen && (
-          <div className="absolute left-0 right-0 z-20 mt-1 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+          <button
+            type="button"
+            onClick={() => {
+              setTypeOpen(!typeOpen);
+              setStatusOpen(false);
+            }}
+            className="flex w-full items-center justify-between rounded-lg border border-[#E8E8EC] bg-white px-3 py-2.5 text-sm text-[#1F2937] outline-none transition hover:border-[#A8383B] focus:border-[#A8383B]"
+          >
+            <span>{type || "All Types"}</span>
 
-            <button
-              type="button"
-              onClick={() => {
-                onTypeChange("");
-                setTypeOpen(false);
-              }}
-              className="block w-full cursor-pointer px-4 py-2.5 text-left text-gray-900 transition hover:bg-[#F9DADA] hover:text-[#8B2424]"
-            >
-              All Types
-            </button>
+            <span className="text-[#667085]">
+              {typeOpen ? "⌃" : "⌄"}
+            </span>
+          </button>
 
-            {typeOptions.map((option) => (
+          {typeOpen && (
+            <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-lg border border-[#E8E8EC] bg-white shadow-lg">
               <button
-                key={option}
                 type="button"
                 onClick={() => {
-                  onTypeChange(option);
+                  onTypeChange("");
                   setTypeOpen(false);
                 }}
-                className="block w-full cursor-pointer px-4 py-2.5 text-left text-gray-900 transition hover:bg-[#F9DADA] hover:text-[#8B2424]"
+                className="w-full px-3 py-2.5 text-left text-sm text-[#1F2937] transition hover:bg-[#F9DADA] hover:text-[#A8383B]"
               >
-                {option}
+                All Types
               </button>
-            ))}
-          </div>
-        )}
-      </div>
 
-      {/* Status */}
-      <div
-        ref={statusRef}
-        className="relative"
-      >
-        <button
-          type="button"
-          onClick={() => {
-            setStatusOpen(!statusOpen);
-            setTypeOpen(false);
-          }}
-          className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
-        >
-          <span>
-            {status || "All Status"}
-          </span>
+              {TYPES.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => {
+                    onTypeChange(item);
+                    setTypeOpen(false);
+                  }}
+                  className="w-full px-3 py-2.5 text-left text-sm text-[#1F2937] transition hover:bg-[#F9DADA] hover:text-[#A8383B]"
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
-          <span className="text-gray-500">
-            ▾
-          </span>
-        </button>
+        {/* Status */}
+        <div className="relative">
+          <label className="mb-2 block text-sm font-medium text-[#1F2937]">
+            Status
+          </label>
 
-        {statusOpen && (
-          <div className="absolute left-0 right-0 z-20 mt-1 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+          <button
+            type="button"
+            onClick={() => {
+              setStatusOpen(!statusOpen);
+              setTypeOpen(false);
+            }}
+            className="flex w-full items-center justify-between rounded-lg border border-[#E8E8EC] bg-white px-3 py-2.5 text-sm text-[#1F2937] outline-none transition hover:border-[#A8383B] focus:border-[#A8383B]"
+          >
+            <span>{status || "All Status"}</span>
 
-            <button
-              type="button"
-              onClick={() => {
-                onStatusChange("");
-                setStatusOpen(false);
-              }}
-              className="block w-full cursor-pointer px-4 py-2.5 text-left text-gray-900 transition hover:bg-[#F9DADA] hover:text-[#8B2424]"
-            >
-              All Status
-            </button>
+            <span className="text-[#667085]">
+              {statusOpen ? "⌃" : "⌄"}
+            </span>
+          </button>
 
-            {statusOptions.map((option) => (
+          {statusOpen && (
+            <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-lg border border-[#E8E8EC] bg-white shadow-lg">
               <button
-                key={option}
                 type="button"
                 onClick={() => {
-                  onStatusChange(option);
+                  onStatusChange("");
                   setStatusOpen(false);
                 }}
-                className="block w-full cursor-pointer px-4 py-2.5 text-left text-gray-900 transition hover:bg-[#F9DADA] hover:text-[#8B2424]"
+                className="w-full px-3 py-2.5 text-left text-sm text-[#1F2937] transition hover:bg-[#F9DADA] hover:text-[#A8383B]"
               >
-                {option}
+                All Status
               </button>
-            ))}
-          </div>
-        )}
+
+              {STATUSES.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => {
+                    onStatusChange(item);
+                    setStatusOpen(false);
+                  }}
+                  className="w-full px-3 py-2.5 text-left text-sm text-[#1F2937] transition hover:bg-[#F9DADA] hover:text-[#A8383B]"
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

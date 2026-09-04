@@ -5,6 +5,8 @@ import {
   type EscalationLevel,
 } from "./escalation.model.js";
 import { Task } from "../tasks/task.model.js";
+import { Employee } from "../employees/employees.model.js";
+import { AuthUser } from "../../core/auth/auth-model.js";
 import { notify } from "../../core/notifications/index.js";
 
 export const ESCALATION_THRESHOLD_HOURS = {
@@ -179,7 +181,7 @@ export async function createEscalation(
         },
         {
           upsert: true,
-          new: true,
+          returnDocument: "after",
           setDefaultsOnInsert: true,
         },
       ).lean();
@@ -215,7 +217,14 @@ export async function createEscalation(
  * GET /api/escalations
  */
 export async function getAllEscalations() {
+  try {
+    await processEscalations();
+  } catch (err) {
+    console.warn("[Escalations] Error auto-processing escalations:", err);
+  }
+
   return EscalationModel.find()
+    .populate("taskId", "title type deadline status")
     .sort({
       triggeredAt: -1,
     })
@@ -239,16 +248,23 @@ export async function getEscalationsByTaskId(
     );
   }
 
+  try {
+    await processEscalations();
+  } catch (err) {
+    console.warn("[Escalations] Error auto-processing task escalations:", err);
+  }
+
   return (
     EscalationModel.find({
       taskId: new Types.ObjectId(
         taskId,
       ),
     } as any)
-    .sort({
-      triggeredAt: 1,
-    })
-    .lean()
+      .populate("taskId", "title type deadline status campaignId")
+      .sort({
+        triggeredAt: 1,
+      })
+      .lean()
   );
 }
 
@@ -359,25 +375,111 @@ export async function processEscalations() {
 
       // 3. Create escalations for each new level
       for (const level of reachedLevels) {
-        const hasExisting =
-          await hasEscalation(
-            String(task._id),
-            level,
-          );
-
-        if (hasExisting) {
-          continue;
-        }
+        const existing = await EscalationModel.findOne({
+          taskId: new Types.ObjectId(String(task._id)),
+          level,
+        } as any);
 
         // Collect user IDs to notify
-        const notifyUserIds: string[] =
-          [];
+        const notifyUserIds: string[] = [];
 
-        // Always notify the assigned person
+        const addUser = (id: any) => {
+          if (!id) return;
+          const str = String(id);
+          if (!notifyUserIds.includes(str)) {
+            notifyUserIds.push(str);
+          }
+        };
+
+        // 1. If assigned, notify assigned user
         if (task.assignedTo) {
-          notifyUserIds.push(
-            String(task.assignedTo),
-          );
+          try {
+            const emp = await Employee.findOne({
+              $or: [{ _id: task.assignedTo }, { userId: task.assignedTo }],
+            })
+              .populate("reportingManagerId", "_id userId fullName")
+              .lean();
+
+            if (emp?.userId) {
+              addUser(emp.userId);
+            } else {
+              addUser(task.assignedTo);
+            }
+
+            // For L2 and L3, notify reporting manager
+            if ((level === "L2" || level === "L3") && emp?.reportingManagerId) {
+              const manager = emp.reportingManagerId as any;
+              if (manager?.userId) addUser(manager.userId);
+              else if (manager?._id) addUser(manager._id);
+            }
+          } catch (empErr) {
+            console.warn(`[Escalations] Could not resolve employee for ${task.assignedTo}:`, empErr);
+            addUser(task.assignedTo);
+          }
+        }
+
+        // 2. Resolve Campaign Manager
+        try {
+          if (task.campaignId) {
+            const { Campaign } = await import("../campaigns/campaign.model.js");
+            const camp = await Campaign.findById(task.campaignId).select("assignedManager createdBy").lean();
+            if (camp?.assignedManager) addUser(camp.assignedManager);
+          }
+        } catch (campErr) {
+          console.warn("[Escalations] Could not resolve campaign manager:", campErr);
+        }
+
+        // 3. Level-specific operational routing
+        try {
+          if (level === "L1") {
+            const opsUsers = await AuthUser.find({ role: "ops", status: "Active" }).select("_id").lean();
+            for (const u of opsUsers) addUser(u._id);
+          } else if (level === "L2") {
+            const opsAndManagers = await AuthUser.find({
+              role: { $in: ["ops", "manager"] },
+              status: "Active",
+            }).select("_id").lean();
+            for (const u of opsAndManagers) addUser(u._id);
+          } else if (level === "L3") {
+            const managersAndAdmins = await AuthUser.find({
+              role: { $in: ["ops", "manager", "admin"] },
+              status: "Active",
+            }).select("_id").lean();
+            for (const u of managersAndAdmins) addUser(u._id);
+          }
+        } catch (roleErr) {
+          console.warn("[Escalations] Could not resolve role-based users:", roleErr);
+        }
+
+        // Fallback: If still nobody, notify active Admins and Ops
+        if (notifyUserIds.length === 0) {
+          const fallbackUsers = await AuthUser.find({ role: { $in: ["admin", "ops"] }, status: "Active" }).select("_id").lean();
+          for (const u of fallbackUsers) addUser(u._id);
+        }
+
+        if (existing) {
+          // If existing escalation has no notified users recorded, backfill notifications
+          if (!existing.notifiedUserIds || existing.notifiedUserIds.length === 0) {
+            existing.notifiedUserIds = notifyUserIds.map((id) => new Types.ObjectId(id)) as any;
+            await existing.save();
+
+            for (const userId of notifyUserIds) {
+              try {
+                await notify({
+                  userId,
+                  type: "escalations.task_escalated",
+                  title: `Task escalated to ${level}: ${task.title}`,
+                  body: `Task "${task.title}" has reached escalation level ${level} due to overdue deadline.`,
+                  link: `/escalations`,
+                  email: true,
+                });
+                notificationsSent++;
+              } catch (err) {
+                console.error(`[Escalations] Failed to send notification to ${userId}:`, err);
+              }
+            }
+          }
+          continue;
         }
 
         // Create the escalation
@@ -387,16 +489,15 @@ export async function processEscalations() {
           notifyUserIds,
         );
 
-        // 4. Trigger notifications for each new escalation
+        // Trigger notifications for each recipient
         for (const userId of notifyUserIds) {
           try {
             await notify({
               userId,
-              type:
-                "escalations.task_escalated",
-              title: `Task escalated to ${level}`,
-              body: `Task "${task.title}" has been escalated to level ${level} due to overdue deadline.`,
-              link: `/tasks/${task._id}`,
+              type: "escalations.task_escalated",
+              title: `Task escalated to ${level}: ${task.title}`,
+              body: `Task "${task.title}" has reached escalation level ${level} due to overdue deadline.`,
+              link: `/escalations`,
               email: true,
             });
 

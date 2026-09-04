@@ -1,13 +1,15 @@
 import mongoose, { Schema } from "mongoose";
+import { basePlugin, type BaseDocument } from "../../core/db/basePlugin.js";
 
 export type VendorStatus =
   | "Active"
   | "Inactive";
 
-export interface IVendor {
+export interface IVendor extends BaseDocument {
   name: string;
   state: string;
   city: string;
+  siteOwnerName?: string;
   contactPerson?: string;
   mobile?: string;
   email?: string;
@@ -19,11 +21,6 @@ export interface IVendor {
   bankAccountNumber?: string;
   ifsc?: string;
   status: VendorStatus;
-  createdAt?: Date;
-  updatedAt?: Date;
-  createdBy?: mongoose.Types.ObjectId;
-  updatedBy?: mongoose.Types.ObjectId;
-  deletedAt?: Date | null;
 }
 
 const vendorSchema = new Schema<IVendor>(
@@ -46,6 +43,11 @@ const vendorSchema = new Schema<IVendor>(
       required: true,
       trim: true,
       index: true,
+    },
+
+    siteOwnerName: {
+      type: String,
+      trim: true,
     },
 
     contactPerson: {
@@ -109,24 +111,10 @@ const vendorSchema = new Schema<IVendor>(
       default: "Active",
       index: true,
     },
-
-    createdBy: {
-      type: Schema.Types.ObjectId,
-    },
-
-    updatedBy: {
-      type: Schema.Types.ObjectId,
-    },
-
-    deletedAt: {
-      type: Date,
-      default: null,
-    },
-  },
-  {
-    timestamps: true,
-  },
+  }
 );
+
+vendorSchema.plugin(basePlugin);
 
 vendorSchema.index({
   state: 1,
@@ -137,4 +125,4 @@ export const Vendor =
   mongoose.model<IVendor>(
     "Vendor",
     vendorSchema,
-  );
+  );

@@ -85,7 +85,8 @@ export async function getSite(
   res: Response
 ) {
   try {
-    const siteId = req.params.id as string;
+    const siteId =
+      req.params.id as string;
 
     const site =
       await siteService.getSiteById(
@@ -113,7 +114,8 @@ export async function updateSite(
   res: Response
 ) {
   try {
-    const siteId = req.params.id as string;
+    const siteId =
+      req.params.id as string;
 
     const data =
       updateSiteSchema.parse(
@@ -150,11 +152,10 @@ export async function importSites(
 ) {
   try {
     /*
-      For this six-file implementation,
       CSV content is sent as:
 
       {
-        "csv": "city,type,..."
+        "csv": "city,type,address,lat,lng,date,..."
       }
     */
 
@@ -177,14 +178,14 @@ export async function importSites(
       );
 
     if (!result.success) {
-      return res.status(400).json(
-        result
-      );
+      return res
+        .status(400)
+        .json(result);
     }
 
-    return res.status(201).json(
-      result
-    );
+    return res
+      .status(201)
+      .json(result);
   } catch (error: any) {
     return res.status(400).json({
       success: false,

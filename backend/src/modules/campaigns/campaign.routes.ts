@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { requireAuth } from "../../core/auth/auth-middleware.js";
+import { requirePermission } from "../../core/rbac/index.js";
 
 import {
   createCampaignController,
@@ -9,6 +11,8 @@ import {
 } from "./campaign.controller.js";
 
 const router = Router();
+
+router.use(requireAuth);
 
 /*
  * GET /api/campaigns
@@ -22,6 +26,7 @@ const router = Router();
  */
 router.get(
   "/",
+  requirePermission("campaigns.view"),
   listCampaignsController,
 );
 
@@ -30,6 +35,7 @@ router.get(
  */
 router.get(
   "/:id",
+  requirePermission("campaigns.view"),
   getCampaignController,
 );
 
@@ -38,6 +44,7 @@ router.get(
  */
 router.post(
   "/",
+  requirePermission("campaigns.manage"),
   createCampaignController,
 );
 
@@ -51,6 +58,7 @@ router.post(
  */
 router.patch(
   "/:id/status",
+  requirePermission("campaigns.manage"),
   updateCampaignStatusController,
 );
 
@@ -58,18 +66,11 @@ router.patch(
  * B3 -> D1
  *
  * Create campaign when quotation is accepted.
- *
- * Body:
- * {
- *   "quotationId": "..."
- * }
- *
- * This route is optional if B3 directly imports
- * createFromQuotation() as a service method.
  */
 router.post(
   "/from-quotation",
+  requirePermission("campaigns.manage"),
   createCampaignFromQuotationController,
 );
 
-export default router;
+export default router;

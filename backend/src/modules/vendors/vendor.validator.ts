@@ -25,6 +25,11 @@ export const createVendorSchema = z.object({
     .trim()
     .min(1, "City is required"),
 
+  siteOwnerName: z
+    .string()
+    .trim()
+    .optional(),
+
   contactPerson: z
     .string()
     .trim()

@@ -73,8 +73,12 @@ export default function EscalationDetail({
 
           <div className="space-y-4">
             <Row
-              label="Task ID"
-              value={`#${escalation.taskId}`}
+              label="Task"
+              value={
+                typeof escalation.taskId === "object" && escalation.taskId !== null
+                  ? (escalation.taskId as any).title || (escalation.taskId as any)._id
+                  : escalation.taskId
+              }
             />
 
             <Row

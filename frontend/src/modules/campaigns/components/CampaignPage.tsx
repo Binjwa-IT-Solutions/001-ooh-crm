@@ -36,6 +36,9 @@ export default function CampaignPage() {
   const [selectedCampaign, setSelectedCampaign] =
     useState<Campaign | null>(null);
 
+  const [activeCampaignId, setActiveCampaignId] =
+    useState<string | null>(null);
+
   const filteredCampaigns = useMemo(() => {
     return campaigns.filter((campaign) => {
       const cityMatch =
@@ -75,6 +78,15 @@ export default function CampaignPage() {
     });
   }, [campaigns, filters]);
 
+  const activeCampaign = useMemo(() => {
+    if (!filteredCampaigns.length) return null;
+    if (activeCampaignId) {
+      const match = filteredCampaigns.find((c) => c._id === activeCampaignId);
+      if (match) return match;
+    }
+    return filteredCampaigns[0];
+  }, [filteredCampaigns, activeCampaignId]);
+
   function handleAddCampaign() {
     setSelectedCampaign(null);
     setShowForm(true);
@@ -83,6 +95,7 @@ export default function CampaignPage() {
   function handleEditCampaign(
     campaign: Campaign,
   ) {
+    setActiveCampaignId(campaign._id);
     setSelectedCampaign(campaign);
     setShowForm(true);
   }
@@ -95,24 +108,40 @@ export default function CampaignPage() {
   async function handleFormSuccess(
     data: Parameters<typeof onCreate>[0],
   ) {
-    await onCreate(data);
+    const created = await onCreate(data);
 
     setShowForm(false);
     setSelectedCampaign(null);
 
+    if (created?._id) {
+      setActiveCampaignId(created._id);
+    }
+
     await onReload();
   }
+
+  const [statusError, setStatusError] =
+    useState<string | null>(null);
 
   async function handleStatusChange(
     campaign: Campaign,
     status: CampaignStatus,
   ) {
-    await onUpdateStatus(
-      campaign._id,
-      status,
-    );
-
-    await onReload();
+    setActiveCampaignId(campaign._id);
+    try {
+      setStatusError(null);
+      await onUpdateStatus(
+        campaign._id,
+        status,
+      );
+      await onReload();
+    } catch (err) {
+      setStatusError(
+        err instanceof Error
+          ? err.message
+          : "Failed to update campaign status.",
+      );
+    }
   }
 
   function resetFilters() {
@@ -157,7 +186,7 @@ export default function CampaignPage() {
           />
         </div>
 
-        {/* ERROR */}
+        {/* LOAD ERROR */}
         {error && (
           <div className="mb-5 flex items-center rounded-xl border border-red-200 bg-red-50 px-5 py-4">
             <div>
@@ -169,6 +198,30 @@ export default function CampaignPage() {
                 {error}
               </p>
             </div>
+          </div>
+        )}
+
+        {/* STATUS CHANGE ERROR */}
+        {statusError && (
+          <div className="mb-5 flex items-start justify-between rounded-xl border border-red-200 bg-red-50 px-5 py-4">
+            <div>
+              <p className="text-sm font-semibold text-red-800">
+                Status update failed
+              </p>
+
+              <p className="mt-1 whitespace-pre-line text-sm text-red-600">
+                {statusError}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setStatusError(null)}
+              className="ml-4 flex-shrink-0 text-red-400 hover:text-red-600"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
           </div>
         )}
 
@@ -203,14 +256,12 @@ export default function CampaignPage() {
         ) : (
           <>
             {/* TIMELINE */}
-            {filteredCampaigns.length > 0 && (
+            {activeCampaign && (
               <div className="mb-6">
                 <CampaignStatusTimeline
-                  status={
-                    getTimelineStatus(
-                      filteredCampaigns,
-                    )
-                  }
+                  status={activeCampaign.status}
+                  campaignCode={activeCampaign.campaignCode}
+                  campaignName={activeCampaign.name}
                 />
               </div>
             )}
@@ -218,10 +269,12 @@ export default function CampaignPage() {
             {/* TABLE */}
             <CampaignTable
               campaigns={filteredCampaigns}
-              onEdit={handleEditCampaign}
-              onStatusChange={
-                handleStatusChange
+              selectedCampaignId={activeCampaign?._id}
+              onSelectCampaign={(campaign) =>
+                setActiveCampaignId(campaign._id)
               }
+              onEdit={handleEditCampaign}
+              onStatusChange={handleStatusChange}
             />
           </>
         )}
@@ -237,33 +290,4 @@ export default function CampaignPage() {
       )}
     </main>
   );
-}
-
-function getTimelineStatus(
-  campaigns: Campaign[],
-): Campaign["status"] {
-  const order: Campaign["status"][] = [
-    "Draft",
-    "Approved",
-    "InProgress",
-    "Completed",
-  ];
-
-  let highest: Campaign["status"] =
-    "Draft";
-
-  for (const campaign of campaigns) {
-    if (campaign.status === "Cancelled") {
-      continue;
-    }
-
-    if (
-      order.indexOf(campaign.status) >
-      order.indexOf(highest)
-    ) {
-      highest = campaign.status;
-    }
-  }
-
-  return highest;
 }

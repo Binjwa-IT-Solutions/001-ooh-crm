@@ -8,7 +8,12 @@ import {
   availabilityQuerySchema,
 } from "./booking.validator.js";
 
-import * as bookingService from "./booking.service.js";
+import * as bookingService
+  from "./booking.service.js";
+
+/* -------------------------------------------------------------------------- */
+/* Create Booking                                                             */
+/* -------------------------------------------------------------------------- */
 
 export async function createBooking(
   req: Request,
@@ -34,10 +39,16 @@ export async function createBooking(
   } catch (error: any) {
     return res.status(409).json({
       success: false,
-      message: error.message,
+      message:
+        error?.message ||
+        "Booking failed",
     });
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Site Availability                                                          */
+/* -------------------------------------------------------------------------- */
 
 export async function siteAvailability(
   req: Request,
@@ -63,10 +74,16 @@ export async function siteAvailability(
   } catch (error: any) {
     return res.status(400).json({
       success: false,
-      message: error.message,
+      message:
+        error?.message ||
+        "Failed to fetch site availability",
     });
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Available Sites                                                            */
+/* -------------------------------------------------------------------------- */
 
 export async function availableSites(
   req: Request,
@@ -104,10 +121,42 @@ export async function availableSites(
   } catch (error: any) {
     return res.status(400).json({
       success: false,
-      message: error.message,
+      message:
+        error?.message ||
+        "Failed to check availability",
     });
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Booking History                                                            */
+/* -------------------------------------------------------------------------- */
+
+export async function bookingHistory(
+  _req: Request,
+  res: Response,
+) {
+  try {
+    const bookings =
+      await bookingService.getBookingHistory();
+
+    return res.json({
+      success: true,
+      data: bookings,
+    });
+  } catch (error: any) {
+    return res.status(400).json({
+      success: false,
+      message:
+        error?.message ||
+        "Failed to fetch booking history",
+    });
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Release Campaign Bookings                                                  */
+/* -------------------------------------------------------------------------- */
 
 export async function releaseCampaignBookings(
   req: Request,
@@ -130,7 +179,9 @@ export async function releaseCampaignBookings(
   } catch (error: any) {
     return res.status(400).json({
       success: false,
-      message: error.message,
+      message:
+        error?.message ||
+        "Failed to release bookings",
     });
   }
 }

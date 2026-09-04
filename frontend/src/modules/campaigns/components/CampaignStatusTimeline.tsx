@@ -4,6 +4,8 @@ import type { Campaign } from "../types";
 
 interface Props {
   status: Campaign["status"];
+  campaignName?: string;
+  campaignCode?: string;
 }
 
 const steps = [
@@ -27,24 +29,32 @@ const steps = [
 
 export default function CampaignStatusTimeline({
   status,
+  campaignName,
+  campaignCode,
 }: Props) {
   if (status === "Cancelled") {
     return (
       <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F9DADA] text-xl font-semibold text-[#8B2424]">
-            ×
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F9DADA] text-xl font-semibold text-[#8B2424]">
+              ×
+            </div>
+
+            <div>
+              <p className="text-sm font-semibold text-gray-900">
+                Campaign Cancelled {campaignCode ? `(${campaignCode})` : ""}
+              </p>
+
+              <p className="mt-1 text-sm text-gray-500">
+                {campaignName ? `${campaignName} is no longer active.` : "This campaign is no longer active."}
+              </p>
+            </div>
           </div>
 
-          <div>
-            <p className="text-sm font-semibold text-gray-900">
-              Campaign Cancelled
-            </p>
-
-            <p className="mt-1 text-sm text-gray-500">
-              This campaign is no longer active.
-            </p>
-          </div>
+          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600">
+            Cancelled
+          </span>
         </div>
       </div>
     );
@@ -56,14 +66,29 @@ export default function CampaignStatusTimeline({
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="mb-5">
-        <h2 className="text-base font-semibold text-gray-900">
-          Campaign Lifecycle
-        </h2>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-gray-900">
+              Campaign Lifecycle
+            </h2>
+            {campaignCode && (
+              <span className="rounded-md bg-[#F9DADA] px-2 py-0.5 text-xs font-bold text-[#8B2424]">
+                {campaignCode}
+              </span>
+            )}
+          </div>
 
-        <p className="mt-1 text-sm text-gray-500">
-          Track the current campaign status.
-        </p>
+          <p className="mt-1 text-sm text-gray-500">
+            {campaignName
+              ? `Tracking: ${campaignName}`
+              : "Track the current campaign status."}
+          </p>
+        </div>
+
+        <span className="inline-flex items-center rounded-full bg-[#F9DADA] px-3 py-1 text-xs font-bold text-[#8B2424]">
+          Status: {status === "InProgress" ? "In Progress" : status}
+        </span>
       </div>
 
       <div className="overflow-x-auto">

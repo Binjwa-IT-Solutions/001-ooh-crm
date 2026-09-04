@@ -51,7 +51,9 @@ export default function EscalationCard({
             </p>
 
             <p className="mt-1 truncate text-base font-semibold text-gray-900">
-              #{escalation.taskId}
+              {typeof escalation.taskId === "object" && escalation.taskId !== null
+                ? (escalation.taskId as any).title || (escalation.taskId as any)._id
+                : escalation.taskId}
             </p>
 
             <p className="mt-1 text-sm text-gray-500">

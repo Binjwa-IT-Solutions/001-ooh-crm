@@ -14,6 +14,23 @@ interface Props {
   onClose: () => void;
 }
 
+function getSiteName(site: unknown): string {
+  if (typeof site === "string") {
+    return site;
+  }
+
+  if (
+    site &&
+    typeof site === "object" &&
+    "code" in site &&
+    typeof site.code === "string"
+  ) {
+    return site.code;
+  }
+
+  return "Unknown Site";
+}
+
 export default function PurchaseOrderDetails({
   order,
   onClose,
@@ -21,13 +38,9 @@ export default function PurchaseOrderDetails({
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
       <div className="flex h-full w-full max-w-2xl flex-col overflow-hidden bg-white shadow-2xl">
-
         {/* HEADER */}
         <div className="flex items-center justify-between border-b border-[#EEEEF3] bg-white px-6 py-5">
           <div>
-            <span className="rounded-md bg-[#F9DADA] px-2 py-1 text-xs font-bold text-[#8B2424]">
-              C4
-            </span>
 
             <h2 className="mt-3 text-xl font-bold text-[#1F2937]">
               {order.poNumber}
@@ -49,7 +62,6 @@ export default function PurchaseOrderDetails({
 
         {/* CONTENT */}
         <div className="flex-1 overflow-y-auto p-6">
-
           {/* BASIC INFORMATION */}
           <section className="mb-5 rounded-2xl border border-[#E8E8EC] bg-white p-5 shadow-sm">
             <h3 className="mb-4 flex items-center gap-2 text-sm font-bold text-[#1F2937]">
@@ -65,16 +77,12 @@ export default function PurchaseOrderDetails({
 
               <Item
                 label="Campaign"
-                value={getCampaignName(
-                  order.campaignId,
-                )}
+                value={getCampaignName(order.campaignId)}
               />
 
               <Item
                 label="Vendor"
-                value={getVendorName(
-                  order.vendorId,
-                )}
+                value={getVendorName(order.vendorId)}
               />
 
               <Item
@@ -84,16 +92,12 @@ export default function PurchaseOrderDetails({
 
               <Item
                 label="Issued At"
-                value={formatDate(
-                  order.issuedAt,
-                )}
+                value={formatDate(order.issuedAt)}
               />
 
               <Item
                 label="Created At"
-                value={formatDate(
-                  order.createdAt,
-                )}
+                value={formatDate(order.createdAt)}
               />
             </div>
           </section>
@@ -106,66 +110,56 @@ export default function PurchaseOrderDetails({
             </h3>
 
             <div className="space-y-3">
-              {order.lineItems.map(
-                (item, index) => (
-                  <div
-                    key={item._id || index}
-                    className="rounded-xl border border-[#E8E8EC] bg-[#FAFAFB] p-4 transition hover:border-[#F0C7C7] hover:bg-[#FFF8F8]"
-                  >
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-bold text-[#1F2937]">
-                        Site {index + 1}
-                      </p>
+              {(order.lineItems || []).map((item, index) => (
+                <div
+                  key={item._id || index}
+                  className="rounded-xl border border-[#E8E8EC] bg-[#FAFAFB] p-4 transition hover:border-[#F0C7C7] hover:bg-[#FFF8F8]"
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-bold text-[#1F2937]">
+                      Site {index + 1}
+                    </p>
 
-                      <p className="text-sm font-bold text-[#8B2424]">
-                        {formatAmount(
-                          item.amount,
-                        )}
-                      </p>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-2 gap-4">
-                      <Item
-                        label="Site ID"
-                        value={item.siteId}
-                      />
-
-                      <Item
-                        label="Days"
-                        value={String(item.days)}
-                      />
-
-                      <Item
-                        label="From Date"
-                        value={formatDate(
-                          item.from,
-                        )}
-                      />
-
-                      <Item
-                        label="To Date"
-                        value={formatDate(
-                          item.to,
-                        )}
-                      />
-
-                      <Item
-                        label="Rate / Day"
-                        value={formatAmount(
-                          item.negotiatedRatePerDay,
-                        )}
-                      />
-
-                      <Item
-                        label="Amount"
-                        value={formatAmount(
-                          item.amount,
-                        )}
-                      />
-                    </div>
+                    <p className="text-sm font-bold text-[#8B2424]">
+                      {formatAmount(item.amount)}
+                    </p>
                   </div>
-                ),
-              )}
+
+                  <div className="mt-4 grid grid-cols-2 gap-4">
+                    <Item
+                      label="Site ID"
+                      value={getSiteName(item.siteId)}
+                    />
+
+                    <Item
+                      label="Days"
+                      value={String(item.days)}
+                    />
+
+                    <Item
+                      label="From Date"
+                      value={formatDate(item.from)}
+                    />
+
+                    <Item
+                      label="To Date"
+                      value={formatDate(item.to)}
+                    />
+
+                    <Item
+                      label="Rate / Day"
+                      value={formatAmount(
+                        item.negotiatedRatePerDay,
+                      )}
+                    />
+
+                    <Item
+                      label="Amount"
+                      value={formatAmount(item.amount)}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* TOTAL */}
@@ -175,9 +169,7 @@ export default function PurchaseOrderDetails({
               </span>
 
               <span className="text-xl font-bold text-[#8B2424]">
-                {formatAmount(
-                  order.totalAmount,
-                )}
+                {formatAmount(order.totalAmount)}
               </span>
             </div>
           </section>

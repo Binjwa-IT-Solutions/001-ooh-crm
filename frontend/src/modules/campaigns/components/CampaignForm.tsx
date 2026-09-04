@@ -287,14 +287,16 @@ export default function CampaignForm({
                 }
               />
 
-              {/* Quotation ID (Optional) */}
+              
+              {/* Site IDs */}
               <Input
-                label="Quotation ID (Optional)"
-                value={form.quotationId}
-                placeholder="Auto-generated if left blank"
+                label="Site IDs"
+                value={form.siteIds}
+                required
+                placeholder="siteId1, siteId2"
                 onChange={(value) =>
                   updateField(
-                    "quotationId",
+                    "siteIds",
                     value,
                   )
                 }
@@ -334,19 +336,7 @@ export default function CampaignForm({
                 }
               />
 
-              {/* Site IDs */}
-              <Input
-                label="Site IDs"
-                value={form.siteIds}
-                required
-                placeholder="siteId1, siteId2"
-                onChange={(value) =>
-                  updateField(
-                    "siteIds",
-                    value,
-                  )
-                }
-              />
+              
 
               {/* Contracted Value */}
               <Input

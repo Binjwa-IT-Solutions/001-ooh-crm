@@ -86,7 +86,7 @@ app.use('/api/tasks',taskRoutes);
 app.use('/api', escalationRoutes);
 
 app.use('/api/purchase-orders', purchaseOrderRoutes);
-app.use('/api', bookingRoutes);
+app.use('/api/bookings', bookingRoutes);
 app.use('/api/quotations', quotationsRoutes);
 app.use('/q', publicQuotationsRoutes);
 

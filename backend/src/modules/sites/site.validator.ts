@@ -5,6 +5,38 @@ import {
   SiteType,
 } from "./site.model.js";
 
+/* ----------------------------------
+   GPS VALIDATOR
+----------------------------------- */
+
+const gpsSchema = z.object({
+  lat: z
+    .number({
+      message: "Latitude must be a number",
+    })
+    .min(-90, "Invalid latitude")
+    .max(90, "Invalid latitude"),
+
+  lng: z
+    .number({
+      message: "Longitude must be a number",
+    })
+    .min(-180, "Invalid longitude")
+    .max(180, "Invalid longitude"),
+});
+
+/* ----------------------------------
+   DATE VALIDATOR
+----------------------------------- */
+
+const dateSchema = z.coerce.date({
+  message: "Valid date is required",
+});
+
+/* ----------------------------------
+   CREATE SITE
+----------------------------------- */
+
 export const createSiteSchema = z.object({
   city: z
     .string()
@@ -18,17 +50,25 @@ export const createSiteSchema = z.object({
     .trim()
     .optional(),
 
-  gps: z.object({
-    lat: z
-      .number()
-      .min(-90, "Invalid latitude")
-      .max(90, "Invalid latitude"),
+  /*
+   * GPS comes from browser/device location.
+   *
+   * Example:
+   * {
+   *   lat: 22.7196,
+   *   lng: 75.8577
+   * }
+   */
+  gps: gpsSchema,
 
-    lng: z
-      .number()
-      .min(-180, "Invalid longitude")
-      .max(180, "Invalid longitude"),
-  }),
+  /*
+   * Availability window.
+   *
+   * Frontend can send:
+   * "2026-09-01" to "2026-12-31"
+   */
+  startDate: dateSchema,
+  endDate: dateSchema,
 
   sizeWidth: z
     .number()
@@ -48,27 +88,47 @@ export const createSiteSchema = z.object({
     .nullable()
     .optional(),
 
-  status: z.nativeEnum(SiteStatus).optional(),
+  status: z
+    .nativeEnum(SiteStatus)
+    .optional(),
 
   photos: z
     .array(z.string())
     .optional(),
 });
 
+/* ----------------------------------
+   UPDATE SITE
+----------------------------------- */
+
 export const updateSiteSchema =
   createSiteSchema.partial();
 
+/* ----------------------------------
+   SITE QUERY
+----------------------------------- */
+
 export const siteQuerySchema = z.object({
-  city: z.string().optional(),
+  city: z
+    .string()
+    .optional(),
 
-  type: z.nativeEnum(SiteType).optional(),
+  type: z
+    .nativeEnum(SiteType)
+    .optional(),
 
-  status: z.nativeEnum(SiteStatus).optional(),
+  status: z
+    .nativeEnum(SiteStatus)
+    .optional(),
 
   search: z
     .string()
     .optional(),
 });
+
+/* ----------------------------------
+   TYPES
+----------------------------------- */
 
 export type CreateSiteInput =
   z.infer<typeof createSiteSchema>;

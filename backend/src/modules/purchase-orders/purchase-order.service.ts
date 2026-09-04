@@ -11,10 +11,14 @@ import type {
   UpdatePurchaseOrderInput,
 } from "./purchase-order.validator.js";
 
-import { Vendor } from "../vendors/vendor.model.js";
-import { Site } from "../sites/site.model.js";
+import { findActiveVendorById } from "../vendors/vendor.service.js";
+import { getSitesByIds } from "../sites/site.service.js";
 
 type RequestContext = NonNullable<Request["ctx"]>;
+
+/* =========================================================
+   HELPERS
+========================================================= */
 
 function getUserId(
   ctx: RequestContext,
@@ -35,6 +39,14 @@ function calculateDays(
   const start = new Date(from);
   const end = new Date(to);
 
+  if (Number.isNaN(start.getTime())) {
+    throw new Error("Invalid from date");
+  }
+
+  if (Number.isNaN(end.getTime())) {
+    throw new Error("Invalid to date");
+  }
+
   if (end < start) {
     throw new Error(
       "To date cannot be before from date",
@@ -52,15 +64,33 @@ function calculateDays(
 function buildLineItems(
   items: CreatePurchaseOrderInput["lineItems"],
 ): IPurchaseOrderLineItem[] {
+  if (!items || items.length === 0) {
+    throw new Error(
+      "At least one line item is required",
+    );
+  }
+
   return items.map((item) => {
     if (!mongoose.isValidObjectId(item.siteId)) {
-      throw new Error("Invalid site ID");
+      throw new Error(
+        `Invalid site ID: ${item.siteId}`,
+      );
     }
 
     const from = new Date(item.from);
     const to = new Date(item.to);
 
     const days = calculateDays(from, to);
+
+    if (
+      typeof item.negotiatedRatePerDay !==
+        "number" ||
+      item.negotiatedRatePerDay < 0
+    ) {
+      throw new Error(
+        "Negotiated rate per day must be a valid non-negative number",
+      );
+    }
 
     const amount =
       item.negotiatedRatePerDay * days;
@@ -83,7 +113,8 @@ function calculateTotal(
   items: IPurchaseOrderLineItem[],
 ): number {
   return items.reduce(
-    (total, item) => total + item.amount,
+    (total, item) =>
+      total + item.amount,
     0,
   );
 }
@@ -103,6 +134,10 @@ async function generatePONumber(): Promise<string> {
   ).padStart(4, "0")}`;
 }
 
+/* =========================================================
+   LIST PURCHASE ORDERS
+========================================================= */
+
 export async function listPurchaseOrders() {
   return PurchaseOrder.find()
     .populate(
@@ -113,11 +148,19 @@ export async function listPurchaseOrders() {
       "campaignId",
       "name",
     )
+    .populate(
+      "lineItems.siteId",
+      "code city type baseCostPerDay",
+    )
     .sort({
       createdAt: -1,
     })
     .lean();
 }
+
+/* =========================================================
+   GET PURCHASE ORDER BY ID
+========================================================= */
 
 export async function getPurchaseOrderById(
   id: string,
@@ -153,42 +196,67 @@ export async function getPurchaseOrderById(
   return po;
 }
 
+/* =========================================================
+   CREATE PURCHASE ORDER
+========================================================= */
+
 export async function createPurchaseOrder(
   input: CreatePurchaseOrderInput,
   ctx: RequestContext,
 ) {
+  /* -------------------------------------------------------
+     CAMPAIGN VALIDATION
+  ------------------------------------------------------- */
+
   if (
+    !input.campaignId ||
     !mongoose.isValidObjectId(
       input.campaignId,
     )
   ) {
     throw new Error(
-      "Invalid campaign ID",
+      `Invalid campaign ID: ${input.campaignId}`,
     );
   }
 
+  /* -------------------------------------------------------
+     VENDOR VALIDATION
+  ------------------------------------------------------- */
+
   if (
+    !input.vendorId ||
     !mongoose.isValidObjectId(
       input.vendorId,
     )
   ) {
     throw new Error(
-      "Invalid vendor ID",
+      `Invalid vendor ID: ${input.vendorId}`,
     );
   }
 
+  /*
+   * Find vendor and make sure it is Active.
+   */
   const vendor =
-    await Vendor.findOne({
-      _id: input.vendorId,
-      deletedAt: null,
-      status: "Active",
-    });
+    await findActiveVendorById(
+      input.vendorId,
+    );
 
   if (!vendor) {
     throw new Error(
-      "Active vendor not found",
+      `Active vendor not found: ${input.vendorId}`,
     );
   }
+
+  if (vendor.status !== "Active") {
+    throw new Error(
+      `Vendor "${vendor.name}" is not Active`,
+    );
+  }
+
+  /* -------------------------------------------------------
+     SITE VALIDATION
+  ------------------------------------------------------- */
 
   for (const item of input.lineItems) {
     if (
@@ -197,12 +265,16 @@ export async function createPurchaseOrder(
       )
     ) {
       throw new Error(
-        "Invalid site ID",
+        `Invalid site ID: ${item.siteId}`,
       );
     }
 
-    const site =
-      await Site.findById(item.siteId);
+    const sites =
+      await getSitesByIds([
+        item.siteId,
+      ]);
+
+    const site = sites[0];
 
     if (!site) {
       throw new Error(
@@ -217,18 +289,39 @@ export async function createPurchaseOrder(
     }
   }
 
+  /* -------------------------------------------------------
+     BUILD LINE ITEMS
+  ------------------------------------------------------- */
+
   const lineItems =
     buildLineItems(
       input.lineItems,
     );
 
+  /* -------------------------------------------------------
+     CALCULATE TOTAL
+  ------------------------------------------------------- */
+
   const totalAmount =
     calculateTotal(lineItems);
+
+  /* -------------------------------------------------------
+     GENERATE PO NUMBER
+  ------------------------------------------------------- */
 
   const poNumber =
     await generatePONumber();
 
-  const userId = getUserId(ctx);
+  /* -------------------------------------------------------
+     USER
+  ------------------------------------------------------- */
+
+  const userId =
+    getUserId(ctx);
+
+  /* -------------------------------------------------------
+     CREATE DRAFT
+  ------------------------------------------------------- */
 
   const po =
     await PurchaseOrder.create({
@@ -258,6 +351,10 @@ export async function createPurchaseOrder(
   return po.toObject();
 }
 
+/* =========================================================
+   UPDATE PURCHASE ORDER
+========================================================= */
+
 export async function updatePurchaseOrder(
   id: string,
   input: UpdatePurchaseOrderInput,
@@ -284,6 +381,10 @@ export async function updatePurchaseOrder(
     );
   }
 
+  /* -------------------------------------------------------
+     UPDATE VENDOR
+  ------------------------------------------------------- */
+
   if (input.vendorId) {
     if (
       !mongoose.isValidObjectId(
@@ -291,20 +392,24 @@ export async function updatePurchaseOrder(
       )
     ) {
       throw new Error(
-        "Invalid vendor ID",
+        `Invalid vendor ID: ${input.vendorId}`,
       );
     }
 
     const vendor =
-      await Vendor.findOne({
-        _id: input.vendorId,
-        deletedAt: null,
-        status: "Active",
-      });
+      await findActiveVendorById(
+        input.vendorId,
+      );
 
     if (!vendor) {
       throw new Error(
-        "Active vendor not found",
+        `Active vendor not found: ${input.vendorId}`,
+      );
+    }
+
+    if (vendor.status !== "Active") {
+      throw new Error(
+        `Vendor "${vendor.name}" is not Active`,
       );
     }
 
@@ -314,6 +419,10 @@ export async function updatePurchaseOrder(
       );
   }
 
+  /* -------------------------------------------------------
+     UPDATE LINE ITEMS
+  ------------------------------------------------------- */
+
   if (input.lineItems) {
     const lineItems =
       buildLineItems(
@@ -321,8 +430,12 @@ export async function updatePurchaseOrder(
       );
 
     for (const item of lineItems) {
-      const site =
-        await Site.findById(item.siteId);
+      const sites =
+        await getSitesByIds([
+          String(item.siteId),
+        ]);
+
+      const site = sites[0];
 
       if (!site) {
         throw new Error(
@@ -344,6 +457,10 @@ export async function updatePurchaseOrder(
       calculateTotal(lineItems);
   }
 
+  /* -------------------------------------------------------
+     UPDATED BY
+  ------------------------------------------------------- */
+
   existing.updatedBy =
     getUserId(ctx);
 
@@ -351,6 +468,10 @@ export async function updatePurchaseOrder(
 
   return existing.toObject();
 }
+
+/* =========================================================
+   ISSUE PURCHASE ORDER
+========================================================= */
 
 export async function issuePurchaseOrder(
   id: string,
@@ -377,28 +498,30 @@ export async function issuePurchaseOrder(
     );
   }
 
-  /*
-   * Recalculate before issuing.
-   * Never trust stored totals.
-   */
+  /* -------------------------------------------------------
+     RECALCULATE TOTAL
+  ------------------------------------------------------- */
+
   let total = 0;
 
-  po.lineItems.forEach((item) => {
-    const days =
-      calculateDays(
-        item.from,
-        item.to,
-      );
+  po.lineItems.forEach(
+    (item) => {
+      const days =
+        calculateDays(
+          item.from,
+          item.to,
+        );
 
-    const amount =
-      item.negotiatedRatePerDay *
-      days;
+      const amount =
+        item.negotiatedRatePerDay *
+        days;
 
-    item.days = days;
-    item.amount = amount;
+      item.days = days;
+      item.amount = amount;
 
-    total += amount;
-  });
+      total += amount;
+    },
+  );
 
   po.totalAmount = total;
 
@@ -409,15 +532,14 @@ export async function issuePurchaseOrder(
   po.updatedBy =
     getUserId(ctx);
 
-  /*
-   * PDF generation should use
-   * the existing core/pdf service.
-   */
-
   await po.save();
 
   return po.toObject();
 }
+
+/* =========================================================
+   CANCEL PURCHASE ORDER
+========================================================= */
 
 export async function cancelPurchaseOrder(
   id: string,
@@ -440,6 +562,15 @@ export async function cancelPurchaseOrder(
 
   if (po.status === "Cancelled") {
     return po.toObject();
+  }
+
+  if (
+    po.status !== "Draft" &&
+    po.status !== "Issued"
+  ) {
+    throw new Error(
+      `Cannot cancel purchase order with status ${po.status}`,
+    );
   }
 
   po.status = "Cancelled";

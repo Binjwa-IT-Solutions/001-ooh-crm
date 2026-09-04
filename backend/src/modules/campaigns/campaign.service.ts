@@ -1,13 +1,20 @@
 import { ClientSession, Types } from "mongoose";
 
 import { withOptionalTransaction } from "../../core/db/transaction.js";
+
 import Campaign, {
   CampaignStatus,
   ICampaign,
 } from "./campaign.model.js";
+
 import { Quotation } from "../quotations/quotations.model.js";
-import { createBooking } from "../bookings/booking.service.js";
-import { Site } from "../sites/site.model.js";
+import { createBooking, releaseCampaignBookings } from "../bookings/booking.service.js";
+import { checkSitesExist } from "../sites/site.service.js";
+import { generateForCampaign } from "../tasks/task.service.js";
+
+/* -------------------------------------------------------------------------- */
+/* Types                                                                      */
+/* -------------------------------------------------------------------------- */
 
 type RequestContext = {
   userId: Types.ObjectId | string;
@@ -34,6 +41,10 @@ type CampaignFilters = {
   endDate?: Date;
 };
 
+/* -------------------------------------------------------------------------- */
+/* Status Transitions                                                         */
+/* -------------------------------------------------------------------------- */
+
 const STATUS_TRANSITIONS: Record<
   CampaignStatus,
   CampaignStatus[]
@@ -42,17 +53,25 @@ const STATUS_TRANSITIONS: Record<
     CampaignStatus.APPROVED,
     CampaignStatus.CANCELLED,
   ],
+
   [CampaignStatus.APPROVED]: [
     CampaignStatus.IN_PROGRESS,
     CampaignStatus.CANCELLED,
   ],
+
   [CampaignStatus.IN_PROGRESS]: [
     CampaignStatus.COMPLETED,
     CampaignStatus.CANCELLED,
   ],
+
   [CampaignStatus.COMPLETED]: [],
+
   [CampaignStatus.CANCELLED]: [],
 };
+
+/* -------------------------------------------------------------------------- */
+/* Validation Helpers                                                         */
+/* -------------------------------------------------------------------------- */
 
 function assertValidDates(
   start: Date,
@@ -65,6 +84,10 @@ function assertValidDates(
   }
 }
 
+/* -------------------------------------------------------------------------- */
+/* Campaign Code                                                              */
+/* -------------------------------------------------------------------------- */
+
 async function generateCampaignCode(
   session?: ClientSession,
 ) {
@@ -74,7 +97,9 @@ async function generateCampaignCode(
     campaignCode: new RegExp(
       `^MO-C-${year}-`,
     ),
-  }).sort({ campaignCode: -1 });
+  }).sort({
+    campaignCode: -1,
+  });
 
   if (session) {
     query = query.session(session);
@@ -93,6 +118,10 @@ async function generateCampaignCode(
   ).padStart(4, "0")}`;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Validate Sites                                                             */
+/* -------------------------------------------------------------------------- */
+
 async function validateSitesExist(
   siteIds: string[],
   session?: ClientSession,
@@ -103,63 +132,57 @@ async function validateSitesExist(
     );
   }
 
-  const validIds = siteIds.filter((id) =>
-    Types.ObjectId.isValid(id),
+  const {
+    valid,
+    missingIds,
+  } = await checkSitesExist(
+    siteIds,
+    session,
   );
 
-  if (validIds.length !== siteIds.length) {
-    const invalidIds = siteIds.filter(
-      (id) => !Types.ObjectId.isValid(id),
-    );
+  if (!valid) {
     throw new Error(
-      `Invalid site ID(s): ${invalidIds.join(", ")}`,
-    );
-  }
-
-  let query = Site.countDocuments({
-    _id: { $in: validIds },
-  });
-
-  if (session) {
-    query = query.session(session);
-  }
-
-  const count = await query;
-
-  if (count !== validIds.length) {
-    const found = await Site.find({
-      _id: { $in: validIds },
-    }).select("_id");
-
-    const foundIds = new Set(
-      found.map((s) => s._id.toString()),
-    );
-    const missingIds = validIds.filter(
-      (id) => !foundIds.has(id),
-    );
-
-    throw new Error(
-      `Site(s) not found: ${missingIds.join(", ")}`,
+      `Site(s) not found or invalid: ${missingIds.join(
+        ", ",
+      )}`,
     );
   }
 }
 
-/**
- * Helper: Identify campaigns with invalid site references.
- * Returns a map of campaign ID → invalid site IDs.
- */
-export async function identifyInvalidSites(): Promise<
-  Array<{ campaignId: string; campaignCode: string; invalidSites: string[] }>
-> {
-  const campaigns = await Campaign.find().lean();
+/* -------------------------------------------------------------------------- */
+/* Identify Invalid Sites                                                     */
+/* -------------------------------------------------------------------------- */
 
-  const allSiteIds = new Set(
-    (
-      await Site.find()
-        .select("_id")
-        .lean()
-    ).map((s) => s._id.toString()),
+export async function identifyInvalidSites(): Promise<
+  Array<{
+    campaignId: string;
+    campaignCode: string;
+    invalidSites: string[];
+  }>
+> {
+  const campaigns =
+    await Campaign.find().lean();
+
+  const allSiteIds =
+    campaigns.flatMap(
+      (campaign) =>
+        (campaign.siteIds || []).map(
+          String,
+        ),
+    );
+
+  const uniqueIds = [
+    ...new Set(allSiteIds),
+  ];
+
+  const {
+    missingIds,
+  } = await checkSitesExist(
+    uniqueIds,
   );
+
+  const missingSet =
+    new Set(missingIds);
 
   const result: Array<{
     campaignId: string;
@@ -168,20 +191,25 @@ export async function identifyInvalidSites(): Promise<
   }> = [];
 
   for (const campaign of campaigns) {
-    const invalidSites = (
-      campaign.siteIds || []
-    ).filter(
-      (siteId: any) =>
-        !allSiteIds.has(siteId.toString()),
-    );
+    const invalidSites =
+      (campaign.siteIds || []).filter(
+        (siteId: any) =>
+          missingSet.has(
+            siteId.toString(),
+          ),
+      );
 
     if (invalidSites.length > 0) {
       result.push({
-        campaignId: String(campaign._id),
-        campaignCode: campaign.campaignCode,
-        invalidSites: invalidSites.map((id) =>
-          String(id),
+        campaignId: String(
+          campaign._id,
         ),
+        campaignCode:
+          campaign.campaignCode,
+        invalidSites:
+          invalidSites.map((id) =>
+            String(id),
+          ),
       });
     }
   }
@@ -189,22 +217,40 @@ export async function identifyInvalidSites(): Promise<
   return result;
 }
 
-/**
- * Repair campaigns by removing invalid site references.
- * Only removes sites if at least one valid site remains.
- */
-export async function repairInvalidSites(): Promise<
-  Array<{ campaignId: string; campaignCode: string; removed: number }>
-> {
-  const campaigns = await Campaign.find().lean();
+/* -------------------------------------------------------------------------- */
+/* Repair Invalid Sites                                                       */
+/* -------------------------------------------------------------------------- */
 
-  const allSiteIds = new Set(
-    (
-      await Site.find()
-        .select("_id")
-        .lean()
-    ).map((s) => s._id.toString()),
+export async function repairInvalidSites(): Promise<
+  Array<{
+    campaignId: string;
+    campaignCode: string;
+    removed: number;
+  }>
+> {
+  const campaigns =
+    await Campaign.find().lean();
+
+  const allIds =
+    campaigns.flatMap(
+      (campaign) =>
+        (campaign.siteIds || []).map(
+          String,
+        ),
+    );
+
+  const uniqueIds = [
+    ...new Set(allIds),
+  ];
+
+  const {
+    missingIds,
+  } = await checkSitesExist(
+    uniqueIds,
   );
+
+  const missingSet =
+    new Set(missingIds);
 
   const repaired: Array<{
     campaignId: string;
@@ -213,12 +259,13 @@ export async function repairInvalidSites(): Promise<
   }> = [];
 
   for (const campaign of campaigns) {
-    const validSites = (
-      campaign.siteIds || []
-    ).filter(
-      (siteId: any) =>
-        allSiteIds.has(siteId.toString()),
-    );
+    const validSites =
+      (campaign.siteIds || []).filter(
+        (siteId: any) =>
+          !missingSet.has(
+            siteId.toString(),
+          ),
+      );
 
     const invalidCount =
       (campaign.siteIds || []).length -
@@ -228,28 +275,40 @@ export async function repairInvalidSites(): Promise<
       continue;
     }
 
-    // Never leave a campaign with zero sites
     if (validSites.length === 0) {
       console.warn(
         `Campaign ${campaign.campaignCode} has no valid sites — skipping to prevent data loss`,
       );
+
       continue;
     }
 
     await Campaign.updateOne(
-      { _id: campaign._id },
-      { siteIds: validSites },
+      {
+        _id: campaign._id,
+      },
+      {
+        siteIds: validSites,
+      },
     );
 
     repaired.push({
-      campaignId: String(campaign._id),
-      campaignCode: campaign.campaignCode,
+      campaignId: String(
+        campaign._id,
+      ),
+      campaignCode:
+        campaign.campaignCode,
       removed: invalidCount,
     });
   }
 
   return repaired;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Create Campaign                                                            */
+/* -------------------------------------------------------------------------- */
+
 export async function createCampaign(
   input: CreateCampaignInput,
   ctx: RequestContext,
@@ -263,34 +322,89 @@ export async function createCampaign(
     async (session) => {
       let quotation = null;
 
-      if (input.quotationId) {
+      /*
+       * Quotation is optional for normal
+       * campaign creation.
+       */
+
+      if (
+        input.quotationId &&
+        Types.ObjectId.isValid(
+          input.quotationId,
+        )
+      ) {
         quotation =
           await Quotation.findOne({
             _id: input.quotationId,
             deletedAt: null,
-          }).session(session ?? null);
-
-        if (!quotation) {
-          throw new Error(
-            "Quotation not found",
+          }).session(
+            session ?? null,
           );
-        }
 
-        const existing =
-          await Campaign.findOne({
-            quotationId: quotation._id,
-          }).session(session ?? null);
+        /*
+         * If quotation exists, make sure
+         * another campaign is not already
+         * linked to it.
+         */
 
-        if (existing) {
-          return existing;
+        if (quotation) {
+          const existing =
+            await Campaign.findOne({
+              quotationId:
+                quotation._id,
+            }).session(
+              session ?? null,
+            );
+
+          if (existing) {
+            return existing;
+          }
         }
       }
 
-      // Validate all sites exist before creating campaign
+      /* -------------------------- Validate Sites ------------------------- */
+
       await validateSitesExist(
         input.siteIds,
         session ?? undefined,
       );
+
+      /* --------------------------- Validate Lead ------------------------ */
+
+      if (
+        !Types.ObjectId.isValid(
+          input.leadId,
+        )
+      ) {
+        throw new Error(
+          "Invalid lead id",
+        );
+      }
+
+      /* ----------------------- Validate Manager -------------------------- */
+
+      let assignedManager:
+        | Types.ObjectId
+        | undefined;
+
+      if (input.assignedManager) {
+        if (
+          !Types.ObjectId.isValid(
+            input.assignedManager,
+          )
+        ) {
+          throw new Error(
+            "Invalid assigned manager id",
+          );
+        }
+
+        assignedManager =
+          new Types.ObjectId(
+            input.assignedManager,
+          );
+      }
+
+      /* -------------------------- Create Campaign ------------------------ */
 
       const campaign =
         new Campaign({
@@ -298,27 +412,38 @@ export async function createCampaign(
             await generateCampaignCode(
               session,
             ),
+
           name: input.name,
-          leadId: new Types.ObjectId(
-            input.leadId,
-          ),
+
+          leadId:
+            new Types.ObjectId(
+              input.leadId,
+            ),
+
           quotationId:
             quotation?._id,
+
           city: input.city,
-          startDate: input.startDate,
-          endDate: input.endDate,
-          siteIds: input.siteIds.map(
-            (id) => new Types.ObjectId(id),
-          ),
+
+          startDate:
+            input.startDate,
+
+          endDate:
+            input.endDate,
+
+          siteIds:
+            input.siteIds.map(
+              (id) =>
+                new Types.ObjectId(id),
+            ),
+
           contractedValue:
             input.contractedValue,
-          status: CampaignStatus.DRAFT,
-          assignedManager:
-            input.assignedManager
-              ? new Types.ObjectId(
-                  input.assignedManager,
-                )
-              : undefined,
+
+          status:
+            CampaignStatus.DRAFT,
+
+          assignedManager,
         });
 
       await campaign.save({
@@ -330,18 +455,33 @@ export async function createCampaign(
   );
 }
 
-/* Create campaign from accepted quotation */
+/* -------------------------------------------------------------------------- */
+/* Create Campaign From Quotation                                             */
+/* -------------------------------------------------------------------------- */
+
 export async function createFromQuotation(
   quotationId: string,
   ctx: RequestContext,
 ): Promise<ICampaign> {
   return withOptionalTransaction(
     async (session) => {
+      if (
+        !Types.ObjectId.isValid(
+          quotationId,
+        )
+      ) {
+        throw new Error(
+          "Invalid quotation id",
+        );
+      }
+
       const quotation =
         await Quotation.findOne({
           _id: quotationId,
           deletedAt: null,
-        }).session(session ?? null);
+        }).session(
+          session ?? null,
+        );
 
       if (!quotation) {
         throw new Error(
@@ -351,14 +491,18 @@ export async function createFromQuotation(
 
       const existing =
         await Campaign.findOne({
-          quotationId: quotation._id,
-        }).session(session ?? null);
+          quotationId:
+            quotation._id,
+        }).session(
+          session ?? null,
+        );
 
       if (existing) {
         return existing;
       }
 
-      const sites = quotation.sites ?? [];
+      const sites =
+        quotation.sites ?? [];
 
       if (!sites.length) {
         throw new Error(
@@ -366,39 +510,46 @@ export async function createFromQuotation(
         );
       }
 
-      const startDate = new Date(
-        Math.min(
-          ...sites.map((site) =>
-            new Date(
-              site.startDate,
-            ).getTime(),
+      const startDate =
+        new Date(
+          Math.min(
+            ...sites.map((site) =>
+              new Date(
+                site.startDate,
+              ).getTime(),
+            ),
           ),
-        ),
-      );
+        );
 
-      const endDate = new Date(
-        Math.max(
-          ...sites.map((site) =>
-            new Date(
-              site.endDate,
-            ).getTime(),
+      const endDate =
+        new Date(
+          Math.max(
+            ...sites.map((site) =>
+              new Date(
+                site.endDate,
+              ).getTime(),
+            ),
           ),
-        ),
-      );
+        );
 
       assertValidDates(
         startDate,
         endDate,
       );
 
-      // Validate all sites exist before creating campaign
-      const siteIds = sites.map(
-        (site) => String(site.siteId),
-      );
+      /* -------------------------- Validate Sites ------------------------- */
+
+      const siteIds =
+        sites.map((site) =>
+          String(site.siteId),
+        );
+
       await validateSitesExist(
         siteIds,
         session ?? undefined,
       );
+
+      /* -------------------------- Create Campaign ------------------------ */
 
       const campaign =
         new Campaign({
@@ -406,20 +557,34 @@ export async function createFromQuotation(
             await generateCampaignCode(
               session,
             ),
+
           name:
             quotation.clientName ||
             "Campaign",
-          leadId: quotation.leadId,
-          quotationId: quotation._id,
+
+          leadId:
+            quotation.leadId,
+
+          quotationId:
+            quotation._id,
+
           city: "",
+
           startDate,
+
           endDate,
-          siteIds: sites.map(
-            (site) => site.siteId,
-          ),
+
+          siteIds:
+            sites.map(
+              (site) =>
+                site.siteId,
+            ),
+
           contractedValue:
             quotation.total,
-          status: CampaignStatus.DRAFT,
+
+          status:
+            CampaignStatus.DRAFT,
         });
 
       await campaign.save({
@@ -431,30 +596,48 @@ export async function createFromQuotation(
   );
 }
 
-/* Campaign list */
+/* -------------------------------------------------------------------------- */
+/* Campaign List                                                              */
+/* -------------------------------------------------------------------------- */
+
 export async function listCampaigns(
   filters: CampaignFilters,
   ctx: RequestContext,
 ) {
-  const query: Record<string, any> = {};
+  const query: Record<string, any> =
+    {};
 
   if (filters.status) {
-    query.status = filters.status;
+    query.status =
+      filters.status;
   }
 
-  if (filters.city) {
+  if (filters.city?.trim()) {
     query.city = new RegExp(
-      filters.city,
+      filters.city.trim(),
       "i",
     );
   }
 
-  if (filters.manager) {
-    query.assignedManager =
-      new Types.ObjectId(
+  if (filters.manager?.trim()) {
+    if (
+      Types.ObjectId.isValid(
         filters.manager,
-      );
+      )
+    ) {
+      query.assignedManager =
+        new Types.ObjectId(
+          filters.manager,
+        );
+    }
   }
+
+  /*
+   * Date filtering.
+   *
+   * If both dates are supplied, find campaigns
+   * whose start date falls within the range.
+   */
 
   if (
     filters.startDate ||
@@ -468,7 +651,7 @@ export async function listCampaigns(
     }
 
     if (filters.endDate) {
-      query.endDate =
+      query.startDate.$lte =
         filters.endDate;
     }
   }
@@ -479,26 +662,29 @@ export async function listCampaigns(
       "name company email",
     )
     .populate(
-      "quotationId",
-      "quoteNumber total sites",
-    )
-    .populate(
       "siteIds",
-      "name city baseCostPerDay",
+      "name code city type size baseCostPerDay",
     )
     .populate(
       "assignedManager",
       "name email",
     )
-    .sort({ createdAt: -1 });
+    .sort({
+      createdAt: -1,
+    });
 }
 
-/* Get campaign */
+/* -------------------------------------------------------------------------- */
+/* Get Campaign                                                               */
+/* -------------------------------------------------------------------------- */
+
 export async function getCampaign(
   id: string,
   ctx: RequestContext,
 ) {
-  if (!Types.ObjectId.isValid(id)) {
+  if (
+    !Types.ObjectId.isValid(id)
+  ) {
     throw new Error(
       "Invalid campaign id",
     );
@@ -516,7 +702,7 @@ export async function getCampaign(
       )
       .populate(
         "siteIds",
-        "name city size baseCostPerDay",
+        "name code city type size baseCostPerDay",
       )
       .populate(
         "assignedManager",
@@ -532,13 +718,18 @@ export async function getCampaign(
   return campaign;
 }
 
-/* Update campaign status */
+/* -------------------------------------------------------------------------- */
+/* Update Campaign Status                                                     */
+/* -------------------------------------------------------------------------- */
+
 export async function updateCampaignStatus(
   id: string,
   nextStatus: CampaignStatus,
   ctx: RequestContext,
 ) {
-  if (!Types.ObjectId.isValid(id)) {
+  if (
+    !Types.ObjectId.isValid(id)
+  ) {
     throw new Error(
       "Invalid campaign id",
     );
@@ -547,7 +738,9 @@ export async function updateCampaignStatus(
   return withOptionalTransaction(
     async (session) => {
       const campaign =
-        await Campaign.findById(id).session(
+        await Campaign.findById(
+          id,
+        ).session(
           session ?? null,
         );
 
@@ -557,13 +750,18 @@ export async function updateCampaignStatus(
         );
       }
 
+      /* ----------------------- Same Status Check ------------------------- */
+
       if (
-        campaign.status === nextStatus
+        campaign.status ===
+        nextStatus
       ) {
         throw new Error(
           `Campaign is already ${nextStatus}`,
         );
       }
+
+      /* ---------------------- Transition Check --------------------------- */
 
       if (
         !STATUS_TRANSITIONS[
@@ -575,38 +773,157 @@ export async function updateCampaignStatus(
         );
       }
 
+      /* -------------------------------------------------------------------- */
+      /* Approval Flow                                                        */
+      /* -------------------------------------------------------------------- */
+
       if (
         nextStatus ===
         CampaignStatus.APPROVED
       ) {
-        // Validate all sites still exist before approval
+        /*
+         * Validate campaign sites first.
+         */
+
         await validateSitesExist(
-          campaign.siteIds.map((id) =>
-            String(id),
+          campaign.siteIds.map(
+            (id) => String(id),
           ),
           session ?? undefined,
         );
 
-        await Promise.all(
-          campaign.siteIds.map(
-            (siteId) =>
-              createBooking({
-                siteId: String(siteId),
-                campaignId: String(
-                  campaign._id,
-                ),
-                from: campaign.startDate,
-                to: campaign.endDate,
-              }),
-          ),
+        /*
+         * Pre-check for booking conflicts before writing anything.
+         * Gives a clear error listing the conflicting sites and date
+         * rather than a low-level duplicate key error.
+         */
+        const { SiteBooking } = await import(
+          "../bookings/site-booking.model.js"
         );
+
+        const conflictingInfo: string[] = [];
+
+        for (const siteId of campaign.siteIds) {
+          const conflicts = await SiteBooking.find({
+            siteId: new Types.ObjectId(String(siteId)),
+            date: {
+              $gte: campaign.startDate,
+              $lte: campaign.endDate,
+            },
+            campaignId: { $ne: campaign._id },
+          })
+            .populate("campaignId", "campaignCode name status")
+            .session(session ?? null)
+            .lean();
+
+          for (const conflict of conflicts) {
+            const ownerCamp = conflict.campaignId as any;
+            if (
+              !ownerCamp ||
+              ownerCamp.status === "Cancelled" ||
+              ownerCamp.status === "Completed"
+            ) {
+              // Stale booking from inactive/completed campaign: clean it up
+              await SiteBooking.deleteMany({
+                _id: conflict._id,
+              }).session(session ?? null);
+              continue;
+            }
+
+            const ownerCode =
+              ownerCamp.campaignCode ||
+              ownerCamp.name ||
+              String(conflict.campaignId);
+            const conflictMsg = `Site ${String(siteId)} is already booked by campaign ${ownerCode} (${ownerCamp.status})`;
+            if (!conflictingInfo.includes(conflictMsg)) {
+              conflictingInfo.push(conflictMsg);
+            }
+          }
+        }
+
+        if (conflictingInfo.length > 0) {
+          throw new Error(
+            `Cannot approve campaign: booking conflicts detected.\n${conflictingInfo.join("\n")}`,
+          );
+        }
+
+        /*
+         * Create bookings one by one.
+         *
+         * This is intentionally sequential.
+         * It avoids Promise.all() creating multiple
+         * independent booking operations while the
+         * campaign itself is inside a transaction.
+         */
+
+        for (const siteId of campaign.siteIds) {
+          await createBooking({
+            siteId: String(siteId),
+
+            campaignId:
+              String(
+                campaign._id,
+              ),
+
+            from:
+              campaign.startDate,
+
+            to:
+              campaign.endDate,
+          });
+        }
       }
 
-      campaign.status = nextStatus;
+      /* ---- Release bookings when campaign is cancelled or completed ---- */
+
+      if (
+        nextStatus === CampaignStatus.CANCELLED ||
+        nextStatus === CampaignStatus.COMPLETED
+      ) {
+        try {
+          await releaseCampaignBookings(String(campaign._id));
+        } catch (releaseErr) {
+          console.warn(
+            `[Bookings] Could not release bookings for ${nextStatus} campaign ${campaign._id}:`,
+            releaseErr,
+          );
+        }
+      }
+
+      /* ------------------------- Update Status ---------------------------- */
+
+      campaign.status =
+        nextStatus;
 
       await campaign.save({
         session,
       });
+
+      /* -------------------------------------------------------------------- */
+      /* Auto Generate Tasks After Approval                                   */
+      /* -------------------------------------------------------------------- */
+
+      if (
+        nextStatus ===
+        CampaignStatus.APPROVED
+      ) {
+        try {
+          await generateForCampaign(
+            campaign,
+            {
+              userId: String(
+                ctx.userId,
+              ),
+              role: ctx.role,
+            },
+          );
+        } catch (taskErr) {
+          console.error(
+            `[D1] Failed to auto-generate tasks for campaign ${campaign._id}:`,
+            taskErr,
+          );
+        }
+      }
 
       return campaign;
     },

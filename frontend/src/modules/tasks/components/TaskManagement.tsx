@@ -41,37 +41,29 @@ export default function TaskManagement() {
     tomorrow.getDate() + 1,
   );
 
-  const todayTasks = filteredTasks.filter(
-    (task) => {
-      const date = new Date(
-        task.deadline,
-      );
-
-      return (
-        getStatus(task) !== "Overdue" &&
-        date >= today &&
-        date < tomorrow
-      );
-    },
+  const completedTasks = filteredTasks.filter(
+    (task) => task.status === "Completed",
   );
 
   const overdueTasks = filteredTasks.filter(
     (task) =>
+      task.status !== "Completed" &&
       getStatus(task) === "Overdue",
   );
 
-  const upcomingTasks = filteredTasks.filter(
-    (task) => {
-      const date = new Date(
-        task.deadline,
-      );
+  const todayTasks = filteredTasks.filter((task) => {
+    if (task.status === "Completed") return false;
+    if (getStatus(task) === "Overdue") return false;
+    const date = new Date(task.deadline);
+    return date >= today && date < tomorrow;
+  });
 
-      return (
-        getStatus(task) !== "Overdue" &&
-        date >= tomorrow
-      );
-    },
-  );
+  const upcomingTasks = filteredTasks.filter((task) => {
+    if (task.status === "Completed") return false;
+    if (getStatus(task) === "Overdue") return false;
+    const date = new Date(task.deadline);
+    return date >= tomorrow;
+  });
 
   async function handleAction(task: Task) {
     const current = getStatus(task);
@@ -110,30 +102,72 @@ export default function TaskManagement() {
           </p>
         </div>
 
-        <div className="rounded-lg bg-[#F9DADA] px-3 py-2 text-sm font-semibold text-[#8B2424]">
-          {filteredTasks.length}{" "}
-          {filteredTasks.length === 1
-            ? "Task"
-            : "Tasks"}
+        <div className="flex items-center gap-2">
+          {status && (
+            <button
+              type="button"
+              onClick={() => setStatus("")}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50"
+            >
+              Clear filter ({status})
+            </button>
+          )}
+
+          <div className="rounded-lg bg-[#F9DADA] px-3 py-2 text-sm font-semibold text-[#8B2424]">
+            {filteredTasks.length}{" "}
+            {filteredTasks.length === 1
+              ? "Task"
+              : "Tasks"}
+          </div>
         </div>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <SummaryCard
           title="Today"
           count={todayTasks.length}
+          active={status === "InProgress"}
+          onClick={() =>
+            setStatus((prev) =>
+              prev === "InProgress" ? "" : "InProgress",
+            )
+          }
         />
 
         <SummaryCard
           title="Overdue"
           count={overdueTasks.length}
-          danger
+          variant="danger"
+          active={status === "Overdue"}
+          onClick={() =>
+            setStatus((prev) =>
+              prev === "Overdue" ? "" : "Overdue",
+            )
+          }
         />
 
         <SummaryCard
           title="Upcoming"
           count={upcomingTasks.length}
+          active={status === "Pending"}
+          onClick={() =>
+            setStatus((prev) =>
+              prev === "Pending" ? "" : "Pending",
+            )
+          }
+        />
+
+        <SummaryCard
+          title="Completed"
+          count={completedTasks.length}
+          variant="success"
+          active={status === "Completed"}
+          onClick={() =>
+            setStatus((prev) =>
+              prev === "Completed" ? "" : "Completed",
+            )
+          }
         />
       </div>
 
@@ -158,35 +192,59 @@ export default function TaskManagement() {
       )}
 
       {/* Today */}
-      <TaskSection
-        title="Today"
-        count={todayTasks.length}
-        tasks={todayTasks}
-        onAction={handleAction}
-        onOpenEscalation={setSelectedEscalationTask}
-      />
+      {(!status || status === "InProgress" || status === "Pending") && (
+        <TaskSection
+          title="Today"
+          count={todayTasks.length}
+          tasks={todayTasks}
+          onAction={handleAction}
+          onOpenEscalation={setSelectedEscalationTask}
+        />
+      )}
 
       {/* Overdue */}
-      <TaskSection
-        title="Overdue"
-        count={overdueTasks.length}
-        tasks={overdueTasks}
-        danger
-        onAction={handleAction}
-        onOpenEscalation={setSelectedEscalationTask}
-      />
+      {(!status || status === "Overdue") && (
+        <TaskSection
+          title="Overdue"
+          count={overdueTasks.length}
+          tasks={overdueTasks}
+          variant="danger"
+          onAction={handleAction}
+          onOpenEscalation={setSelectedEscalationTask}
+        />
+      )}
 
       {/* Upcoming */}
-      <TaskSection
-        title="Upcoming"
-        count={upcomingTasks.length}
-        tasks={upcomingTasks}
-        onAction={handleAction}
-        onOpenEscalation={setSelectedEscalationTask}
-      />
+      {(!status || status === "Pending") && (
+        <TaskSection
+          title="Upcoming"
+          count={upcomingTasks.length}
+          tasks={upcomingTasks}
+          onAction={handleAction}
+          onOpenEscalation={setSelectedEscalationTask}
+        />
+      )}
+
+      {/* Completed Tasks */}
+      {(!status || status === "Completed") && (
+        <TaskSection
+          title="Completed Tasks"
+          count={completedTasks.length}
+          tasks={completedTasks}
+          variant="success"
+          onAction={handleAction}
+          onOpenEscalation={setSelectedEscalationTask}
+        />
+      )}
 
       {!filteredTasks.length && (
-        <EmptyState />
+        <EmptyState
+          message={
+            status === "Completed"
+              ? "No completed tasks found"
+              : undefined
+          }
+        />
       )}
 
       {/* Task Escalation Modal */}
@@ -213,31 +271,54 @@ function getStatus(task: Task) {
 function SummaryCard({
   title,
   count,
-  danger = false,
+  variant = "default",
+  active = false,
+  onClick,
 }: {
   title: string;
   count: number;
-  danger?: boolean;
+  variant?: "default" | "danger" | "success";
+  active?: boolean;
+  onClick?: () => void;
 }) {
+  const numberClass =
+    variant === "danger"
+      ? "text-[#A8333B]"
+      : variant === "success"
+        ? "text-green-700"
+        : "text-[#8B2424]";
+
+  const iconBg =
+    variant === "danger"
+      ? "bg-[#F9DADA] text-[#A8333B]"
+      : variant === "success"
+        ? "bg-green-100 text-green-700"
+        : "bg-[#F9DADA] text-[#8B2424]";
+
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div
+      onClick={onClick}
+      className={`rounded-xl border bg-white p-5 shadow-sm transition ${
+        onClick ? "cursor-pointer hover:shadow-md" : ""
+      } ${
+        active
+          ? "border-[#8B2424] ring-2 ring-[#F9DADA]"
+          : "border-gray-200"
+      }`}
+    >
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-gray-500">
           {title}
         </p>
 
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F9DADA] text-[#8B2424]">
+        <div
+          className={`flex h-9 w-9 items-center justify-center rounded-lg ${iconBg}`}
+        >
           ✓
         </div>
       </div>
 
-      <p
-        className={`mt-3 text-3xl font-bold ${
-          danger
-            ? "text-[#A8333B]"
-            : "text-[#8B2424]"
-        }`}
-      >
+      <p className={`mt-3 text-3xl font-bold ${numberClass}`}>
         {count}
       </p>
     </div>
@@ -248,18 +329,25 @@ function TaskSection({
   title,
   count,
   tasks,
-  danger = false,
+  variant = "default",
   onAction,
   onOpenEscalation,
 }: {
   title: string;
   count: number;
   tasks: Task[];
-  danger?: boolean;
+  variant?: "default" | "danger" | "success";
   onAction: (task: Task) => void;
   onOpenEscalation: (task: Task) => void;
 }) {
   if (!tasks.length) return null;
+
+  const badgeClass =
+    variant === "danger"
+      ? "bg-[#F9DADA] text-[#A8333B]"
+      : variant === "success"
+        ? "bg-green-100 text-green-700"
+        : "bg-[#F9DADA] text-[#8B2424]";
 
   return (
     <section>
@@ -269,11 +357,7 @@ function TaskSection({
         </h2>
 
         <span
-          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-            danger
-              ? "bg-[#F9DADA] text-[#A8333B]"
-              : "bg-[#F9DADA] text-[#8B2424]"
-          }`}
+          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${badgeClass}`}
         >
           {count}
         </span>
@@ -295,7 +379,7 @@ function TaskSection({
   );
 }
 
-function EmptyState() {
+function EmptyState({ message }: { message?: string }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white px-6 py-16 text-center shadow-sm">
       <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F9DADA] text-xl font-bold text-[#8B2424]">
@@ -303,7 +387,7 @@ function EmptyState() {
       </div>
 
       <h3 className="mt-4 text-base font-semibold text-gray-900">
-        No tasks found
+        {message || "No tasks found"}
       </h3>
 
       <p className="mt-1 text-sm text-gray-500">

@@ -11,6 +11,7 @@ export interface VendorFilters {
   search?: string;
   state?: string;
   city?: string;
+  status?: "Active" | "Inactive";
 }
 
 export interface VendorStateFilter {
@@ -26,8 +27,6 @@ export interface VendorFilterOptionsResponse {
     cities: string[];
   };
 }
-
-/* GET VENDORS */
 
 export async function getVendors(
   filters?: VendorFilters,
@@ -46,16 +45,16 @@ export async function getVendors(
     params.set("city", filters.city.trim());
   }
 
+  if (filters?.status) {
+    params.set("status", filters.status);
+  }
+
   const query = params.toString();
 
   return api.get<VendorsResponse>(
-    query
-      ? `/api/vendors?${query}`
-      : "/api/vendors",
+    query ? `/api/vendors?${query}` : "/api/vendors",
   );
 }
-
-/* GET STATE + CITY FILTERS */
 
 export async function getVendorFilters(
   state?: string,
@@ -75,28 +74,17 @@ export async function getVendorFilters(
   );
 }
 
-/* GET SINGLE VENDOR */
-
 export async function getVendor(
   id: string,
 ): Promise<VendorResponse> {
-  return api.get<VendorResponse>(
-    `/api/vendors/${id}`,
-  );
+  return api.get<VendorResponse>(`/api/vendors/${id}`);
 }
-
-/* CREATE VENDOR */
 
 export async function createVendor(
   data: VendorFormData,
 ): Promise<VendorResponse> {
-  return api.post<VendorResponse>(
-    "/api/vendors",
-    data,
-  );
+  return api.post<VendorResponse>("/api/vendors", data);
 }
-
-/* UPDATE VENDOR */
 
 export async function updateVendor(
   id: string,
@@ -108,8 +96,6 @@ export async function updateVendor(
   );
 }
 
-/* DEACTIVATE VENDOR */
-
 export async function deactivateVendor(
   id: string,
 ): Promise<VendorResponse> {
@@ -117,8 +103,6 @@ export async function deactivateVendor(
     `/api/vendors/${id}/deactivate`,
   );
 }
-
-/* GET VENDOR SITES */
 
 export async function getVendorSites(
   id: string,
@@ -129,7 +113,9 @@ export async function getVendorSites(
 }
 
 export const vendorsApi = {
-  async getVendors(filters?: VendorFilters & { limit?: string }) {
+  async getVendors(
+    filters?: VendorFilters & { limit?: string },
+  ) {
     return getVendors(filters);
   },
 };

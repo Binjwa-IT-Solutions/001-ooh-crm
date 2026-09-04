@@ -3,15 +3,15 @@ import type { Task, TaskStatus } from "./types";
 export function getTaskName(
   value:
     | string
-    | { _id: string; name?: string }
+    | { _id: string; name?: string; code?: string; campaignCode?: string }
     | null
     | undefined,
 ) {
   if (!value) return "—";
 
-  return typeof value === "string"
-    ? value
-    : value.name || value._id;
+  if (typeof value === "string") return value;
+
+  return value.code || value.campaignCode || value.name || value._id;
 }
 
 export function getTaskStatus(

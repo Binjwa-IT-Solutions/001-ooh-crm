@@ -10,12 +10,14 @@ export interface CampaignLead {
   name?: string;
   company?: string;
   email?: string;
+  phone?: string;
 }
 
 export interface CampaignQuotation {
   _id: string;
   quoteNumber?: string;
   total?: number;
+  sites?: unknown[];
 }
 
 export interface CampaignManager {
@@ -26,8 +28,10 @@ export interface CampaignManager {
 
 export interface CampaignSite {
   _id: string;
-  name: string;
+  name?: string;
+  code?: string;
   city?: string;
+  type?: string;
   size?: string;
   baseCostPerDay?: number;
 }
@@ -36,20 +40,31 @@ export interface Campaign {
   _id: string;
 
   campaignCode: string;
+
   name: string;
 
-  leadId: string | CampaignLead;
-
-  quotationId:
+  leadId:
     | string
-    | CampaignQuotation;
+    | CampaignLead;
+
+  /*
+   * Quotation is optional.
+   * A campaign can exist without a quotation.
+   */
+  quotationId?:
+    | string
+    | CampaignQuotation
+    | null;
 
   city: string;
 
   startDate: string;
+
   endDate: string;
 
-  siteIds: string[] | CampaignSite[];
+  siteIds:
+    | string[]
+    | CampaignSite[];
 
   contractedValue: number;
 
@@ -61,32 +76,50 @@ export interface Campaign {
     | null;
 
   createdAt: string;
+
   updatedAt: string;
 }
 
 export interface CampaignFilters {
   status?: CampaignStatus;
+
   city?: string;
+
   manager?: string;
+
   startDate?: string;
+
   endDate?: string;
 }
 
 export interface CreateCampaignPayload {
   name: string;
+
   leadId: string;
+
+  /*
+   * Optional quotation.
+   */
   quotationId?: string;
+
   city: string;
+
   startDate: string;
+
   endDate: string;
+
   siteIds: string[];
+
   contractedValue: number;
+
   status: CampaignStatus;
+
   assignedManager?: string;
 }
 
 export interface CampaignListResponse {
   success: boolean;
+
   data: Campaign[];
 
   pagination?: {
@@ -99,5 +132,6 @@ export interface CampaignListResponse {
 
 export interface CampaignResponse {
   success: boolean;
+
   data: Campaign;
 }

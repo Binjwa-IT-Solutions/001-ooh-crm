@@ -4,6 +4,8 @@ import type { Campaign } from "../types";
 
 interface Props {
   campaigns: Campaign[];
+  selectedCampaignId?: string | null;
+  onSelectCampaign?: (campaign: Campaign) => void;
   onEdit: (campaign: Campaign) => void;
   onStatusChange: (
     campaign: Campaign,
@@ -13,6 +15,8 @@ interface Props {
 
 export default function CampaignTable({
   campaigns,
+  selectedCampaignId,
+  onSelectCampaign,
   onEdit,
   onStatusChange,
 }: Props) {
@@ -78,7 +82,12 @@ export default function CampaignTable({
             {campaigns.map((campaign) => (
               <tr
                 key={campaign._id}
-                className="transition-colors hover:bg-gray-50"
+                onClick={() => onSelectCampaign?.(campaign)}
+                className={`cursor-pointer transition-colors ${
+                  selectedCampaignId === campaign._id
+                    ? "bg-[#FFF5F5] ring-2 ring-inset ring-[#8B2424]/30"
+                    : "hover:bg-gray-50"
+                }`}
               >
                 <td className="whitespace-nowrap px-5 py-4">
                   <span className="font-semibold text-gray-900">
@@ -139,7 +148,10 @@ export default function CampaignTable({
                   <div className="flex justify-end gap-2">
                     <button
                       type="button"
-                      onClick={() => onEdit(campaign)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEdit(campaign);
+                      }}
                       className="rounded-lg border border-[#8B2424] bg-[#8B2424] px-3.5 py-2 text-sm font-medium text-[#F9DADA] transition hover:border-[#A8383B] hover:bg-[#A8383B] hover:text-white"
                     >
                       Edit
@@ -185,12 +197,13 @@ export default function CampaignTable({
                       campaign.status !== "Cancelled" && (
                         <button
                           type="button"
-                          onClick={() =>
+                          onClick={(e) => {
+                            e.stopPropagation();
                             onStatusChange(
                               campaign,
                               "Cancelled",
-                            )
-                          }
+                            );
+                          }}
                           className="rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 transition hover:border-[#8B2424] hover:bg-[#8B2424] hover:text-[#F9DADA]"
                         >
                           Cancel
@@ -252,7 +265,10 @@ function ActionButton({
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
       className="rounded-lg border border-[#8B2424] bg-[#8B2424] px-3.5 py-2 text-sm font-medium text-[#F9DADA] transition hover:border-[#A8383B] hover:bg-[#A8383B] hover:text-white"
     >
       {label}

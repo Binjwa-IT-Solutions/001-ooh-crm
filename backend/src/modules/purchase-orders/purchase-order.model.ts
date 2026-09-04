@@ -1,4 +1,5 @@
 import mongoose, { Schema } from "mongoose";
+import { basePlugin, type BaseDocument } from "../../core/db/basePlugin.js";
 
 export type PurchaseOrderStatus =
   | "Draft"
@@ -15,7 +16,7 @@ export interface IPurchaseOrderLineItem {
   amount: number;
 }
 
-export interface IPurchaseOrder {
+export interface IPurchaseOrder extends BaseDocument {
   poNumber: string;
   campaignId: mongoose.Types.ObjectId;
   vendorId: mongoose.Types.ObjectId;
@@ -24,10 +25,6 @@ export interface IPurchaseOrder {
   status: PurchaseOrderStatus;
   issuedAt?: Date;
   pdfKey?: string;
-  createdAt?: Date;
-  updatedAt?: Date;
-  createdBy?: mongoose.Types.ObjectId;
-  updatedBy?: mongoose.Types.ObjectId;
 }
 
 const lineItemSchema = new Schema<IPurchaseOrderLineItem>(
@@ -133,23 +130,12 @@ const purchaseOrderSchema = new Schema<IPurchaseOrder>(
       type: String,
       trim: true,
     },
-
-    createdBy: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-    },
-
-    updatedBy: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-    },
-  },
-  {
-    timestamps: true,
-  },
+  }
 );
+
+purchaseOrderSchema.plugin(basePlugin);
 
 export const PurchaseOrder = mongoose.model<IPurchaseOrder>(
   "PurchaseOrder",
   purchaseOrderSchema,
-);
+);
