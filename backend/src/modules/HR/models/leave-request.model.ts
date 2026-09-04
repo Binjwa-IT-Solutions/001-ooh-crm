@@ -10,9 +10,12 @@ export interface ILeaveRequest extends Document {
   status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
   documentUrl?: string;
   approverId?: mongoose.Types.ObjectId;
+  approvedAt?: Date | null;
   rejectionReason?: string;
   createdBy?: mongoose.Types.ObjectId;
   updatedBy?: mongoose.Types.ObjectId;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const leaveRequestSchema = new Schema<ILeaveRequest>(
@@ -30,6 +33,7 @@ const leaveRequestSchema = new Schema<ILeaveRequest>(
     },
     documentUrl: { type: String },
     approverId: { type: Schema.Types.ObjectId, ref: 'Employee' },
+    approvedAt: { type: Date, default: null },
     rejectionReason: { type: String },
     createdBy: { type: Schema.Types.ObjectId, ref: 'Employee' },
     updatedBy: { type: Schema.Types.ObjectId, ref: 'Employee' },

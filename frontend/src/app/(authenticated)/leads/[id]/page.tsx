@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useLead } from '@/modules/leads/hooks/use-leads';
 import { leadsApi } from '@/modules/leads/api';
@@ -65,6 +66,41 @@ export default function LeadDetailPage() {
   const [isApprovingManager, setIsApprovingManager] = useState(false);
   const [approvalMessage, setApprovalMessage] = useState<string | null>(null);
 
+  // Re-assign Agent state
+  const [agentsList, setAgentsList] = useState<{ _id: string; name: string; email: string; role: string }[]>([]);
+  const [isReassigning, setIsReassigning] = useState(false);
+  const [showReassignModal, setShowReassignModal] = useState(false);
+  const [selectedAgentId, setSelectedAgentId] = useState('');
+
+  const openReassignModal = async () => {
+    setSelectedAgentId(lead?.assignedTo?._id || '');
+    try {
+      const res = await leadsApi.listAgents();
+      setAgentsList(res.agents || []);
+    } catch {
+      // ignore
+    }
+    setShowReassignModal(true);
+  };
+
+  const handleReassignSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!lead) return;
+    setIsReassigning(true);
+    try {
+      await leadsApi.updateLead(lead._id || lead.id, {
+        assignedTo: selectedAgentId || null,
+      });
+      setShowReassignModal(false);
+      mutate();
+      alert('Lead successfully re-assigned!');
+    } catch (err: any) {
+      alert(err.message || 'Failed to re-assign lead');
+    } finally {
+      setIsReassigning(false);
+    }
+  };
+
   // Activity timeline state
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
@@ -83,7 +119,20 @@ export default function LeadDetailPage() {
   if (isLoading) return <div className="py-12 flex justify-center"><Spinner label="Loading lead details..." /></div>;
   if (error || !lead) return <Alert tone="error" title="Error">Failed to load lead</Alert>;
 
-  const availableNextStatuses: LeadStatus[] = STATUS_TRANSITIONS[lead.status] || [];
+  const ALL_STATUSES: LeadStatus[] = [
+    'New',
+    'Contacted',
+    'Interested',
+    'Qualified',
+    'Proposal Sent',
+    'Negotiation',
+    'Won',
+    'Lost',
+  ];
+
+  const availableNextStatuses: LeadStatus[] = isManagerOrAdmin
+    ? ALL_STATUSES.filter((s) => s !== lead.status)
+    : STATUS_TRANSITIONS[lead.status] || [];
 
   // Calculate Lead Aging (Days since creation)
   const createdDate = new Date(lead.createdAt || lead.receivedAt || Date.now());
@@ -178,14 +227,14 @@ export default function LeadDetailPage() {
   return (
     <div className="space-y-6 py-6 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
               {lead.companyName}
             </h1>
             <span
-              className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+              className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
                 STATUS_STYLES[lead.status] ?? 'border-slate-200 bg-slate-50 text-slate-700'
               }`}
             >
@@ -212,15 +261,11 @@ export default function LeadDetailPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
-          <Button variant="secondary" onClick={() => setLogModalOpen(true)}>
-            + Log Action / ATR
-          </Button>
-
+        <div className="flex flex-wrap items-center justify-start lg:justify-end gap-2.5">
           {/* Valid Next Steps Dropdown */}
           {availableNextStatuses.length > 0 && (
             <div className="flex items-center gap-2">
-              <label htmlFor="nextStatus" className="text-xs font-medium text-slate-500">
+              <label htmlFor="nextStatus" className="text-xs font-medium text-slate-500 whitespace-nowrap">
                 Move to:
               </label>
               <select
@@ -231,7 +276,7 @@ export default function LeadDetailPage() {
                   if (e.target.value) handleStatusSelect(e.target.value as LeadStatus);
                 }}
                 aria-label="Next lead status transition"
-                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 focus:border-red-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 focus:border-red-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
               >
                 <option value="" disabled>Select next status...</option>
                 {availableNextStatuses.map((s) => (
@@ -242,6 +287,16 @@ export default function LeadDetailPage() {
               </select>
             </div>
           )}
+
+          <Button variant="secondary" onClick={() => setLogModalOpen(true)}>
+            + Log Action / ATR
+          </Button>
+
+          <Link href={`/quotations/new?leadId=${lead._id || lead.id}`}>
+            <Button variant="primary" className="bg-[#8B2424] text-white hover:bg-[#6E1D1D] shadow-sm">
+              + Create Quotation
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -255,7 +310,7 @@ export default function LeadDetailPage() {
       <div className="flex gap-4 border-b border-slate-200 dark:border-slate-800">
         {[
           { id: 'info', label: 'Information' },
-          { id: 'qualification', label: 'Qualification' },
+          { id: 'qualification', label: 'Requirements' },
           { id: 'activity', label: 'Activity Timeline (ATR)' },
           { id: 'documents', label: 'Documents' },
         ].map((tab) => (
@@ -286,10 +341,21 @@ export default function LeadDetailPage() {
               <p className="text-base text-slate-800 dark:text-slate-200">{lead.city || '-'}</p>
             </div>
             <div>
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Assigned Agent</h3>
-              <p className="text-base text-slate-800 dark:text-slate-200">
-                {lead.assignedTo?.name || lead.claimedBy?.name || 'Unassigned'}
-              </p>
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Assigned Agent</h3>
+              <div className="flex items-center gap-3">
+                <p className="text-base font-medium text-slate-800 dark:text-slate-200">
+                  {lead.assignedTo?.name || lead.claimedBy?.name || 'Unassigned'}
+                </p>
+                {isManagerOrAdmin && (
+                  <button
+                    type="button"
+                    onClick={openReassignModal}
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-xs hover:border-[#8B2424] hover:bg-[#F9DADA]/40 hover:text-[#8B2424] transition-all dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-red-500"
+                  >
+                    <span>🔁</span> Re-assign
+                  </button>
+                )}
+              </div>
             </div>
             <div>
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Received At</h3>
@@ -542,7 +608,7 @@ export default function LeadDetailPage() {
                   <div key={idx} className="relative pl-6">
                     {/* Timeline dot */}
                     <div
-                      className={`absolute -left-[9px] top-1 h-4 w-4 rounded-full border-2 border-white dark:border-slate-900 ${
+                      className={`absolute -left-2.25 top-1 h-4 w-4 rounded-full border-2 border-white dark:border-slate-900 ${
                         item.type === 'status_change'
                           ? item.to === 'Won'
                             ? 'bg-emerald-500'
@@ -679,6 +745,55 @@ export default function LeadDetailPage() {
         onClose={() => setLogModalOpen(false)}
         onSubmit={submitLogFollowUp}
       />
+
+      {/* Re-assign Agent Modal */}
+      {showReassignModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-slate-900">
+            <h2 className="mb-2 text-lg font-semibold text-slate-900 dark:text-white">Re-assign Lead Owner</h2>
+            <p className="mb-4 text-xs text-slate-500">
+              Transfer this lead to another sales agent or move it to Unassigned pool.
+            </p>
+
+            <form onSubmit={handleReassignSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Select Sales Agent / User
+                </label>
+                <select
+                  value={selectedAgentId}
+                  onChange={(e) => setSelectedAgentId(e.target.value)}
+                  className="w-full rounded border border-slate-300 bg-white p-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                >
+                  <option value="">-- Unassigned (Move to Unclaimed Pool) --</option>
+                  {agentsList.map((agent) => (
+                    <option key={agent._id} value={agent._id}>
+                      {agent.name} ({agent.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowReassignModal(false)}
+                  className="rounded border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isReassigning}
+                  className="rounded bg-[#8B2424] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#6E1D1D] disabled:opacity-50 shadow-sm"
+                >
+                  {isReassigning ? 'Transferring...' : 'Confirm Transfer'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

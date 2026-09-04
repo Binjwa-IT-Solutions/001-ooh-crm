@@ -37,6 +37,12 @@ export const quotationsApi = {
   getPdfUrl: (id: string) =>
     api.get<{ pdfKey?: string; pdfUrl: string }>(`/api/quotations/${id}/pdf`),
 
+  uploadPdf: (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post<{ pdfKey: string; pdfUrl: string }>(`/api/quotations/${id}/upload-pdf`, formData);
+  },
+
   send: (id: string, sentTo: string, message?: string) =>
     api.post<{ quotation: Quotation; trackingToken: string; publicUrl: string }>(
       `/api/quotations/${id}/send`,

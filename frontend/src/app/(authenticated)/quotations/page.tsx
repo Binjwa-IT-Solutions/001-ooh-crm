@@ -65,7 +65,7 @@ export default function QuotationsPage() {
         </div>
         <Link
           href="/quotations/new"
-          className="rounded-md bg-[#8B2424] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#6E1D1D] shadow-sm"
+          className="rounded-md bg-[#8B2424] px-4 py-2 text-sm font-medium text-white transition hover:bg-primary shadow-sm"
         >
           + New Quotation
         </Link>
@@ -139,7 +139,7 @@ export default function QuotationsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusBadge(q.status)}`}>
-                          {q.status}
+                          {q.status === 'Draft' ? 'No Action' : q.status}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-500">

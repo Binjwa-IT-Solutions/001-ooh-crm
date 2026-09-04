@@ -72,3 +72,27 @@ export async function cancelPurchaseOrder(
     `/api/purchase-orders/${id}/cancel`,
   );
 }
+
+export const purchaseOrdersApi = {
+  list: getPurchaseOrders,
+  get: getPurchaseOrder,
+  create: createPurchaseOrder,
+  update: updatePurchaseOrder,
+  issue: issuePurchaseOrder,
+  cancel: cancelPurchaseOrder,
+  updateStatus: async (id: string, status: "Issued" | "Accepted" | "Cancelled") => {
+    if (status === "Issued") return issuePurchaseOrder(id);
+    if (status === "Cancelled") return cancelPurchaseOrder(id);
+    return updatePurchaseOrder(id, { status } as any);
+  },
+  downloadPDF: async (id: string) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("mo.accessToken") : "";
+    const res = await fetch(`/api/purchase-orders/${id}/pdf`, {
+      headers: {
+        Authorization: token ? `Bearer ${token}` : "",
+      },
+    });
+    if (!res.ok) throw new Error("Failed to download PO PDF");
+    return res.blob();
+  },
+};

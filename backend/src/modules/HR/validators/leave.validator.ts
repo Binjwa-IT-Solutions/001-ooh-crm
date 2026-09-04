@@ -22,7 +22,7 @@ export const leaveRequestSchema = z.object({
   leaveTypeId: objectIdValidator,
   fromDate: z.coerce.date(),
   toDate: z.coerce.date(),
-  days: z.number().min(0.5, 'Minimum 0.5 days required'),
+  days: z.coerce.number().min(0.5, 'Minimum 0.5 days required'),
   reason: z.string().min(1, 'Reason is required'),
   documentUrl: z.string().optional(),
 });

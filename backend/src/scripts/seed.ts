@@ -17,6 +17,8 @@ import { connectDatabase, disconnectDatabase } from '../core/db/connect.js';
 import { formattedSequence } from '../core/db/sequence.js';
 import { ROLE_LABELS, type Role } from '../core/rbac/permissions.js';
 import { Employee, type Department } from '../modules/employees/employees.model.js';
+import Holiday from '../modules/HR/models/holiday.model.js';
+
 
 const DEMO_PASSWORD = process.env.SEED_PASSWORD ?? 'Password123!';
 
@@ -278,6 +280,97 @@ async function seedEmployees(userIds: Map<string, Types.ObjectId>): Promise<void
   console.log(`  linked   ${linked} reporting relationship${linked === 1 ? '' : 's'}`);
 }
 
+async function seedHolidays() {
+  console.log('\nHolidays');
+  const defaultHolidays = [
+    { name: "New Year's Day", date: new Date(Date.UTC(2026, 0, 1)) },
+    { name: 'Republic Day', date: new Date(Date.UTC(2026, 0, 26)) },
+    { name: 'Independence Day', date: new Date(Date.UTC(2026, 7, 15)) },
+    { name: 'Gandhi Jayanti', date: new Date(Date.UTC(2026, 9, 2)) },
+    { name: 'Christmas Day', date: new Date(Date.UTC(2026, 11, 25)) },
+  ];
+
+  for (const h of defaultHolidays) {
+    const existing = await Holiday.findOne({ date: h.date, deletedAt: null });
+    if (!existing) {
+      await Holiday.create(h);
+      console.log(`  created  ${h.name.padEnd(30)} ${h.date.toISOString().slice(0, 10)}`);
+    } else {
+      console.log(`  skipped  ${h.name.padEnd(30)} (already exists)`);
+    }
+  }
+}
+
+async function seedLeaveTypesAndBalances(): Promise<void> {
+  console.log('\nLeave Types & Balances');
+  const { LeaveType, LeaveBalance } = await import('../modules/HR/leaveTypes/leaveTypes.model.js');
+  const { Employee } = await import('../modules/employees/employees.model.js');
+
+  const defaultTypes = [
+    { name: 'Casual Leave', code: 'CL', annualQuota: 12, carryForward: false, maxCarryForward: 0, encashable: false, requiresDocument: false, status: 'Active' as const },
+    { name: 'Sick Leave', code: 'SL', annualQuota: 12, carryForward: false, maxCarryForward: 0, encashable: false, requiresDocument: false, status: 'Active' as const },
+    { name: 'Privilege Leave', code: 'PL', annualQuota: 15, carryForward: true, maxCarryForward: 30, encashable: true, requiresDocument: false, status: 'Active' as const },
+    { name: 'Maternity Leave', code: 'ML', annualQuota: 182, carryForward: false, maxCarryForward: 0, encashable: false, requiresDocument: false, status: 'Active' as const },
+    { name: 'Paternity Leave', code: 'PTL', annualQuota: 15, carryForward: false, maxCarryForward: 0, encashable: false, requiresDocument: false, status: 'Active' as const },
+    { name: 'Compensatory Off', code: 'COMP', annualQuota: 0, carryForward: false, maxCarryForward: 0, encashable: false, requiresDocument: false, status: 'Active' as const },
+    { name: 'Leave Without Pay', code: 'LWP', annualQuota: null, carryForward: false, maxCarryForward: 0, encashable: false, requiresDocument: false, status: 'Active' as const },
+  ];
+
+  const allowedCodes = defaultTypes.map((t) => t.code);
+  const obsoleteTypes = await LeaveType.find({ code: { $nin: allowedCodes } });
+  if (obsoleteTypes.length > 0) {
+    const obsoleteIds = obsoleteTypes.map((ot) => ot._id);
+    await LeaveBalance.deleteMany({ leaveTypeId: { $in: obsoleteIds } });
+    await LeaveType.deleteMany({ _id: { $in: obsoleteIds } });
+    console.log(`  removed ${obsoleteTypes.length} obsolete leave types and their balances`);
+  }
+
+  const year = new Date().getFullYear();
+  const employeeDocs = await Employee.find({ deletedAt: null });
+
+  for (const t of defaultTypes) {
+    let leaveType = await LeaveType.findOne({ code: t.code, deletedAt: null });
+    if (!leaveType) {
+      leaveType = await LeaveType.create(t);
+      console.log(`  created leave type: ${t.name} (${t.code})`);
+    } else {
+      leaveType.name = t.name;
+      leaveType.annualQuota = t.annualQuota;
+      leaveType.carryForward = t.carryForward;
+      leaveType.maxCarryForward = t.maxCarryForward;
+      leaveType.encashable = t.encashable;
+      leaveType.requiresDocument = t.requiresDocument;
+      leaveType.status = t.status;
+      await leaveType.save();
+      console.log(`  updated/verified leave type: ${t.name} (${t.code})`);
+    }
+
+    if (t.annualQuota !== null) {
+      for (const emp of employeeDocs) {
+        const existingBalance = await LeaveBalance.findOne({
+          employeeId: emp._id,
+          leaveTypeId: leaveType._id,
+          year,
+        });
+
+        if (!existingBalance) {
+          await LeaveBalance.create({
+            employeeId: emp._id,
+            leaveTypeId: leaveType._id,
+            year,
+            allocated: t.annualQuota,
+            used: 0,
+            carriedForward: 0,
+          });
+        } else {
+          existingBalance.allocated = t.annualQuota;
+          await existingBalance.save();
+        }
+      }
+    }
+  }
+}
+
 async function seed() {
   if (config.isProduction) {
     throw new Error('Refusing to run the seed script with NODE_ENV=production');
@@ -289,12 +382,15 @@ async function seed() {
 
   const userIds = await seedUsers(resetPasswords);
   await seedEmployees(userIds);
+  await seedHolidays();
+  await seedLeaveTypesAndBalances();
 
   console.log(`\nDemo password for every seeded account: ${DEMO_PASSWORD}`);
   console.log('Sign in, then read the OTP off the login screen (dev mode) or the API log.\n');
 
   await disconnectDatabase();
 }
+
 
 seed().catch((err) => {
   console.error('[seed] failed:', err);

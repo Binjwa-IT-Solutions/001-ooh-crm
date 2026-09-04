@@ -28,6 +28,12 @@ leadRoutes.post(
 );
 
 leadRoutes.get(
+  '/agents',
+  requirePermission('leads.view'),
+  asyncHandler(LeadsController.listAgents),
+);
+
+leadRoutes.get(
   '/:id',
   requirePermission('leads.view'),
   asyncHandler(LeadsController.get),

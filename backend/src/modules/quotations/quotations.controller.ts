@@ -45,6 +45,15 @@ export class QuotationsController {
     res.status(200).json(result);
   }
 
+  static async uploadPdf(req: Request, res: Response): Promise<void> {
+    const result = await QuotationsService.uploadCustomPdf(
+      req.params.id as string,
+      req.file,
+      req.ctx!,
+    );
+    res.status(200).json(result);
+  }
+
   static async send(req: Request, res: Response): Promise<void> {
     const input = sendQuotationSchema.parse(req.body);
     const result = await QuotationsService.send(

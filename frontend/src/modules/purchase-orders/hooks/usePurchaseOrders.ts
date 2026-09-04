@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   cancelPurchaseOrder,
   createPurchaseOrder,
+  getPurchaseOrder,
   getPurchaseOrders,
   issuePurchaseOrder,
   updatePurchaseOrder,
@@ -144,5 +145,36 @@ export function usePurchaseOrders() {
     editOrder,
     issueOrder,
     cancelOrder,
+  };
+}
+
+export function usePurchaseOrder(id: string) {
+  const [purchaseOrder, setPurchaseOrder] = useState<PurchaseOrder | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadOrder = useCallback(async () => {
+    if (!id) return;
+    try {
+      setIsLoading(true);
+      setError('');
+      const response = await getPurchaseOrder(id);
+      setPurchaseOrder(response.data || null);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load purchase order');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    loadOrder();
+  }, [loadOrder]);
+
+  return {
+    purchaseOrder,
+    isLoading,
+    error,
+    mutate: loadOrder,
   };
 }

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/shared/auth/auth-context';
 import { useLeads } from '@/modules/leads/hooks/use-leads';
 import { leadsApi } from '@/modules/leads/api';
 import { LeadStatus, LeadSource, Lead, LogCallValues } from '@/modules/leads/types';
@@ -36,16 +37,45 @@ function StatusBadge({ status }: { status: LeadStatus }) {
 function SlaCountdown({ end }: { end?: string | null }) {
   const [now, setNow] = useState(Date.now());
 
+  useEffect(() => {
+    if (!end) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [end]);
+
   if (!end) return null;
   const endMs = new Date(end).getTime();
   const diff = endMs - now;
-  if (diff <= 0) return <span className="ml-2 text-xs font-semibold text-red-500">SLA Breach</span>;
-  const minutes = Math.floor(diff / (1000 * 60));
+  if (diff <= 0) {
+    return (
+      <span className="ml-2 inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+        SLA Breach
+      </span>
+    );
+  }
+
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
   const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-  return <span className="ml-2 text-xs text-[#8B2424]">{minutes}m {String(seconds).padStart(2, '0')}s</span>;
+
+  if (hours > 0) {
+    return (
+      <span className="ml-2 inline-flex items-center text-xs font-medium text-[#8B2424] dark:text-red-400">
+        ⏱️ {hours}h {minutes}m
+      </span>
+    );
+  }
+
+  return (
+    <span className="ml-2 inline-flex items-center text-xs font-medium text-[#8B2424] dark:text-red-400">
+      ⏱️ {minutes}m {String(seconds).padStart(2, '0')}s
+    </span>
+  );
 }
 
 export default function LeadsPage() {
+  const { user } = useAuth();
+  const isManagerOrAdmin = ['admin', 'manager'].includes(user?.role?.toLowerCase() || '');
   const [activeTab, setActiveTab] = useState<'my-leads' | 'unclaimed' | 'all'>('my-leads');
 
   // Filters
@@ -128,13 +158,13 @@ export default function LeadsPage() {
         </Link>
       </div>
 
-      <div className="flex gap-4 border-b border-[#E6E8EC]">
+      <div className="flex gap-4 border-b border-border-subtle">
         <button
           onClick={() => { setActiveTab('my-leads'); setPage(1); }}
           className={`h-11 px-4 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'my-leads'
-              ? 'border-[#6E1D1D] text-[#6E1D1D]'
-              : 'border-transparent text-[#687280] hover:text-[#1F2937]'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-text-secondary hover:text-text-primary'
           }`}
         >
           My Leads
@@ -143,23 +173,25 @@ export default function LeadsPage() {
           onClick={() => { setActiveTab('unclaimed'); setPage(1); }}
           className={`h-11 px-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
             activeTab === 'unclaimed'
-              ? 'border-[#6E1D1D] text-[#6E1D1D]'
-              : 'border-transparent text-[#687280] hover:text-[#1F2937]'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-text-secondary hover:text-text-primary'
           }`}
         >
           Unclaimed
           <Badge>Live</Badge>
         </button>
-        <button
-          onClick={() => { setActiveTab('all'); setPage(1); }}
-          className={`h-11 px-4 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'all'
-              ? 'border-[#6E1D1D] text-[#6E1D1D]'
-              : 'border-transparent text-[#687280] hover:text-[#1F2937]'
-          }`}
-        >
-          All Leads
-        </button>
+        {isManagerOrAdmin && (
+          <button
+            onClick={() => { setActiveTab('all'); setPage(1); }}
+            className={`h-11 px-4 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'all'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            All Leads (Team)
+          </button>
+        )}
       </div>
 
       <Card className="grid grid-cols-1 gap-8 p-6 md:grid-cols-2 xl:grid-cols-4">
@@ -252,7 +284,9 @@ export default function LeadsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge status={lead.status} />
-                        {<SlaCountdown end={lead.slaTimerEnd} />}
+                        {((lead.status === 'New' || lead.status === 'Contacted') && !lead.firstResponseAt && !lead.firstCallAt) && (
+                          <SlaCountdown end={lead.slaTimerEnd || (lead.createdAt ? new Date(new Date(lead.createdAt).getTime() + 24 * 60 * 60 * 1000).toISOString() : null)} />
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         {lead.nextActionDate ? (
@@ -280,7 +314,7 @@ export default function LeadsPage() {
                             </Button>
                             <Button
                               variant="ghost"
-                              className="bg-[#F9DADA] text-[#6E1D1D] hover:bg-[#F2CACA]"
+                              className="bg-[#F9DADA] text-primary hover:bg-[#F2CACA]"
                               onClick={() => openLogModal(lead._id || lead.id)}
                             >
                               Log Action
@@ -293,7 +327,7 @@ export default function LeadsPage() {
                             </Link>
                             <Button
                               variant="ghost"
-                              className="bg-[#F9DADA] text-[#6E1D1D] hover:bg-[#F2CACA]"
+                              className="bg-[#F9DADA] text-primary hover:bg-[#F2CACA]"
                               onClick={() => openLogModal(lead._id || lead.id)}
                             >
                               Log Action

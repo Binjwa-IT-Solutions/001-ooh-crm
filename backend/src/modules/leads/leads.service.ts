@@ -11,6 +11,7 @@ import {
 } from './leads.model.js';
 import { STATUS_TRANSITIONS } from './leads.validator.js';
 import { toObjectId } from '../../core/db/basePlugin.js';
+import { AuthUser } from '../../core/auth/auth-model.js';
 
 export class LeadsService {
   /**
@@ -128,6 +129,7 @@ export class LeadsService {
       assignedTo: toObjectId(ctx.user.id),
       claimedBy: toObjectId(ctx.user.id),
       claimedAt: now,
+      slaTimerEnd: new Date(now.getTime() + 24 * 60 * 60 * 1000),
       status,
       statusHistory: [
         {
@@ -239,7 +241,6 @@ export class LeadsService {
           assignedTo: toObjectId(ctx.user.id),
           claimedAt: now,
           status: 'Contacted',
-          firstResponseAt: now,
           slaTimerEnd: new Date(now.getTime() + 24 * 60 * 60 * 1000),
           updatedBy: toObjectId(ctx.user.id),
         },
@@ -410,9 +411,10 @@ export class LeadsService {
       return lead;
     }
 
-    // 1. Check state transitions map
+    // 1. Check state transitions map (Admins and Managers have override privileges)
+    const isManagerOrAdmin = ctx.user?.role === 'admin' || ctx.user?.role === 'manager';
     const allowed = STATUS_TRANSITIONS[fromStatus] || [];
-    if (!allowed.includes(toStatus)) {
+    if (!isManagerOrAdmin && !allowed.includes(toStatus)) {
       throw new ValidationError(`Invalid status transition from ${fromStatus} to ${toStatus}.`);
     }
 
@@ -466,6 +468,13 @@ export class LeadsService {
   }
 
   /**
+   * List active users/agents for assignment.
+   */
+  static async listAgents(): Promise<any[]> {
+    return AuthUser.find({ status: 'Active' }, '_id name email role').sort({ name: 1 }).lean();
+  }
+
+  /**
    * Update lead info (A1/A4).
    */
   static async updateLead(id: string, data: any, ctx: RequestContext): Promise<ILead> {
@@ -479,9 +488,25 @@ export class LeadsService {
       );
     }
 
+    if (data.assignedTo !== undefined) {
+      if (data.assignedTo) {
+        const targetId = toObjectId(data.assignedTo);
+        lead.assignedTo = targetId;
+        lead.claimedBy = targetId;
+      } else {
+        // Move to Unclaimed Pool
+        lead.assignedTo = null;
+        lead.claimedBy = null;
+        lead.claimedAt = null;
+        lead.status = 'New';
+      }
+      delete data.assignedTo;
+    }
+
     Object.assign(lead, data);
     lead.updatedBy = toObjectId(ctx.user.id);
     await lead.save();
+    await lead.populate('assignedTo claimedBy', 'name email role');
     return lead;
   }
 

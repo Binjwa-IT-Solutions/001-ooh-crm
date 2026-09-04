@@ -330,6 +330,34 @@ export class QuotationsService {
   }
 
   /**
+   * Upload Custom Proposal PDF.
+   * Allows agency/company to upload their own bespoke proposal PDF.
+   */
+  static async uploadCustomPdf(
+    id: string,
+    file: Express.Multer.File | undefined,
+    ctx: RequestContext,
+  ): Promise<{ pdfKey: string; pdfUrl: string }> {
+    if (!file) throw new ValidationError('No PDF file provided');
+    if (file.mimetype !== 'application/pdf') {
+      throw new ValidationError('Only PDF documents are supported');
+    }
+
+    const quotation = await Quotation.findOne({ _id: toObjectId(id), deletedAt: null });
+    if (!quotation) throw new NotFoundError('Quotation not found');
+
+    const stored = await fileService.save(file, { folder: 'quotations', ctx });
+    quotation.pdfKey = stored.key;
+    quotation.updatedBy = toObjectId(ctx.user.id);
+    await quotation.save();
+
+    return {
+      pdfKey: stored.key,
+      pdfUrl: stored.url,
+    };
+  }
+
+  /**
    * B3 — Send Proposal to Client.
    * Generates 32-char crypto random trackingToken and locks quotation to 'Sent'.
    */

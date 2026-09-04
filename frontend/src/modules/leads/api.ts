@@ -89,4 +89,7 @@ export const leadsApi = {
 
   getActivity: (id: string) =>
     api.get<{ activities: ActivityItem[] }>(`/api/leads/${id}/activity`),
+
+  listAgents: () =>
+    api.get<{ agents: { _id: string; name: string; email: string; role: string }[] }>('/api/leads/agents'),
 };
