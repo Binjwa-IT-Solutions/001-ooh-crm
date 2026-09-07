@@ -1,4 +1,5 @@
-import { Schema, model, Types, Document } from "mongoose";
+import { Schema, model, Types } from "mongoose";
+import { basePlugin, type BaseDocument } from "../../core/db/basePlugin.js";
 
 export enum CampaignStatus {
   DRAFT = "Draft",
@@ -8,7 +9,7 @@ export enum CampaignStatus {
   CANCELLED = "Cancelled",
 }
 
-export interface ICampaign extends Document {
+export interface ICampaign extends BaseDocument {
   campaignCode: string;
   name: string;
 
@@ -28,9 +29,6 @@ export interface ICampaign extends Document {
   status: CampaignStatus;
 
   assignedManager?: Types.ObjectId;
-
-  createdAt: Date;
-  updatedAt: Date;
 }
 
 const campaignSchema = new Schema<ICampaign>(
@@ -56,14 +54,14 @@ const campaignSchema = new Schema<ICampaign>(
       index: true,
     },
 
-    quotationId: {
-      type: Schema.Types.ObjectId,
-      ref: "Quotation",
-      required: true,
-      unique: true,
-      index: true,
-    },
-
+   quotationId: {
+  type: Schema.Types.ObjectId,
+  ref: "Quotation",
+  required: false,
+  unique: true,
+  sparse: true,
+  index: true,
+},
     city: {
       type: String,
       required: true,
@@ -108,11 +106,10 @@ const campaignSchema = new Schema<ICampaign>(
       default: undefined,
       index: true,
     },
-  },
-  {
-    timestamps: true,
-  },
+  }
 );
+
+campaignSchema.plugin(basePlugin);
 
 campaignSchema.index({
   status: 1,

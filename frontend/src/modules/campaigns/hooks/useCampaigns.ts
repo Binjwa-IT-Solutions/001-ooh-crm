@@ -9,6 +9,7 @@ import {
 import {
   createCampaign,
   getCampaigns,
+  updateCampaign,
   updateCampaignStatus,
 } from "../api";
 
@@ -104,6 +105,46 @@ export function useCampaigns(
       [],
     );
 
+  const editCampaign =
+    useCallback(
+      async (
+        id: string,
+        payload: CreateCampaignPayload,
+      ) => {
+        try {
+          setCreating(true);
+          setError(null);
+
+          const response =
+            await updateCampaign(
+              id,
+              payload,
+            );
+
+          setCampaigns(
+            (current) =>
+              current.map((c) =>
+                c._id === id ? response.data : c,
+              ),
+          );
+
+          return response.data;
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Failed to update campaign";
+
+          setError(message);
+
+          throw error;
+        } finally {
+          setCreating(false);
+        }
+      },
+      [],
+    );
+
   const changeStatus =
     useCallback(
       async (
@@ -160,6 +201,7 @@ export function useCampaigns(
     error,
     reload: loadCampaigns,
     addCampaign,
+    editCampaign,
     changeStatus,
   };
 }

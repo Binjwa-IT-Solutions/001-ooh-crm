@@ -18,6 +18,12 @@ const router = Router();
 
 router.get(
   '/*key',
+  (req, _res, next) => {
+    if (!req.headers.authorization && req.query.token) {
+      req.headers.authorization = `Bearer ${req.query.token}`;
+    }
+    next();
+  },
   requireAuth,
   asyncHandler(async (req, res) => {
     if (config.storage.driver !== 'local') {
@@ -29,6 +35,9 @@ router.get(
 
     const buffer = await fileService.read(key);
 
+    if (key.endsWith('.pdf')) {
+      res.setHeader('Content-Type', 'application/pdf');
+    }
     res.setHeader('Cache-Control', 'private, max-age=3600');
     res.send(buffer);
   }),

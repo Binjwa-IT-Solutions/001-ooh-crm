@@ -1,6 +1,8 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useCallback } from 'react';
-import { leaveApi } from '../api';
-import { LeaveType, LeaveRequest, LeaveBalance } from '../types';
+import { leaveApi, holidayApi } from '../api';
+import { LeaveType, LeaveRequest, LeaveBalance, Holiday } from '../types';
+import { employeesApi } from '@/modules/employees/api';
 
 export function useLeaveTypes() {
   const [data, setData] = useState<LeaveType[] | null>(null);
@@ -33,7 +35,8 @@ export function useLeaveBalance() {
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await leaveApi.getBalance();
+      const employee = await employeesApi.getMine();
+      const res = await leaveApi.getBalance(employee.id);
       setData(res);
       setError(null);
     } catch (err: unknown) {
@@ -97,3 +100,28 @@ export function useTeamLeaveRequests() {
 
   return { data, isLoading, error, mutate: fetchData };
 }
+
+export function useHolidays() {
+  const [data, setData] = useState<Holiday[] | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const res = await holidayApi.getHolidays();
+      setData(res);
+      setError(null);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err : new Error(String(err)));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
+
+  return { data, isLoading, error, mutate: fetchData };
+}
+

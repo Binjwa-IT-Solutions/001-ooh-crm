@@ -356,4 +356,10 @@ export const employeeService = {
       employeeCode: doc.employeeCode,
     }));
   },
+
+  async getAllActiveEmployees(ctx: RequestContext): Promise<EmployeeDto[]> {
+    const documents = await scopedFind(Employee, { status: 'Active' }, ctx).sort({ fullName: 1 });
+    const includeSensitive = canSeeSensitive(ctx);
+    return documents.map((doc) => toDto(doc, includeSensitive));
+  },
 };

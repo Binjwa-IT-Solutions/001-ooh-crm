@@ -84,7 +84,7 @@ export function LeadsSelect({
         onKeyDown={handleKeyDown}
       >
         <span className={selectedOption ? '' : styles.placeholder}>{selectedOption?.label ?? placeholder}</span>
-        <span className={styles.chevron} aria-hidden="true">⌄</span>
+        <span className={styles.chevron} aria-hidden="true">▾</span>
       </button>
       {isOpen && (
         <div id={`${selectId}-listbox`} role="listbox" aria-labelledby={selectId} className={styles.menu}>

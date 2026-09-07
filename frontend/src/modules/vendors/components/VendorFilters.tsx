@@ -34,23 +34,34 @@ export default function VendorFilters({
   const statusOptions = ["Active", "Inactive"];
 
   /* LOAD STATES / CITIES */
-
   useEffect(() => {
     getVendorFilters(state)
       .then((response) => {
         const stateData = response.data?.states || [];
 
-        setStates(
-          stateData.map((item) => item.state),
+        const uniqueStates = Array.from(
+          new Set(
+            stateData
+              .map((item) => item.state)
+              .filter(Boolean),
+          ),
         );
 
-        setCities(
-          state
-            ? stateData.find(
-                (item) => item.state === state,
-              )?.cities || []
-            : response.data?.cities || [],
+        setStates(uniqueStates);
+
+        const selectedStateCities = state
+          ? stateData.find(
+              (item) => item.state === state,
+            )?.cities || []
+          : response.data?.cities || [];
+
+        const uniqueCities = Array.from(
+          new Set(
+            selectedStateCities.filter(Boolean),
+          ),
         );
+
+        setCities(uniqueCities);
       })
       .catch(() => {
         setStates([]);
@@ -59,7 +70,6 @@ export default function VendorFilters({
   }, [state]);
 
   /* CLEAR CITY WHEN STATE CHANGES */
-
   function handleStateChange(value: string) {
     onStateChange(value);
     onCityChange("");
@@ -71,7 +81,6 @@ export default function VendorFilters({
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
 
         {/* SEARCH */}
-
         <div className="lg:col-span-2">
           <label className="mb-2 block text-sm font-bold text-[#1F2937]">
             Search Vendor
@@ -89,7 +98,6 @@ export default function VendorFilters({
         </div>
 
         {/* STATE */}
-
         <Dropdown
           label="State"
           value={state}
@@ -101,13 +109,10 @@ export default function VendorFilters({
         />
 
         {/* CITY */}
-
         <Dropdown
           label="City"
           value={city}
-          placeholder={
-            state ? "All Cities" : "All Cities"
-          }
+          placeholder="All Cities"
           options={cities}
           open={cityOpen}
           setOpen={setCityOpen}
@@ -115,7 +120,6 @@ export default function VendorFilters({
         />
 
         {/* STATUS */}
-
         <Dropdown
           label="Status"
           value={status}
@@ -129,6 +133,7 @@ export default function VendorFilters({
     </div>
   );
 }
+
 
 /* =========================
    DROPDOWN
@@ -179,7 +184,6 @@ function Dropdown({
         <div className="absolute left-0 right-0 z-30 mt-1 max-h-60 overflow-y-auto rounded-xl border border-[#E8E8EC] bg-white shadow-lg">
 
           {/* ALL */}
-
           <button
             type="button"
             onClick={() => {
@@ -192,10 +196,9 @@ function Dropdown({
           </button>
 
           {/* OPTIONS */}
-
-          {options.map((option) => (
+          {options.map((option, index) => (
             <button
-              key={option}
+              key={`${label}-${option}-${index}`}
               type="button"
               onClick={() => {
                 onChange(option);
@@ -207,6 +210,7 @@ function Dropdown({
             </button>
           ))}
 
+          {/* EMPTY */}
           {!options.length && (
             <p className="px-4 py-3 text-sm text-gray-500">
               No options available

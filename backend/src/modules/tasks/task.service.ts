@@ -105,7 +105,7 @@ export async function getTasks(
     )
     .populate(
       "siteId",
-      "name city size",
+      "code city type address sizeWidth sizeHeight",
     )
     .populate(
       "assignedTo",
@@ -179,7 +179,7 @@ export async function updateTask(
     taskId,
     update,
     {
-      new: true,
+      returnDocument: "after",
       runValidators: true,
     },
   )
@@ -189,7 +189,7 @@ export async function updateTask(
     )
     .populate(
       "siteId",
-      "name city",
+      "code city type",
     )
     .populate(
       "assignedTo",

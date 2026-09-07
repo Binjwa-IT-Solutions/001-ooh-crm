@@ -11,6 +11,7 @@ import {
 } from './leads.model.js';
 import { STATUS_TRANSITIONS } from './leads.validator.js';
 import { toObjectId } from '../../core/db/basePlugin.js';
+import { AuthUser } from '../../core/auth/auth-model.js';
 
 export class LeadsService {
   /**
@@ -128,6 +129,7 @@ export class LeadsService {
       assignedTo: toObjectId(ctx.user.id),
       claimedBy: toObjectId(ctx.user.id),
       claimedAt: now,
+      slaTimerEnd: new Date(now.getTime() + 24 * 60 * 60 * 1000),
       status,
       statusHistory: [
         {
@@ -162,6 +164,13 @@ export class LeadsService {
         leadData.assignedTo = toObjectId(ctx.user.id);
         leadData.claimedBy = toObjectId(ctx.user.id);
         leadData.claimedAt = now;
+        leadData.statusHistory.push({
+          from: 'New',
+          to: 'Contacted',
+          changedBy: toObjectId(ctx.user.id),
+          reason: 'Initial follow-up logged during lead creation',
+          changedAt: now,
+        });
       }
     }
 
@@ -238,22 +247,21 @@ export class LeadsService {
           claimedBy: toObjectId(ctx.user.id),
           assignedTo: toObjectId(ctx.user.id),
           claimedAt: now,
-          status: 'Contacted',
-          firstResponseAt: now,
+          status: 'New',
           slaTimerEnd: new Date(now.getTime() + 24 * 60 * 60 * 1000),
           updatedBy: toObjectId(ctx.user.id),
         },
         $push: {
           statusHistory: {
             from: 'New',
-            to: 'Contacted',
+            to: 'New',
             changedBy: toObjectId(ctx.user.id),
             reason: 'Lead Claimed by Agent',
             changedAt: now,
           },
         },
       },
-      { new: true },
+      { returnDocument: 'after' },
     ).populate('assignedTo claimedBy', 'name email role');
 
     if (!updated) {
@@ -319,6 +327,15 @@ export class LeadsService {
         lead.assignedTo = lead.assignedTo || toObjectId(ctx.user.id);
         lead.claimedBy = lead.claimedBy || toObjectId(ctx.user.id);
         lead.claimedAt = lead.claimedAt || now;
+
+        lead.statusHistory = lead.statusHistory || [];
+        lead.statusHistory.push({
+          from: 'New',
+          to: 'Contacted',
+          changedBy: toObjectId(ctx.user.id),
+          reason: `First Follow-up Logged (${followUpEntry.followUpType}): ${followUpEntry.reason || followUpEntry.remarks || 'Client Contacted'}`,
+          changedAt: now,
+        });
       }
     }
 
@@ -389,6 +406,10 @@ export class LeadsService {
       ...qualificationData,
     };
 
+    if (qualificationData.city) {
+      lead.city = qualificationData.city;
+    }
+
     lead.updatedBy = toObjectId(ctx.user.id);
     await lead.save();
     return lead;
@@ -410,9 +431,14 @@ export class LeadsService {
       return lead;
     }
 
-    // 1. Check state transitions map
+    // 1. Check state transitions map (Admins and Managers have override privileges; Reopening from Won/Lost is allowed for all roles)
+    const isManagerOrAdmin = ctx.user?.role === 'admin' || ctx.user?.role === 'manager';
+    const isTerminalStatus = fromStatus === 'Won' || fromStatus === 'Lost';
+    const isActiveStatus = !['Won', 'Lost', 'Duplicate', 'duplicate'].includes(toStatus);
+    const isReopening = isTerminalStatus && isActiveStatus;
+
     const allowed = STATUS_TRANSITIONS[fromStatus] || [];
-    if (!allowed.includes(toStatus)) {
+    if (!isManagerOrAdmin && !isReopening && !allowed.includes(toStatus)) {
       throw new ValidationError(`Invalid status transition from ${fromStatus} to ${toStatus}.`);
     }
 
@@ -447,6 +473,14 @@ export class LeadsService {
       }
     }
 
+    // 5. Cycle Increment on Re-activation from Won / Lost to an active stage
+    if (isReopening) {
+      lead.cycle = (lead.cycle || 1) + 1;
+      if (lead.qualification?.lostReason) {
+        lead.qualification.lostReason = undefined;
+      }
+    }
+
     const now = new Date();
     lead.status = toStatus;
     lead.updatedBy = toObjectId(ctx.user.id);
@@ -456,13 +490,29 @@ export class LeadsService {
       from: fromStatus,
       to: toStatus,
       changedBy: toObjectId(ctx.user.id),
-      reason: payload.lostReason || undefined,
+      reason: payload.lostReason || (isReopening ? 'Re-opened for new campaign inquiry' : undefined),
+      cycle: lead.cycle || 1,
       changedAt: now,
     });
 
     await lead.save();
     await lead.populate('assignedTo claimedBy', 'name email role');
     return lead;
+  }
+
+  /**
+   * List active users/agents for assignment (sales_agent, manager, admin only).
+   */
+  static async listAgents(): Promise<any[]> {
+    return AuthUser.find(
+      {
+        status: 'Active',
+        role: { $in: ['sales_agent', 'manager', 'admin'] },
+      },
+      '_id name email role',
+    )
+      .sort({ name: 1 })
+      .lean();
   }
 
   /**
@@ -479,9 +529,25 @@ export class LeadsService {
       );
     }
 
+    if (data.assignedTo !== undefined) {
+      if (data.assignedTo) {
+        const targetId = toObjectId(data.assignedTo);
+        lead.assignedTo = targetId;
+        lead.claimedBy = targetId;
+      } else {
+        // Move to Unclaimed Pool
+        lead.assignedTo = null;
+        lead.claimedBy = null;
+        lead.claimedAt = null;
+        lead.status = 'New';
+      }
+      delete data.assignedTo;
+    }
+
     Object.assign(lead, data);
     lead.updatedBy = toObjectId(ctx.user.id);
     await lead.save();
+    await lead.populate('assignedTo claimedBy', 'name email role');
     return lead;
   }
 
@@ -502,6 +568,7 @@ export class LeadsService {
           to: sh.to,
           reason: sh.reason,
           changedBy: sh.changedBy,
+          cycle: sh.cycle,
           timestamp: sh.changedAt,
         });
       }

@@ -11,4 +11,5 @@ attendanceRoutes.use(requireAuth);
 attendanceRoutes.post('/check-in', requirePermission('attendance.self'), controller.checkIn);
 attendanceRoutes.post('/check-out', requirePermission('attendance.self'), controller.checkOut);
 attendanceRoutes.get('/me', requirePermission('attendance.self'), controller.getMine);
+attendanceRoutes.get('/me/summary', requirePermission('attendance.self'), controller.getMineSummary);
 attendanceRoutes.get('/team', requirePermission('attendance.view_team'), controller.getTeam);

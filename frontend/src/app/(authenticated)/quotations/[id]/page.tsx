@@ -1,10 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { quotationsApi } from '@/modules/quotations/api';
+import { api } from '@/shared/api/client';
+import { sessionStore } from '@/shared/auth/session-store';
 import type { Quotation } from '@/modules/quotations/types';
+import { Pencil, Upload, FileText, X } from 'lucide-react';
 
 export default function QuotationDetailPage() {
   const params = useParams<{ id?: string | string[] }>();
@@ -20,9 +23,37 @@ export default function QuotationDetailPage() {
   const [sendLoading, setSendLoading] = useState(false);
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
 
+  // Edit modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editClientName, setEditClientName] = useState('');
+  const [editClientEmail, setEditClientEmail] = useState('');
+  const [editClientPhone, setEditClientPhone] = useState('');
+  const [editValidUntil, setEditValidUntil] = useState('');
+  const [editLineItems, setEditLineItems] = useState<{
+    siteId: string;
+    description: string;
+    ratePerDay: number;
+    startDate: string;
+    endDate: string;
+  }[]>([]);
+  const [availableSites, setAvailableSites] = useState<{ _id: string; siteCode: string; city?: string }[]>([]);
+  const [editSaving, setEditSaving] = useState(false);
+
   // PDF state
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [uploadLoading, setUploadLoading] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function withAuthToken(rawUrl: string): string {
+    if (!rawUrl) return '';
+    const token = sessionStore.getAccessToken();
+    if (token && rawUrl.startsWith('/api/files/')) {
+      const separator = rawUrl.includes('?') ? '&' : '?';
+      return `${rawUrl}${separator}token=${encodeURIComponent(token)}`;
+    }
+    return rawUrl;
+  }
 
   useEffect(() => {
     if (id) fetchQuotation();
@@ -47,10 +78,111 @@ export default function QuotationDetailPage() {
     }
   }
 
+  async function openEditModal() {
+    if (!quotation) return;
+    setEditClientName(quotation.clientName || '');
+    setEditClientEmail(quotation.clientEmail || '');
+    setEditClientPhone(quotation.clientPhone || '');
+    setEditValidUntil(
+      quotation.validUntil ? new Date(quotation.validUntil).toISOString().slice(0, 10) : ''
+    );
+    setEditLineItems(
+      quotation.sites.map((s) => ({
+        siteId: typeof s.siteId === 'object' && s.siteId ? (s.siteId as any)._id : String(s.siteId),
+        description: s.description || '',
+        ratePerDay: s.ratePerDay / 100,
+        startDate: new Date(s.startDate).toISOString().slice(0, 10),
+        endDate: new Date(s.endDate).toISOString().slice(0, 10),
+      }))
+    );
+
+    try {
+      const res = await api.get<{ data?: any[]; sites?: any[] }>('/api/sites?limit=100').catch(() => ({ data: [], sites: [] }));
+      const loaded = (res as any).data || res.sites || [];
+      setAvailableSites(loaded);
+    } catch {
+      // ignore
+    }
+
+    setShowEditModal(true);
+  }
+
+  function handleLineItemChange(index: number, field: string, value: any) {
+    setEditLineItems((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  }
+
+  function addEditLineItem() {
+    const defaultSiteId = availableSites.length > 0
+      ? availableSites[0]._id
+      : (quotation?.sites[0]?.siteId
+        ? (typeof quotation.sites[0].siteId === 'object'
+          ? (quotation.sites[0].siteId as any)._id
+          : String(quotation.sites[0].siteId))
+        : '');
+    const today = new Date().toISOString().slice(0, 10);
+    const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    setEditLineItems((prev) => [
+      ...prev,
+      {
+        siteId: defaultSiteId,
+        description: '',
+        ratePerDay: 1000,
+        startDate: today,
+        endDate: nextWeek,
+      },
+    ]);
+  }
+
+  function removeEditLineItem(index: number) {
+    if (editLineItems.length <= 1) {
+      alert('Quotation must have at least one media site line item.');
+      return;
+    }
+    setEditLineItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (editLineItems.length === 0) {
+      alert('At least one site is required');
+      return;
+    }
+
+    try {
+      setEditSaving(true);
+      const updated = await quotationsApi.update(id, {
+        clientName: editClientName.trim() || undefined,
+        clientEmail: editClientEmail.trim() || undefined,
+        clientPhone: editClientPhone.trim() || undefined,
+        validUntil: editValidUntil ? new Date(editValidUntil).toISOString() : undefined,
+        sites: editLineItems.map((item) => ({
+          siteId: item.siteId,
+          description: item.description,
+          ratePerDay: Number(item.ratePerDay),
+          startDate: item.startDate,
+          endDate: item.endDate,
+        })),
+      });
+      setQuotation(updated);
+      setShowEditModal(false);
+      loadPdfUrl();
+      alert('Quotation updated successfully!');
+    } catch (err: any) {
+      alert(err.message || 'Failed to update quotation');
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
   async function loadPdfUrl() {
     try {
       const res = await quotationsApi.getPdfUrl(id);
-      setPdfUrl(res.pdfUrl);
+      setPdfUrl(withAuthToken(res.pdfUrl));
     } catch (err) {
       console.error(err);
     }
@@ -60,7 +192,7 @@ export default function QuotationDetailPage() {
     try {
       setPdfLoading(true);
       const res = await quotationsApi.generatePdf(id);
-      setPdfUrl(res.pdfUrl);
+      setPdfUrl(withAuthToken(res.pdfUrl));
       if (quotation) {
         setQuotation({ ...quotation, pdfKey: res.pdfKey });
       }
@@ -68,6 +200,30 @@ export default function QuotationDetailPage() {
       alert(err.message || 'PDF generation failed');
     } finally {
       setPdfLoading(false);
+    }
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== 'application/pdf') {
+      alert('Please select a valid PDF file');
+      return;
+    }
+
+    try {
+      setUploadLoading(true);
+      const res = await quotationsApi.uploadPdf(id, file);
+      setPdfUrl(withAuthToken(res.pdfUrl));
+      if (quotation) {
+        setQuotation({ ...quotation, pdfKey: res.pdfKey });
+      }
+      alert('Custom proposal PDF uploaded successfully!');
+    } catch (err: any) {
+      alert(err.message || 'Failed to upload PDF');
+    } finally {
+      setUploadLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }
 
@@ -111,6 +267,15 @@ export default function QuotationDetailPage() {
 
   return (
     <div className="space-y-6">
+      {/* Hidden PDF file input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept="application/pdf"
+        className="hidden"
+        onChange={handleFileUpload}
+      />
+
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -134,15 +299,47 @@ export default function QuotationDetailPage() {
           >
             Back
           </Link>
+          {quotation.status === 'Draft' && (
+            <button
+              type="button"
+              onClick={openEditModal}
+              className="inline-flex items-center gap-1.5 rounded border border-[#8B2424] bg-white px-3 py-1.5 text-xs font-semibold text-[#8B2424] hover:bg-[#8B2424] hover:text-white transition shadow-sm dark:bg-slate-800"
+            >
+              <Pencil className="w-3.5 h-3.5 shrink-0" />
+              <span>Edit Quotation</span>
+            </button>
+          )}
 
           <button
             type="button"
             onClick={handleGeneratePdf}
-            disabled={pdfLoading}
+            disabled={pdfLoading || uploadLoading}
             className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
           >
-            {pdfLoading ? 'Generating PDF...' : quotation.pdfKey ? 'Regenerate PDF' : 'Generate PDF (B2)'}
+            {pdfLoading ? 'Generating PDF...' : quotation.pdfKey ? 'Regenerate PDF' : 'Generate PDF'}
           </button>
+
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadLoading || pdfLoading}
+            className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+          >
+            <Upload className="w-3.5 h-3.5 shrink-0" />
+            <span>{uploadLoading ? 'Uploading...' : 'Upload Custom PDF'}</span>
+          </button>
+
+          {pdfUrl && (
+            <a
+              href={pdfUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 rounded border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-300"
+            >
+              <FileText className="w-3.5 h-3.5 shrink-0" />
+              <span>View PDF</span>
+            </a>
+          )}
 
           <button
             type="button"
@@ -224,26 +421,26 @@ export default function QuotationDetailPage() {
           {/* Financial Breakdown */}
           <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h2 className="mb-4 text-base font-semibold text-slate-900 dark:text-white">Financial Breakdown</h2>
-            <dl className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+            <div className="space-y-2 text-xs">
               <div className="flex justify-between">
-                <dt>Subtotal</dt>
-                <dd className="font-medium">{formatRupees(quotation.subtotal)}</dd>
+                <span className="text-slate-500">Subtotal</span>
+                <span className="font-medium text-slate-900 dark:text-white">{formatRupees(quotation.subtotal)}</span>
               </div>
               <div className="flex justify-between">
-                <dt>GST (18%)</dt>
-                <dd className="font-medium text-slate-500">{formatRupees(quotation.taxAmount)}</dd>
+                <span className="text-slate-500">GST (18%)</span>
+                <span className="font-medium text-slate-900 dark:text-white">{formatRupees(quotation.taxAmount)}</span>
               </div>
-              <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-bold text-slate-900 dark:border-slate-800 dark:text-white">
-                <dt>Total Amount</dt>
-                <dd className="text-emerald-600 dark:text-emerald-400">{formatRupees(quotation.total)}</dd>
+              <div className="border-t border-slate-200 pt-2 dark:border-slate-800 flex justify-between text-sm font-semibold">
+                <span className="text-slate-900 dark:text-white">Total Amount</span>
+                <span className="text-emerald-600 dark:text-emerald-400">{formatRupees(quotation.total)}</span>
               </div>
-            </dl>
+            </div>
           </div>
 
           {/* Proposal Tracking Timeline (B3) */}
           <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h2 className="mb-4 text-base font-semibold text-slate-900 dark:text-white">Tracking Timeline</h2>
-            <div className="space-y-3 text-xs text-slate-600 dark:text-slate-400">
+            <div className="space-y-3 text-xs">
               <div>
                 <span className="font-semibold text-slate-900 dark:text-white">Created:</span>{' '}
                 {quotation.createdAt ? new Date(quotation.createdAt).toLocaleString('en-IN') : '-'}
@@ -273,6 +470,176 @@ export default function QuotationDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Edit Quotation Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
+          <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl dark:bg-slate-900 my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3 dark:border-slate-800">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                  Edit Quotation ({quotation.quoteNumber})
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Update rates, campaign dates, sites, or client info.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditModal(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-1"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              {/* Client Info Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="font-medium text-slate-700 dark:text-slate-300">Client / Company Name</label>
+                  <input
+                    type="text"
+                    value={editClientName}
+                    onChange={(e) => setEditClientName(e.target.value)}
+                    className="mt-1 w-full rounded border border-slate-300 bg-white p-2 text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="font-medium text-slate-700 dark:text-slate-300">Client Email</label>
+                  <input
+                    type="email"
+                    value={editClientEmail}
+                    onChange={(e) => setEditClientEmail(e.target.value)}
+                    className="mt-1 w-full rounded border border-slate-300 bg-white p-2 text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="font-medium text-slate-700 dark:text-slate-300">Client Phone</label>
+                  <input
+                    type="text"
+                    value={editClientPhone}
+                    onChange={(e) => setEditClientPhone(e.target.value)}
+                    className="mt-1 w-full rounded border border-slate-300 bg-white p-2 text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="font-medium text-slate-700 dark:text-slate-300">Valid Until Date</label>
+                  <input
+                    type="date"
+                    value={editValidUntil}
+                    onChange={(e) => setEditValidUntil(e.target.value)}
+                    className="mt-1 w-full rounded border border-slate-300 bg-white p-2 text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              {/* Line items header */}
+              <div className="border-t border-slate-200 pt-3 dark:border-slate-800">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                    Media Sites & Daily Rates
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={addEditLineItem}
+                    className="text-xs font-semibold text-[#8B2424] hover:underline"
+                  >
+                    + Add Another Site
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {editLineItems.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-800/50 space-y-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">Site #{idx + 1}</span>
+                        {editLineItems.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeEditLineItem(idx)}
+                            className="text-[11px] text-rose-600 hover:underline font-medium"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[11px] text-slate-500">Select Media Site</label>
+                          <select
+                            value={item.siteId}
+                            onChange={(e) => handleLineItemChange(idx, 'siteId', e.target.value)}
+                            className="mt-1 w-full rounded border border-slate-300 bg-white p-1.5 text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                          >
+                            {availableSites.map((s) => (
+                              <option key={s._id} value={s._id}>
+                                {s.siteCode} {s.city ? `(${s.city})` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-slate-500">Daily Rate (₹ Rupees)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={item.ratePerDay}
+                            onChange={(e) => handleLineItemChange(idx, 'ratePerDay', Number(e.target.value))}
+                            className="mt-1 w-full rounded border border-slate-300 bg-white p-1.5 text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-slate-500">Start Date</label>
+                          <input
+                            type="date"
+                            value={item.startDate}
+                            onChange={(e) => handleLineItemChange(idx, 'startDate', e.target.value)}
+                            className="mt-1 w-full rounded border border-slate-300 bg-white p-1.5 text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-slate-500">End Date</label>
+                          <input
+                            type="date"
+                            value={item.endDate}
+                            onChange={(e) => handleLineItemChange(idx, 'endDate', e.target.value)}
+                            className="mt-1 w-full rounded border border-slate-300 bg-white p-1.5 text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="rounded border border-slate-300 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editSaving}
+                  className="rounded bg-[#8B2424] px-5 py-2 text-xs font-semibold text-white hover:bg-[#6E1D1D] disabled:opacity-50 shadow-sm"
+                >
+                  {editSaving ? 'Saving Changes...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Send Proposal Modal */}
       {showSendModal && (

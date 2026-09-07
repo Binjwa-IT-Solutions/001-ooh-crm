@@ -4,16 +4,18 @@ import { useCallback, useEffect, useState } from "react";
 import {
   cancelPurchaseOrder,
   createPurchaseOrder,
+  getPurchaseOrder,
   getPurchaseOrders,
   issuePurchaseOrder,
   updatePurchaseOrder,
 } from "../api";
 import type {
   PurchaseOrder,
+  PurchaseOrderFilters,
   PurchaseOrderFormData,
 } from "../types";
 
-export function usePurchaseOrders() {
+export function usePurchaseOrders(initialFilters?: PurchaseOrderFilters) {
   const [orders, setOrders] = useState<
     PurchaseOrder[]
   >([]);
@@ -21,13 +23,13 @@ export function usePurchaseOrders() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const loadOrders = useCallback(async () => {
+  const loadOrders = useCallback(async (filters?: PurchaseOrderFilters) => {
     try {
       setLoading(true);
       setError("");
 
-      const response =
-        await getPurchaseOrders();
+      const queryFilters = filters ?? initialFilters;
+      const response = await getPurchaseOrders(queryFilters);
 
       setOrders(response.data || []);
     } catch (error) {
@@ -39,7 +41,7 @@ export function usePurchaseOrders() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [initialFilters?.search, initialFilters?.status, initialFilters?.campaignId, initialFilters?.vendorId]);
 
   useEffect(() => {
     loadOrders();
@@ -144,5 +146,36 @@ export function usePurchaseOrders() {
     editOrder,
     issueOrder,
     cancelOrder,
+  };
+}
+
+export function usePurchaseOrder(id: string) {
+  const [purchaseOrder, setPurchaseOrder] = useState<PurchaseOrder | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadOrder = useCallback(async () => {
+    if (!id) return;
+    try {
+      setIsLoading(true);
+      setError('');
+      const response = await getPurchaseOrder(id);
+      setPurchaseOrder(response.data || null);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load purchase order');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    loadOrder();
+  }, [loadOrder]);
+
+  return {
+    purchaseOrder,
+    isLoading,
+    error,
+    mutate: loadOrder,
   };
 }

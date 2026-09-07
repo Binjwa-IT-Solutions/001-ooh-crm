@@ -12,7 +12,7 @@ import { processEscalations } from '../modules/escalations/escalation.service.js
  *
  * Wrapped in `withJobLock` to be idempotent and safe in cluster mode.
  */
-export async function escalationJob() {
+export async function escalationJob(): Promise<void> {
   try {
     console.log('[job:escalation] starting...');
 
@@ -26,7 +26,3 @@ export async function escalationJob() {
   }
 }
 
-export const escalationJobLocked = withJobLock(
-  'escalation',
-  escalationJob,
-);

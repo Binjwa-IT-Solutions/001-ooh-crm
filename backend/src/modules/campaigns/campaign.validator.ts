@@ -48,6 +48,8 @@ export const updateCampaignStatusSchema = z.object({
 });
 
 export const campaignListQuerySchema = z.object({
+  search: z.string().trim().optional(),
+
   status: z
     .enum([
       "Draft",
@@ -63,7 +65,7 @@ export const campaignListQuerySchema = z.object({
     .trim()
     .optional(),
 
-  manager: objectId.optional(),
+  manager: z.string().trim().optional(),
 
   startDate: z.coerce.date().optional(),
 
@@ -82,3 +84,5 @@ export const campaignListQuerySchema = z.object({
     .max(100)
     .default(20),
 });
+
+export const updateCampaignSchema = createCampaignSchema.partial();

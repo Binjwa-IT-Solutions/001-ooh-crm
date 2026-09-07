@@ -2,7 +2,7 @@ import cron, { type ScheduledTask } from 'node-cron';
 
 import { config } from '../config/index.js';
 import { withJobLock } from './job-runner.js';
-import { escalationJobLocked } from './escalation.job.js';
+import { escalationJob } from './escalation.job.js';
 
 export { withJobLock } from './job-runner.js';
 
@@ -37,7 +37,7 @@ const JOBS: JobDefinition[] = [
     schedule: '*/15 * * * *',
     lockTtlSeconds: 15 * 60,
     description: 'D4 — escalate overdue tasks',
-    run: escalationJobLocked,
+    run: escalationJob,
   },
   {
     name: 'heartbeat',

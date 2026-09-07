@@ -3,9 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  AlertTriangle,
   Clock,
-  ShieldAlert,
+  ArrowUpRight,
   Users,
   CheckCircle2,
   ExternalLink,
@@ -68,13 +67,13 @@ export default function TaskEscalationModal({
         {/* Header */}
         <div className="flex items-start justify-between border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white px-6 py-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F9DADA] text-[#8B2424]">
-              <ShieldAlert className="h-5 w-5" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#8B2424] to-[#A8333B] text-white shadow-sm ring-2 ring-[#F9DADA]">
+              <ArrowUpRight className="h-5 w-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-[#8B2424]">
-                  Task Escalation
+                  SLA Escalation Engine
                 </span>
                 <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[11px] font-medium text-gray-700">
                   {task.type}
@@ -152,7 +151,7 @@ export default function TaskEscalationModal({
               {currentStatus === "Completed" ? (
                 <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
               ) : overdueInfo.isOverdue ? (
-                <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                <Clock className="h-5 w-5 text-[#8B2424] shrink-0 mt-0.5" />
               ) : (
                 <Clock className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
               )}
@@ -195,10 +194,11 @@ export default function TaskEscalationModal({
 
               {expectedLevel && (
                 <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-bold shadow-xs shrink-0 ${getLevelClass(
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold shadow-xs shrink-0 ${getLevelClass(
                     expectedLevel
                   )}`}
                 >
+                  <ArrowUpRight className="h-3 w-3" />
                   {expectedLevel} Active
                 </span>
               )}
@@ -209,7 +209,7 @@ export default function TaskEscalationModal({
           <div>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
-                <ShieldAlert className="h-4 w-4 text-[#8B2424]" />
+                <ArrowUpRight className="h-4 w-4 text-[#8B2424]" />
                 Escalation Thresholds & Rules
               </h3>
               <span className="text-xs text-gray-500">Automated SLAs</span>
@@ -272,10 +272,11 @@ export default function TaskEscalationModal({
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-bold shrink-0 ${getLevelClass(
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold shrink-0 ${getLevelClass(
                           esc.level
                         )}`}
                       >
+                        <ArrowUpRight className="h-3 w-3" />
                         {esc.level}
                       </span>
                       <div className="min-w-0">

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { quotationsApi } from '@/modules/quotations/api';
 import { leadsApi } from '@/modules/leads/api';
 import { api } from '@/shared/api/client';
@@ -26,6 +26,8 @@ interface QuotationLineForm {
 
 export default function NewQuotationPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryLeadId = searchParams.get('leadId');
 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [sites, setSites] = useState<SiteOption[]>([]);
@@ -64,12 +66,15 @@ export default function NewQuotationPage() {
       const loadedLeads: Lead[] = (leadsRes as any).data || leadsRes.leads || [];
       setLeads(loadedLeads);
       if (loadedLeads.length > 0) {
-        const firstLead = loadedLeads[0];
-        const firstId = firstLead._id || firstLead.id;
-        setSelectedLeadId(firstId);
-        setClientName(firstLead.companyName || '');
-        setClientEmail(firstLead.email || '');
-        setClientPhone(firstLead.mobile || '');
+        const targetLead = queryLeadId
+          ? loadedLeads.find((l) => (l.id || (l as any)._id) === queryLeadId) || loadedLeads[0]
+          : loadedLeads[0];
+
+        const targetId = targetLead._id || targetLead.id;
+        setSelectedLeadId(targetId);
+        setClientName(targetLead.companyName || '');
+        setClientEmail(targetLead.email || '');
+        setClientPhone(targetLead.mobile || '');
       }
 
       const loadedSites: SiteOption[] = (sitesRes as any).data || sitesRes.sites || [];
@@ -385,7 +390,7 @@ export default function NewQuotationPage() {
           <button
             type="submit"
             disabled={loading}
-            className="rounded-md bg-[#8B2424] px-5 py-2 text-sm font-semibold text-white hover:bg-[#6E1D1D] disabled:opacity-50 shadow-sm"
+            className="rounded-md bg-[#8B2424] px-5 py-2 text-sm font-semibold text-white hover:bg-primary disabled:opacity-50 shadow-sm"
           >
             {loading ? 'Creating Draft Quotation...' : 'Create Draft Quotation'}
           </button>

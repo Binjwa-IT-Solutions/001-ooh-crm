@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useLead } from '@/modules/leads/hooks/use-leads';
 import { leadsApi } from '@/modules/leads/api';
@@ -16,28 +17,94 @@ import { Card, Badge, Spinner, Button, Field, Alert, Modal, TextAreaField } from
 import { LeadsSelect } from '@/modules/leads/components/leads-select';
 import LogCallModal from '@/modules/leads/component/log-call-modal';
 import { useAuth } from '@/shared/auth/auth-context';
+import {
+  Timer,
+  Clock,
+  RefreshCw,
+  ShieldCheck,
+  Check,
+  CheckCircle,
+  Phone,
+  Users,
+  MessageSquare,
+  Mail,
+  MapPin,
+  FileText,
+  Plus,
+  ArrowRight,
+  RotateCw,
+} from 'lucide-react';
 
 const STATUS_STYLES: Record<string, string> = {
-  New: 'border-sky-200 bg-sky-50 text-sky-700',
-  Contacted: 'border-amber-200 bg-amber-50 text-amber-700',
-  Interested: 'border-cyan-200 bg-cyan-50 text-cyan-700',
-  Qualified: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-  'Proposal Sent': 'border-indigo-200 bg-indigo-50 text-indigo-700',
-  Negotiation: 'border-orange-200 bg-orange-50 text-orange-700',
-  Won: 'border-green-200 bg-green-50 text-green-700',
-  Lost: 'border-rose-200 bg-rose-50 text-rose-700',
-  Duplicate: 'border-red-200 bg-red-50 text-red-700',
-  duplicate: 'border-red-200 bg-red-50 text-red-700',
+  New: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300',
+  Contacted: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300',
+  Interested: 'border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-950/50 dark:text-cyan-300',
+  Qualified: 'border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-800 dark:bg-purple-950/50 dark:text-purple-300',
+  'Proposal Sent': 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300',
+  Negotiation: 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950/50 dark:text-orange-300',
+  Won: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300',
+  Lost: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300',
+  Duplicate: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-300',
+  duplicate: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-300',
 };
 
-const FOLLOW_UP_ICONS: Record<string, string> = {
-  Call: '📞',
-  Meeting: '🤝',
-  WhatsApp: '💬',
-  Email: '✉️',
-  Visit: '📍',
-  Other: '📝',
+const STATUS_DOT_COLORS: Record<string, string> = {
+  New: 'bg-sky-500',
+  Contacted: 'bg-amber-500',
+  Interested: 'bg-cyan-500',
+  Qualified: 'bg-purple-500',
+  'Proposal Sent': 'bg-indigo-500',
+  Negotiation: 'bg-orange-500',
+  Won: 'bg-emerald-500',
+  Lost: 'bg-rose-500',
+  Duplicate: 'bg-red-500',
+  duplicate: 'bg-red-500',
 };
+
+const STATUS_TEXT_COLORS: Record<string, string> = {
+  New: 'text-sky-600 dark:text-sky-400',
+  Contacted: 'text-amber-600 dark:text-amber-400',
+  Interested: 'text-cyan-600 dark:text-cyan-400',
+  Qualified: 'text-purple-600 dark:text-purple-400',
+  'Proposal Sent': 'text-indigo-600 dark:text-indigo-400',
+  Negotiation: 'text-orange-600 dark:text-orange-400',
+  Won: 'text-emerald-600 dark:text-emerald-400',
+  Lost: 'text-rose-600 dark:text-rose-400',
+  Duplicate: 'text-red-600 dark:text-red-400',
+  duplicate: 'text-red-600 dark:text-red-400',
+};
+
+function renderFollowUpIcon(type?: string) {
+  switch (type) {
+    case 'Call':
+      return <Phone className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 shrink-0" />;
+    case 'Meeting':
+      return <Users className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />;
+    case 'WhatsApp':
+      return <MessageSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />;
+    case 'Email':
+      return <Mail className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />;
+    case 'Visit':
+      return <MapPin className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />;
+    case 'Other':
+    default:
+      return <FileText className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400 shrink-0" />;
+  }
+}
+
+function formatDateTime(dateStr?: string | Date | null) {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
 
 export default function LeadDetailPage() {
   const params = useParams();
@@ -50,6 +117,7 @@ export default function LeadDetailPage() {
 
   const [isQualifying, setIsQualifying] = useState(false);
   const [qualifyError, setQualifyError] = useState('');
+  const [qualifySuccess, setQualifySuccess] = useState('');
 
   // Status transition & Lost modal state
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
@@ -64,6 +132,41 @@ export default function LeadDetailPage() {
   const [managerRemarks, setManagerRemarks] = useState('');
   const [isApprovingManager, setIsApprovingManager] = useState(false);
   const [approvalMessage, setApprovalMessage] = useState<string | null>(null);
+
+  // Re-assign Agent state
+  const [agentsList, setAgentsList] = useState<{ _id: string; name: string; email: string; role: string }[]>([]);
+  const [isReassigning, setIsReassigning] = useState(false);
+  const [showReassignModal, setShowReassignModal] = useState(false);
+  const [selectedAgentId, setSelectedAgentId] = useState('');
+
+  const openReassignModal = async () => {
+    setSelectedAgentId(lead?.assignedTo?._id || '');
+    try {
+      const res = await leadsApi.listAgents();
+      setAgentsList(res.agents || []);
+    } catch {
+      // ignore
+    }
+    setShowReassignModal(true);
+  };
+
+  const handleReassignSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!lead) return;
+    setIsReassigning(true);
+    try {
+      await leadsApi.updateLead(lead._id || lead.id, {
+        assignedTo: selectedAgentId || null,
+      });
+      setShowReassignModal(false);
+      mutate();
+      alert('Lead successfully re-assigned!');
+    } catch (err: any) {
+      alert(err.message || 'Failed to re-assign lead');
+    } finally {
+      setIsReassigning(false);
+    }
+  };
 
   // Activity timeline state
   const [activities, setActivities] = useState<ActivityItem[]>([]);
@@ -83,7 +186,20 @@ export default function LeadDetailPage() {
   if (isLoading) return <div className="py-12 flex justify-center"><Spinner label="Loading lead details..." /></div>;
   if (error || !lead) return <Alert tone="error" title="Error">Failed to load lead</Alert>;
 
-  const availableNextStatuses: LeadStatus[] = STATUS_TRANSITIONS[lead.status] || [];
+  const ALL_STATUSES: LeadStatus[] = [
+    'New',
+    'Contacted',
+    'Interested',
+    'Qualified',
+    'Proposal Sent',
+    'Negotiation',
+    'Won',
+    'Lost',
+  ];
+
+  const availableNextStatuses: LeadStatus[] = isManagerOrAdmin
+    ? ALL_STATUSES.filter((s) => s !== lead.status)
+    : STATUS_TRANSITIONS[lead.status] || [];
 
   // Calculate Lead Aging (Days since creation)
   const createdDate = new Date(lead.createdAt || lead.receivedAt || Date.now());
@@ -96,6 +212,8 @@ export default function LeadDetailPage() {
     e.preventDefault();
     setIsQualifying(true);
     setQualifyError('');
+    setQualifySuccess('');
+    setStatusError('');
 
     const formData = new FormData(e.currentTarget);
     const data: LeadQualification = {
@@ -111,7 +229,8 @@ export default function LeadDetailPage() {
 
     try {
       await leadsApi.qualifyLead(lead._id || lead.id, data);
-      mutate();
+      await mutate();
+      setQualifySuccess('Requirements saved successfully! You can now move status to Qualified.');
     } catch (err: unknown) {
       setQualifyError(err instanceof Error ? err.message : 'Failed to qualify lead');
     } finally {
@@ -178,32 +297,44 @@ export default function LeadDetailPage() {
   return (
     <div className="space-y-6 py-6 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
-        <div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
               {lead.companyName}
             </h1>
             <span
-              className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+              className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
                 STATUS_STYLES[lead.status] ?? 'border-slate-200 bg-slate-50 text-slate-700'
               }`}
             >
               {lead.status}
             </span>
-            <span className="inline-flex items-center rounded-md bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-medium text-slate-600 dark:text-slate-400">
-              ⏱️ Lead Duration: {agingDays}d
+            {Boolean(lead.cycle && lead.cycle > 1) && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800 shadow-2xs">
+                <RotateCw className="w-3 h-3 shrink-0" />
+                Repeat Client ({lead.cycle}x)
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-medium text-slate-600 dark:text-slate-400">
+              <Timer className="w-3.5 h-3.5 shrink-0" />
+              Lead: {agingDays}d
             </span>
             {lead.nextActionDate && (
               <span
-                className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${
                   isOverdue
-                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                    : 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                    ? 'bg-rose-50 text-rose-700 border border-rose-200/80 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-900'
+                    : 'bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900'
                 }`}
               >
-                🕒 Next Action: {new Date(lead.nextActionDate).toLocaleDateString()}{' '}
-                {isOverdue && '(Overdue)'}
+                <Clock className="w-3.5 h-3.5 shrink-0" />
+                <span>Next: {formatDateTime(lead.nextActionDate)}</span>
+                {isOverdue && (
+                  <span className="ml-0.5 rounded bg-rose-200 px-1 py-0.1 text-[10px] font-bold text-rose-800 dark:bg-rose-900 dark:text-rose-200">
+                    Overdue
+                  </span>
+                )}
               </span>
             )}
           </div>
@@ -212,36 +343,62 @@ export default function LeadDetailPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
-          <Button variant="secondary" onClick={() => setLogModalOpen(true)}>
-            + Log Action / ATR
+        <div className="flex items-center justify-start lg:justify-end gap-2 shrink-0 flex-nowrap">
+          {/* Re-open Lead Button (When Closed / Won / Lost) vs Normal Stage Dropdown */}
+          {['Won', 'Lost'].includes(lead.status) ? (
+            <Button
+              variant="secondary"
+              isLoading={isUpdatingStatus}
+              onClick={() => executeStatusChange('Interested', 'Re-opened for new campaign inquiry')}
+              className="!h-9 !px-3 inline-flex items-center gap-1.5 border border-purple-300 bg-purple-50 text-purple-800 hover:bg-purple-100 dark:border-purple-800 dark:bg-purple-950 dark:text-purple-300 !text-xs font-semibold shadow-2xs"
+            >
+              <RotateCw className="w-3.5 h-3.5 shrink-0" />
+              <span>Re-open Lead</span>
+            </Button>
+          ) : (
+            availableNextStatuses.length > 0 && (
+              <div className="h-9 flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-700 shadow-xs hover:border-slate-400 hover:bg-slate-50 focus-within:border-[#8B2424] focus-within:ring-1 focus-within:ring-[#8B2424] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors">
+                <ArrowRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <span className="text-slate-500 whitespace-nowrap">Move to:</span>
+                <select
+                  id="nextStatus"
+                  value=""
+                  disabled={isUpdatingStatus}
+                  onChange={(e) => {
+                    if (e.target.value) handleStatusSelect(e.target.value as LeadStatus);
+                  }}
+                  aria-label="Next lead status transition"
+                  className="bg-transparent font-semibold text-slate-800 dark:text-slate-100 outline-none cursor-pointer pr-1"
+                >
+                  <option value="" disabled className="text-slate-400">Select stage...</option>
+                  {availableNextStatuses.map((s) => (
+                    <option key={s} value={s} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-white">
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )
+          )}
+
+          <Button
+            variant="ghost"
+            onClick={() => setLogModalOpen(true)}
+            className="!h-9 !px-3 inline-flex items-center gap-1.5 bg-[#F9DADA] text-[#8B2424] hover:bg-[#F2CACA] !text-xs font-semibold border border-[#F2CACA]/80 shadow-2xs dark:bg-red-950/40 dark:text-red-300 dark:border-red-900"
+          >
+            <Plus className="w-3.5 h-3.5 shrink-0" />
+            <span>Log Action</span>
+            <span className="ml-0.5 rounded bg-white/70 px-1 py-0.2 text-[10px] font-bold text-[#8B2424] dark:bg-red-900/60 dark:text-red-200">
+              ATR
+            </span>
           </Button>
 
-          {/* Valid Next Steps Dropdown */}
-          {availableNextStatuses.length > 0 && (
-            <div className="flex items-center gap-2">
-              <label htmlFor="nextStatus" className="text-xs font-medium text-slate-500">
-                Move to:
-              </label>
-              <select
-                id="nextStatus"
-                value=""
-                disabled={isUpdatingStatus}
-                onChange={(e) => {
-                  if (e.target.value) handleStatusSelect(e.target.value as LeadStatus);
-                }}
-                aria-label="Next lead status transition"
-                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 focus:border-red-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-              >
-                <option value="" disabled>Select next status...</option>
-                {availableNextStatuses.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <Link href={`/quotations/new?leadId=${lead._id || lead.id}`}>
+            <Button variant="primary" className="!h-9 !px-3 inline-flex items-center gap-1.5 bg-[#8B2424] text-white hover:bg-[#6E1D1D] shadow-2xs !text-xs font-semibold">
+              <Plus className="w-3.5 h-3.5 shrink-0" />
+              <span>Create Quotation</span>
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -255,7 +412,7 @@ export default function LeadDetailPage() {
       <div className="flex gap-4 border-b border-slate-200 dark:border-slate-800">
         {[
           { id: 'info', label: 'Information' },
-          { id: 'qualification', label: 'Qualification' },
+          { id: 'qualification', label: 'Requirements' },
           { id: 'activity', label: 'Activity Timeline (ATR)' },
           { id: 'documents', label: 'Documents' },
         ].map((tab) => (
@@ -286,22 +443,34 @@ export default function LeadDetailPage() {
               <p className="text-base text-slate-800 dark:text-slate-200">{lead.city || '-'}</p>
             </div>
             <div>
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Assigned Agent</h3>
-              <p className="text-base text-slate-800 dark:text-slate-200">
-                {lead.assignedTo?.name || lead.claimedBy?.name || 'Unassigned'}
-              </p>
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Assigned Agent</h3>
+              <div className="flex items-center gap-3">
+                <p className="text-base font-medium text-slate-800 dark:text-slate-200">
+                  {lead.assignedTo?.name || lead.claimedBy?.name || 'Unassigned'}
+                </p>
+                {isManagerOrAdmin && (
+                  <button
+                    type="button"
+                    onClick={openReassignModal}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-xs hover:border-[#8B2424] hover:bg-[#F9DADA]/40 hover:text-[#8B2424] transition-all dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-red-500"
+                  >
+                    <RefreshCw className="w-3 h-3 shrink-0" />
+                    <span>Re-assign</span>
+                  </button>
+                )}
+              </div>
             </div>
             <div>
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Received At</h3>
               <p className="text-base text-slate-800 dark:text-slate-200">
-                {new Date(lead.receivedAt || lead.createdAt).toLocaleString()}
+                {formatDateTime(lead.receivedAt || lead.createdAt)}
               </p>
             </div>
             {lead.nextActionDate && (
               <div>
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Scheduled Next Action</h3>
                 <p className="text-base font-semibold text-blue-600 dark:text-blue-400">
-                  {new Date(lead.nextActionDate).toLocaleString()}
+                  {formatDateTime(lead.nextActionDate)}
                 </p>
               </div>
             )}
@@ -309,7 +478,7 @@ export default function LeadDetailPage() {
               <div>
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">First Response At</h3>
                 <p className="text-base text-slate-800 dark:text-slate-200">
-                  {new Date(lead.firstResponseAt).toLocaleString()}
+                  {formatDateTime(lead.firstResponseAt)}
                 </p>
               </div>
             )}
@@ -369,7 +538,7 @@ export default function LeadDetailPage() {
                 </div>
               )}
 
-            {lead.qualification?.lostReason && (
+            {lead.status === 'Lost' && lead.qualification?.lostReason && (
               <div className="sm:col-span-2">
                 <h3 className="text-xs font-semibold text-rose-500 uppercase tracking-wider mb-1">Lost Reason</h3>
                 <p className="text-base text-rose-700 dark:text-rose-300 font-medium">
@@ -390,8 +559,9 @@ export default function LeadDetailPage() {
 
             {lead.managerApproval?.approved ? (
               <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 p-4 border border-emerald-200 dark:border-emerald-900">
-                <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800 dark:text-emerald-300">
-                  <span>✓ Manager Approved</span>
+                <div className="flex items-center gap-1.5 text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+                  <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span>Manager Approved</span>
                 </div>
                 {lead.managerApproval.remarks && (
                   <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-1 italic">
@@ -419,7 +589,10 @@ export default function LeadDetailPage() {
                     isLoading={isApprovingManager}
                     onClick={() => handleManagerApprove(true)}
                   >
-                    ✓ Sign-off & Approve
+                    <span className="inline-flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5 shrink-0" />
+                      Sign-off & Approve
+                    </span>
                   </Button>
                 </div>
               </div>
@@ -435,6 +608,14 @@ export default function LeadDetailPage() {
       {/* Tab: Qualification */}
       {activeTab === 'qualification' && (
         <Card className="p-6">
+          {qualifySuccess && (
+            <div className="mb-4">
+              <Alert tone="success" title="Requirements Saved">
+                {qualifySuccess}
+              </Alert>
+            </div>
+          )}
+
           {qualifyError && (
             <div className="mb-4">
               <Alert tone="error" title="Qualification Error">{qualifyError}</Alert>
@@ -520,8 +701,9 @@ export default function LeadDetailPage() {
               <h3 className="text-base font-semibold text-slate-900 dark:text-white">Action Taken History (ATR)</h3>
               <p className="text-xs text-slate-500">Chained follow-up logs, status transitions, and manager approvals.</p>
             </div>
-            <Button variant="secondary" onClick={() => setLogModalOpen(true)}>
-              + Log Action
+            <Button variant="secondary" onClick={() => setLogModalOpen(true)} className="!h-9 !px-3 inline-flex items-center gap-1.5 !text-xs font-medium">
+              <Plus className="w-3.5 h-3.5 shrink-0" />
+              <span>Log Action</span>
             </Button>
           </div>
 
@@ -536,46 +718,59 @@ export default function LeadDetailPage() {
           ) : (
             <div className="relative border-l-2 border-slate-200 dark:border-slate-800 ml-4 space-y-6 py-2">
               {activities.map((item, idx) => {
-                const icon = item.followUpType ? FOLLOW_UP_ICONS[item.followUpType] || '📝' : '📌';
+                const isCycleRestart = Boolean(item.type === 'status_change' && item.from && ['Won', 'Lost'].includes(item.from));
 
                 return (
-                  <div key={idx} className="relative pl-6">
-                    {/* Timeline dot */}
-                    <div
-                      className={`absolute -left-[9px] top-1 h-4 w-4 rounded-full border-2 border-white dark:border-slate-900 ${
-                        item.type === 'status_change'
-                          ? item.to === 'Won'
-                            ? 'bg-emerald-500'
-                            : item.to === 'Lost'
-                            ? 'bg-rose-500'
-                            : 'bg-red-500'
-                          : item.type === 'manager_review'
-                          ? 'bg-amber-500'
-                          : 'bg-blue-500'
-                      }`}
-                    />
+                  <div key={idx} className="space-y-3">
+                    <div className="relative pl-6">
+                      {/* Timeline dot */}
+                      <div
+                        className={`absolute -left-2.25 top-1 h-4 w-4 rounded-full border-2 border-white dark:border-slate-900 ${
+                          item.type === 'status_change'
+                            ? (item.to ? STATUS_DOT_COLORS[item.to] || 'bg-blue-500' : 'bg-blue-500')
+                            : item.type === 'manager_review'
+                            ? 'bg-amber-500'
+                            : 'bg-blue-500'
+                        }`}
+                      />
 
-                    {item.type === 'status_change' ? (
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                            Status changed {item.from ? `from ${item.from}` : ''} to{' '}
-                            <span className="text-red-600 dark:text-red-400">{item.to}</span>
-                          </span>
+                      {item.type === 'status_change' ? (
+                        <div>
+                          <div className="flex items-center gap-1.5 flex-wrap text-sm font-semibold text-slate-900 dark:text-white">
+                            {item.from ? (
+                              <>
+                                <span>Status changed from</span>
+                                <span className={STATUS_TEXT_COLORS[item.from] || 'text-slate-700 dark:text-slate-300'}>
+                                  {item.from}
+                                </span>
+                                <span>to</span>
+                                <span className={item.to ? STATUS_TEXT_COLORS[item.to] || 'text-slate-700 dark:text-slate-300' : ''}>
+                                  {item.to}
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <span>Lead created with status</span>
+                                <span className={item.to ? STATUS_TEXT_COLORS[item.to] || 'text-slate-700 dark:text-slate-300' : ''}>
+                                  {item.to}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                          {item.reason && (
+                            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 italic">
+                              Reason: "{item.reason}"
+                            </p>
+                          )}
+                          <div className="text-xs text-slate-400 mt-1">
+                            {formatDateTime(item.timestamp)}
+                          </div>
                         </div>
-                        {item.reason && (
-                          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 italic">
-                            Reason: "{item.reason}"
-                          </p>
-                        )}
-                        <div className="text-xs text-slate-400 mt-1">
-                          {new Date(item.timestamp).toLocaleString()}
-                        </div>
-                      </div>
-                    ) : item.type === 'manager_review' ? (
+                      ) : item.type === 'manager_review' ? (
                       <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 p-3 border border-amber-200 dark:border-amber-900">
-                        <div className="text-sm font-semibold text-amber-900 dark:text-amber-300">
-                          🛡️ Manager Review Sign-off
+                        <div className="flex items-center gap-1.5 text-sm font-semibold text-amber-900 dark:text-amber-300">
+                          <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                          <span>Manager Review Sign-off</span>
                         </div>
                         {item.remarks && (
                           <p className="text-xs text-amber-800 dark:text-amber-400 mt-1">
@@ -583,21 +778,23 @@ export default function LeadDetailPage() {
                           </p>
                         )}
                         <div className="text-xs text-amber-600 dark:text-amber-500 mt-1">
-                          {new Date(item.timestamp).toLocaleString()}
+                          {formatDateTime(item.timestamp)}
                         </div>
                       </div>
                     ) : (
                       <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 p-4 border border-slate-200 dark:border-slate-700">
                         <div className="flex items-center justify-between gap-2 flex-wrap">
                           <div className="flex items-center gap-2">
-                            <span className="text-base">{icon}</span>
+                            <span className="flex items-center justify-center w-7 h-7 rounded-full bg-slate-200/60 dark:bg-slate-700/60">
+                              {renderFollowUpIcon(item.followUpType)}
+                            </span>
                             <span className="text-sm font-bold text-slate-900 dark:text-white">
                               {item.followUpType || 'Action'} — {item.reason || 'Follow-up'}
                             </span>
                           </div>
                           {item.nextActionDate && (
                             <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 px-2 py-0.5 rounded">
-                              Next: {new Date(item.nextActionDate).toLocaleString()}
+                              Next: {formatDateTime(item.nextActionDate)}
                             </span>
                           )}
                         </div>
@@ -621,13 +818,24 @@ export default function LeadDetailPage() {
                         )}
 
                         <div className="text-xs text-slate-400 mt-2">
-                          Logged at {new Date(item.timestamp).toLocaleString()}
+                          Logged at {formatDateTime(item.timestamp)}
                         </div>
                       </div>
                     )}
                   </div>
-                );
-              })}
+                  {isCycleRestart && (
+                    <div className="my-2 -ml-6 flex items-center gap-2">
+                      <div className="h-px flex-1 bg-purple-200 dark:bg-purple-900" />
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-50 px-2.5 py-0.5 text-[11px] font-bold text-purple-700 dark:bg-purple-950 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shadow-2xs">
+                        <RotateCw className="w-3 h-3 shrink-0" />
+                        <span>Cycle #{item.cycle || 2}: Re-opened Inquiry</span>
+                      </span>
+                      <div className="h-px flex-1 bg-purple-200 dark:bg-purple-900" />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
             </div>
           )}
         </Card>
@@ -679,6 +887,67 @@ export default function LeadDetailPage() {
         onClose={() => setLogModalOpen(false)}
         onSubmit={submitLogFollowUp}
       />
+
+      {/* Re-assign Agent Modal */}
+      {showReassignModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-slate-900">
+            <h2 className="mb-2 text-lg font-semibold text-slate-900 dark:text-white">Re-assign Lead Owner</h2>
+            <p className="mb-4 text-xs text-slate-500">
+              Transfer this lead to another sales agent or move it to Unassigned pool.
+            </p>
+
+            <form onSubmit={handleReassignSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Select Sales Agent / User
+                </label>
+                <select
+                  value={selectedAgentId}
+                  onChange={(e) => setSelectedAgentId(e.target.value)}
+                  className="w-full rounded border border-slate-300 bg-white p-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                >
+                  <option value="">-- Unassigned (Move to Unclaimed Pool) --</option>
+                  {agentsList
+                    .filter((agent) =>
+                      ['sales_agent', 'manager', 'admin'].includes(agent.role.toLowerCase()),
+                    )
+                    .map((agent) => {
+                      const roleLabel =
+                        agent.role.toLowerCase() === 'sales_agent'
+                          ? 'Sales Agent'
+                          : agent.role.toLowerCase() === 'manager'
+                          ? 'Manager'
+                          : 'Admin';
+                      return (
+                        <option key={agent._id} value={agent._id}>
+                          {agent.name} ({roleLabel})
+                        </option>
+                      );
+                    })}
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowReassignModal(false)}
+                  className="rounded border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isReassigning}
+                  className="rounded bg-[#8B2424] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#6E1D1D] disabled:opacity-50 shadow-sm"
+                >
+                  {isReassigning ? 'Transferring...' : 'Confirm Transfer'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

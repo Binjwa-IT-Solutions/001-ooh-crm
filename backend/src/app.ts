@@ -1,6 +1,5 @@
 import cors from 'cors';
 import express, { Request, Response } from 'express';
-
 import { config } from './config/index.js';
 import './core/context.js';
 import { auditMiddleware } from './core/audit/index.js';
@@ -10,7 +9,13 @@ import { errorHandler, notFoundHandler } from './core/http/error-middleware.js';
 import notificationRoutes from './core/notifications/notifications-routes.js';
 import employeeRoutes from './modules/employees/employees.routes.js';
 import { attendanceRoutes } from './modules/HR/routes/attendance.routes.js';
+import leaveTypeRoutes, {
+  employeeLeaveBalanceRouter,
+  leaveBalancesRouter,
+} from './modules/HR/leaveTypes/leaveTypes.routes.js';
 import { leaveRoutes } from './modules/HR/routes/leave.routes.js';
+import { holidayRoutes } from './modules/HR/routes/holiday.routes.js';
+
 
 const app = express();
 
@@ -33,6 +38,7 @@ app.use(
     credentials: true,
   })
 );
+
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -86,15 +92,26 @@ app.use('/api/tasks',taskRoutes);
 app.use('/api', escalationRoutes);
 
 app.use('/api/purchase-orders', purchaseOrderRoutes);
-app.use('/api', bookingRoutes);
+app.use('/api/bookings', bookingRoutes);
 app.use('/api/quotations', quotationsRoutes);
 app.use('/q', publicQuotationsRoutes);
 
 //attendance
 app.use('/api/attendance', attendanceRoutes);
 
-//leave
-app.use('/api/leave', leaveRoutes);
+import { reportsRoutes } from './modules/HR/routes/reports.routes.js';
+app.use('/api/reports', reportsRoutes);
+
+// G3 — Leave Types, Quotas & Balances. The legacy leave router is retained
+// only for later migration work and is not mounted as a second G3 API.
+app.use('/api/leave-types', leaveTypeRoutes);
+app.use('/api/leave-balances', leaveBalancesRouter);
+app.use('/api/employees', employeeLeaveBalanceRouter);
+app.use('/api/leave-requests', leaveRoutes);
+app.use('/api/holidays', holidayRoutes);
+
+import candidateRoutes from './modules/candidates/candidates.routes.js';
+app.use('/api/candidates', candidateRoutes);
 
 
 // 404 then the central error handler — both must stay last.

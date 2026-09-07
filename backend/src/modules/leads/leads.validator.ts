@@ -93,6 +93,7 @@ export const updateLeadSchema = createLeadSchema.partial().extend({
   status: z.enum(LEAD_STATUSES).optional(),
   lostReason: z.string().trim().optional(),
   nextActionDate: z.coerce.date().optional(),
+  assignedTo: z.string().nullable().optional(),
 });
 
 export const listLeadsSchema = z.object({

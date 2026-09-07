@@ -81,8 +81,13 @@ async function request<T>(
   options: RequestOptions = {},
 ): Promise<T> {
   const headers: Record<string, string> = {};
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
 
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (body !== undefined && !isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+
 
   if (!options.skipAuth) {
     const accessToken = sessionStore.getAccessToken();
@@ -92,7 +97,7 @@ async function request<T>(
   const response = await fetch(`${appConfig.apiUrl}${path}`, {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined ? undefined : isFormData ? (body as BodyInit) : JSON.stringify(body),
     signal: options.signal,
   });
 
@@ -122,6 +127,21 @@ async function request<T>(
 
 export const api = {
   get: <T>(path: string, options?: RequestOptions) => request<T>('GET', path, undefined, options),
+  getBlob: async (path: string, options?: RequestOptions): Promise<Blob> => {
+    const headers: Record<string, string> = {};
+    if (!options?.skipAuth) {
+      const accessToken = sessionStore.getAccessToken();
+      if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+    }
+    const fullUrl = path.startsWith('http') ? path : `${appConfig.apiUrl}${path}`;
+    const response = await fetch(fullUrl, {
+      method: 'GET',
+      headers,
+      signal: options?.signal,
+    });
+    if (!response.ok) throw await parseError(response);
+    return await response.blob();
+  },
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>('POST', path, body, options),
   patch: <T>(path: string, body?: unknown, options?: RequestOptions) =>

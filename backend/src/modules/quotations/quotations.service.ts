@@ -42,14 +42,61 @@ export class QuotationsService {
   ): Promise<{ quotations: IQuotation[]; total: number }> {
     const filter: Record<string, unknown> = { deletedAt: null };
 
-    if (query.search) {
-      filter.quoteNumber = { $regex: query.search, $options: 'i' };
-    }
     if (query.status) {
       filter.status = query.status;
     }
     if (query.leadId) {
       filter.leadId = toObjectId(query.leadId);
+    }
+
+    // Role-based Scoping: Sales agents only see their own quotations or quotations for their assigned/created leads
+    const isUnscoped = ['admin', 'manager', 'finance', 'hr', 'ops'].includes(ctx.user?.role?.toLowerCase() || '');
+    let scopeConditions: any = null;
+    if (!isUnscoped) {
+      const myLeads = await Lead.find({
+        $or: [
+          { assignedTo: toObjectId(ctx.user.id) },
+          { createdBy: toObjectId(ctx.user.id) },
+        ],
+        deletedAt: null,
+      }).select('_id').lean();
+      const myLeadIds = myLeads.map((l) => l._id);
+
+      scopeConditions = [
+        { createdBy: toObjectId(ctx.user.id) },
+        { leadId: { $in: myLeadIds } },
+      ];
+    }
+
+    if (query.search && query.search.trim().length > 0) {
+      const searchRegex = { $regex: query.search.trim(), $options: 'i' };
+      const matchingLeads = await Lead.find({
+        $or: [
+          { companyName: searchRegex },
+          { contactPerson: searchRegex },
+          { mobile: searchRegex },
+        ],
+        deletedAt: null,
+      }).select('_id').lean();
+      const matchingLeadIds = matchingLeads.map((l) => l._id);
+
+      const searchConditions: any[] = [
+        { quoteNumber: searchRegex },
+        { clientName: searchRegex },
+        { clientEmail: searchRegex },
+        { leadId: { $in: matchingLeadIds } },
+      ];
+
+      if (scopeConditions) {
+        filter.$and = [
+          { $or: scopeConditions },
+          { $or: searchConditions },
+        ];
+      } else {
+        filter.$or = searchConditions;
+      }
+    } else if (scopeConditions) {
+      filter.$or = scopeConditions;
     }
 
     const page = query.page ?? 1;
@@ -73,7 +120,34 @@ export class QuotationsService {
   static async get(id: string, ctx: RequestContext): Promise<IQuotation> {
     if (!Types.ObjectId.isValid(id)) throw new NotFoundError('Quotation not found');
 
-    const quotation = await scopedFindOne(Quotation, { _id: toObjectId(id) }, ctx);
+    const isUnscoped = ['admin', 'manager', 'finance', 'hr', 'ops'].includes(ctx.user?.role?.toLowerCase() || '');
+    let quotation: IQuotation | null = null;
+
+    if (isUnscoped) {
+      quotation = await Quotation.findOne({ _id: toObjectId(id), deletedAt: null });
+    } else {
+      // 1. Allow if created by agent
+      quotation = await Quotation.findOne({
+        _id: toObjectId(id),
+        createdBy: toObjectId(ctx.user.id),
+        deletedAt: null,
+      });
+
+      // 2. Or allow if agent is assigned to the lead (or created the lead)
+      if (!quotation) {
+        const candidate = await Quotation.findOne({ _id: toObjectId(id), deletedAt: null }).populate('leadId');
+        if (candidate && candidate.leadId) {
+          const lead = candidate.leadId as any;
+          const isOwner =
+            lead.assignedTo?.toString() === ctx.user.id ||
+            lead.createdBy?.toString() === ctx.user.id;
+          if (isOwner) {
+            quotation = candidate;
+          }
+        }
+      }
+    }
+
     if (!quotation) throw new NotFoundError('Quotation not found');
 
     await quotation.populate('leadId', 'companyName contactPerson mobile email');
@@ -327,6 +401,34 @@ export class QuotationsService {
 
     const pdfUrl = await fileService.url(quotation.pdfKey);
     return { pdfUrl, pdfKey: quotation.pdfKey };
+  }
+
+  /**
+   * Upload Custom Proposal PDF.
+   * Allows agency/company to upload their own bespoke proposal PDF.
+   */
+  static async uploadCustomPdf(
+    id: string,
+    file: Express.Multer.File | undefined,
+    ctx: RequestContext,
+  ): Promise<{ pdfKey: string; pdfUrl: string }> {
+    if (!file) throw new ValidationError('No PDF file provided');
+    if (file.mimetype !== 'application/pdf') {
+      throw new ValidationError('Only PDF documents are supported');
+    }
+
+    const quotation = await Quotation.findOne({ _id: toObjectId(id), deletedAt: null });
+    if (!quotation) throw new NotFoundError('Quotation not found');
+
+    const stored = await fileService.save(file, { folder: 'quotations', ctx });
+    quotation.pdfKey = stored.key;
+    quotation.updatedBy = toObjectId(ctx.user.id);
+    await quotation.save();
+
+    return {
+      pdfKey: stored.key,
+      pdfUrl: stored.url,
+    };
   }
 
   /**

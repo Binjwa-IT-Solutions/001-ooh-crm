@@ -12,6 +12,11 @@ import {
 } from './leads.validator.js';
 
 export class LeadsController {
+  static async listAgents(_req: Request, res: Response) {
+    const agents = await LeadsService.listAgents();
+    res.status(200).json({ agents });
+  }
+
   static async list(req: Request, res: Response) {
     const filters = listLeadsSchema.parse(req.query);
     const { leads, total } = await LeadsService.listLeads(filters, req.ctx!);

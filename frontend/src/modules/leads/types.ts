@@ -93,6 +93,7 @@ export interface ActivityItem {
   delayResponsibility?: string;
   approved?: boolean;
   durationSec?: number;
+  cycle?: number;
   timestamp: string;
 }
 
@@ -118,9 +119,10 @@ export interface Lead {
   slaTimerEnd?: string | null;
   nextActionDate?: string | null;
   managerApproval?: ManagerApproval | null;
-  statusHistory?: Array<{ from?: string; to: string; changedBy?: any; reason?: string; changedAt: string }>;
+  statusHistory?: Array<{ from?: string; to: string; changedBy?: any; reason?: string; cycle?: number; changedAt: string }>;
   callLogs?: FollowUpLog[];
   qualification?: LeadQualification;
+  cycle?: number;
   createdAt: string;
   updatedAt: string;
 }

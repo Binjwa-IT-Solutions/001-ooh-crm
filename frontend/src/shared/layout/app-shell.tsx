@@ -16,11 +16,11 @@ import {
   Camera,
   ArrowDownToLine,
   ArrowUpFromLine,
+  ArrowUpRight,
   BarChart3,
   TrendingUp,
   Clock,
   CalendarDays,
-  FileBarChart,
   ShieldCheck,
   AlertTriangle,
   Search,
@@ -28,20 +28,23 @@ import {
   Menu,
   X,
   LogOut,
-  ChevronDown
+  ChevronDown,
 } from 'lucide-react';
 
 import { useAuth } from '../auth/auth-context';
 import { ROLE_LABELS } from '../auth/types';
 import { Button, cx } from '../ui';
 import { type LucideIcon } from 'lucide-react';
+import NotificationBell from './NotificationBell';
+import { PageHeaderProvider } from './page-header-context';
+import { PageHeader } from './page-header';
 
 interface NavGroup {
   label: string;
   items: Array<{ href: string; label: string; icon: LucideIcon; permission?: string }>;
 }
 
-const NAV_GROUPS: NavGroup[] = [
+export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Overview',
     items: [{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }],
@@ -62,7 +65,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/purchase-orders', label: 'Purchase Orders', icon: ShoppingCart, permission: 'purchase_orders.view' },
       { href: '/campaigns', label: 'Campaigns', icon: Megaphone, permission: 'campaigns.view' },
       { href: '/tasks', label: 'Tasks', icon: ClipboardCheck, permission: 'tasks.view' },
-      { href: '/escalations', label: 'Escalations', icon: AlertTriangle, permission: 'tasks.view' },
+      { href: '/escalations', label: 'Escalations', icon: ArrowUpRight, permission: 'tasks.view' },
       { href: '/proofs', label: 'Proofs', icon: Camera, permission: 'proofs.view' },
     ],
   },
@@ -79,12 +82,9 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'HR',
     items: [
       { href: '/employees', label: 'Employees', icon: Users, permission: 'employees.view' },
-      { href: '/attendance', label: 'My Attendance', icon: Clock, permission: 'attendance.self' },
-      { href: '/attendance/team', label: 'Team Attendance', icon: Users, permission: 'attendance.view_team' },
-      { href: '/attendance/reports', label: 'Attendance Reports', icon: FileBarChart, permission: 'attendance.view_team' },
-      { href: '/leave', label: 'My Leave', icon: CalendarDays, permission: 'leave.self' },
-      { href: '/leave/approvals', label: 'Leave Approvals', icon: CalendarCheck, permission: 'leave.manage' },
-      { href: '/leave/types', label: 'Leave Types', icon: CalendarCheck, permission: 'leave.manage' },
+      { href: '/candidates', label: 'Interviews', icon: Users, permission: 'candidates.view' },
+      { href: '/attendance', label: 'Attendance', icon: Clock, permission: 'attendance.self' },
+      { href: '/leave', label: 'Leave', icon: CalendarDays, permission: 'leave.self' },
     ],
   },
   {
@@ -121,7 +121,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex h-16 shrink-0 items-center px-6">
           <Link href="/dashboard" className="flex items-center gap-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="Media Octus" className="w-[160px] h-auto object-contain" />
+            <img src="/logo.png" alt="Media Octus" className="w-[200px] h-[100px] object-contain" />
           </Link>
           <button
             onClick={() => setSidebarOpen(false)}
@@ -130,16 +130,16 @@ export function AppShell({ children }: { children: ReactNode }) {
             <X className="h-6 w-6" />
           </button>
         </div>
-        
+
         <div className="flex flex-1 flex-col overflow-y-auto pt-4 pb-12 no-scrollbar">
           <nav className="flex-1 space-y-6">
             {NAV_GROUPS.map((group) => {
               const visibleItems = group.items.filter(
                 (item) => !item.permission || hasPermission(item.permission)
               );
-              
+
               if (visibleItems.length === 0) return null;
-              
+
               const isOverview = group.label === 'Overview';
 
               return (
@@ -153,7 +153,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     {visibleItems.map((item) => {
                       const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
                       const Icon = item.icon;
-                      
+
                       return (
                         <li key={item.href}>
                           <Link
@@ -181,73 +181,79 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
 
       {/* Main content wrapper */}
-      <div className="flex flex-1 flex-col lg:pl-64 min-h-screen">
-        {/* Header (Sticky) */}
-        <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between gap-x-4 border-b border-[#E6E8EC] bg-white px-4 sm:gap-x-6 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              className="-m-2.5 p-2.5 text-slate-700 lg:hidden"
-              onClick={() => setSidebarOpen(true)}
-            >
-              <span className="sr-only">Open sidebar</span>
-              <Menu className="h-6 w-6" />
-            </button>
-          </div>
-
-          <div className="flex flex-1 justify-end gap-x-4 lg:gap-x-6">
-            <form className="relative flex max-w-md w-full items-center mr-auto ml-4 lg:ml-0" action="#" method="GET" onSubmit={(e) => e.preventDefault()}>
-              <label htmlFor="search-field" className="sr-only">
-                Search
-              </label>
-              <div className="relative w-full flex items-center">
-                <Search className="absolute left-3 h-4 w-4 text-[#687280]" />
-                <input
-                  id="search-field"
-                  className="block h-10 w-full rounded-full border border-[#E6E8EC] bg-white py-2 pl-10 pr-3 text-sm text-[#1F2937] placeholder:text-[#687280] focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none sm:text-sm/6 shadow-sm"
-                  placeholder="Search"
-                  type="search"
-                  name="search"
-                />
-              </div>
-            </form>
-            
-            <div className="flex items-center gap-x-4 lg:gap-x-6">
-              <button type="button" className="-m-2.5 p-2.5 text-[#687280] hover:text-[#1F2937] rounded-full border border-[#E6E8EC] shadow-sm ml-2 h-10 w-10 flex items-center justify-center">
-                <span className="sr-only">View notifications</span>
-                <Bell className="h-5 w-5" />
+      <PageHeaderProvider>
+        <div className="flex flex-1 flex-col lg:pl-64 min-h-screen">
+          {/* Header (Sticky) */}
+          <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between gap-x-4 border-b border-[#E6E8EC] bg-white px-4 sm:gap-x-6 sm:px-6 lg:px-8">
+            <div className="flex items-center gap-4">
+              <button
+                type="button"
+                className="-m-2.5 p-2.5 text-slate-700 lg:hidden"
+                onClick={() => setSidebarOpen(true)}
+              >
+                <span className="sr-only">Open sidebar</span>
+                <Menu className="h-6 w-6" />
               </button>
-
-              <div className="flex items-center gap-3 ml-2 border border-[#E6E8EC] rounded-full p-1 pr-3 shadow-sm cursor-pointer hover:bg-slate-50 transition-colors">
-                <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary-100 text-primary font-bold text-sm shrink-0">
-                  {user?.name?.[0]?.toUpperCase() ?? 'U'}
-                </div>
-                <div className="hidden sm:flex flex-col text-left">
-                  <span className="text-sm font-semibold leading-none text-[#1F2937]">
-                    {user?.name ?? 'Loading...'}
-                  </span>
-                  <span className="text-[10px] uppercase font-medium leading-snug text-[#687280] mt-1">
-                    {user ? (ROLE_LABELS[user.role] ?? user.role) : ''}
-                  </span>
-                </div>
-                <ChevronDown className="h-4 w-4 text-[#687280] ml-1 hidden sm:block" />
-              </div>
-              
-              <Button variant="ghost" onClick={() => void signOut()} className="h-10 px-3 text-[#687280] hover:text-primary transition-colors border border-transparent" title="Sign out">
-                <LogOut className="h-4 w-4" />
-                <span className="sr-only">Sign out</span>
-              </Button>
             </div>
-          </div>
-        </header>
 
-        {/* Main content */}
-        <main className="flex-1 bg-white p-4 sm:p-6 lg:p-8">
-          <div className="mx-auto w-full max-w-[1200px]">
-            {children}
-          </div>
-        </main>
-      </div>
+            <div className="flex flex-1 items-center justify-between gap-x-4 lg:gap-x-6 pr-2 w-full">
+              <PageHeader />
+
+              <div className="flex items-center justify-end gap-x-4 lg:gap-x-6">
+                {/* Search Bar - aligned to the right */}
+                <form className="relative flex w-64 items-center" action="#" method="GET" onSubmit={(e) => e.preventDefault()}>
+                  <label htmlFor="search-field" className="sr-only">
+                    Search
+                  </label>
+                  <div className="relative w-full flex items-center">
+                    <Search className="absolute left-3 h-4 w-4 text-[#687280]" />
+                    <input
+                      id="search-field"
+                      className="block h-10 w-full rounded-full border border-[#E6E8EC] bg-white py-2 pl-9 pr-3 text-sm text-[#1F2937] placeholder:text-[#687280] focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none sm:text-sm/6 shadow-sm"
+                      placeholder="Search"
+                      type="search"
+                      name="search"
+                    />
+                  </div>
+                </form>
+
+                <div className="flex items-center gap-x-3">
+                  {/* Notification Bell */}
+                  <NotificationBell />
+
+                  {/* Profile Pill */}
+                  <div className="flex items-center gap-2 border border-[#E6E8EC] rounded-full p-1 pr-3 shadow-sm cursor-pointer hover:bg-slate-50 transition-colors bg-white">
+                    <div className="flex items-center justify-center h-8 w-8 rounded-full overflow-hidden shrink-0 bg-primary-100 text-primary font-bold text-sm">
+                      {user?.name?.[0]?.toUpperCase() ?? 'U'}
+                    </div>
+                    <div className="hidden sm:flex flex-col text-left mr-1">
+                      <span className="text-[13px] font-semibold leading-none text-[#1F2937]">
+                        {user?.name ?? 'User'}
+                      </span>
+                      <span className="text-[11px] font-medium text-[#687280] mt-0.5 capitalize">
+                        {user ? (ROLE_LABELS[user.role] ?? user.role) : 'Admin'}
+                      </span>
+                    </div>
+                    <ChevronDown className="h-4 w-4 text-[#687280]" />
+                  </div>
+
+                  <Button variant="ghost" onClick={() => void signOut()} className="h-10 px-3 text-[#687280] hover:text-primary transition-colors border border-transparent" title="Sign out">
+                    <LogOut className="h-4 w-4" />
+                    <span className="sr-only">Sign out</span>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          {/* Main content */}
+          <main className="flex-1 bg-white p-4 sm:p-6 lg:p-8">
+            <div className="mx-auto w-full max-w-[1200px]">
+              {children}
+            </div>
+          </main>
+        </div>
+      </PageHeaderProvider>
     </div>
   );
 }

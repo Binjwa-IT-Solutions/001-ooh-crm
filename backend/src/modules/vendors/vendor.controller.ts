@@ -37,13 +37,20 @@ export async function list(
         ? req.query.city.trim()
         : undefined;
 
-    const vendors =
-      await vendorService.listVendors(
-        req.ctx!,
-        { search, state, city },
-      );
+    const status =
+      req.query.status === "Active" ||
+      req.query.status === "Inactive"
+        ? req.query.status
+        : undefined;
 
-    res.status(200).json({
+    const vendors = await vendorService.getVendors({
+      search,
+      state,
+      city,
+      status,
+    });
+
+    return res.status(200).json({
       success: true,
       data: vendors,
     });
@@ -51,6 +58,7 @@ export async function list(
     next(error);
   }
 }
+
 
 /* ----------------------------------
    FILTER OPTIONS
@@ -63,12 +71,15 @@ export async function filters(
   next: NextFunction,
 ) {
   try {
-    const data =
-      await vendorService.getVendorFilters(
-        req.ctx!,
-      );
+    const state =
+      typeof req.query.state === "string"
+        ? req.query.state.trim()
+        : undefined;
 
-    res.status(200).json({
+    const data =
+      await vendorService.getVendorFilters(state);
+
+    return res.status(200).json({
       success: true,
       data,
     });
@@ -76,6 +87,7 @@ export async function filters(
     next(error);
   }
 }
+
 
 /* ----------------------------------
    GET VENDOR BY ID
@@ -91,10 +103,9 @@ export async function getById(
     const vendor =
       await vendorService.getVendorById(
         String(req.params.id),
-        req.ctx!,
       );
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: vendor,
     });
@@ -102,6 +113,7 @@ export async function getById(
     next(error);
   }
 }
+
 
 /* ----------------------------------
    CREATE VENDOR
@@ -118,12 +130,9 @@ export async function create(
       createVendorSchema.parse(req.body);
 
     const vendor =
-      await vendorService.createVendor(
-        input,
-        req.ctx!,
-      );
+      await vendorService.createVendor(input);
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Vendor created successfully",
       data: vendor,
@@ -132,6 +141,7 @@ export async function create(
     next(error);
   }
 }
+
 
 /* ----------------------------------
    UPDATE VENDOR
@@ -151,10 +161,9 @@ export async function update(
       await vendorService.updateVendor(
         String(req.params.id),
         input,
-        req.ctx!,
       );
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Vendor updated successfully",
       data: vendor,
@@ -163,6 +172,7 @@ export async function update(
     next(error);
   }
 }
+
 
 /* ----------------------------------
    DEACTIVATE VENDOR
@@ -176,12 +186,14 @@ export async function deactivate(
 ) {
   try {
     const vendor =
-      await vendorService.deactivateVendor(
+      await vendorService.updateVendor(
         String(req.params.id),
-        req.ctx!,
+        {
+          status: "Inactive",
+        },
       );
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Vendor deactivated successfully",
       data: vendor,
@@ -191,17 +203,24 @@ export async function deactivate(
   }
 }
 
+
+/* ----------------------------------
+   GET SITES BY VENDOR
+   GET /api/vendors/:id/sites
+----------------------------------- */
+
 export async function getSites(
   req: Request,
   res: Response,
   next: NextFunction,
 ) {
   try {
-    const sites = await vendorService.getSitesByVendor(
-      String(req.params.id),
-    );
+    const sites =
+      await vendorService.getSitesByVendor(
+        String(req.params.id),
+      );
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: sites,
     });

@@ -53,20 +53,35 @@ const ALLOWED_MIME_TYPES = new Set([
  * Memory is correct here because the size limit is small; do not raise the
  * limit far without switching to a streaming upload.
  */
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: config.storage.maxUploadBytes, files: 10 },
-  fileFilter: (_req, file, callback) => {
-    if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
-      callback(new ValidationError(`Files of type ${file.mimetype} are not accepted`));
-      return;
-    }
-    callback(null, true);
-  },
-});
+const createUpload = (allowedTypes: Set<string> = ALLOWED_MIME_TYPES) => {
+  return multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: config.storage.maxUploadBytes, files: 10 },
+    fileFilter: (_req, file, callback) => {
+      if (!allowedTypes.has(file.mimetype)) {
+        callback(new ValidationError(`Files of type ${file.mimetype} are not accepted`));
+        return;
+      }
+      callback(null, true);
+    },
+  });
+};
 
-export const uploadSingle = (field: string) => upload.single(field);
-export const uploadMany = (field: string, max = 10) => upload.array(field, max);
+const defaultUpload = createUpload();
+
+export const uploadSingle = (field: string, customAllowedTypes?: string[]) => {
+  if (customAllowedTypes) {
+    return createUpload(new Set(customAllowedTypes)).single(field);
+  }
+  return defaultUpload.single(field);
+};
+
+export const uploadMany = (field: string, max = 10, customAllowedTypes?: string[]) => {
+  if (customAllowedTypes) {
+    return createUpload(new Set(customAllowedTypes)).array(field, max);
+  }
+  return defaultUpload.array(field, max);
+};
 
 /** `photo.JPG` → `photo.jpg`, stripped of anything that could escape a path. */
 function safeExtension(originalName: string): string {

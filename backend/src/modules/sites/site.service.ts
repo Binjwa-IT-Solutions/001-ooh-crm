@@ -1,5 +1,8 @@
 import mongoose from "mongoose";
-import { withOptionalTransaction } from "../../core/db/transaction.js";
+
+import {
+  withOptionalTransaction,
+} from "../../core/db/transaction.js";
 
 import {
   Site,
@@ -86,13 +89,13 @@ async function generateSiteCode(
       "site_counters"
     );
 
-  const key =
-    `${cityCode}-${typeCode}`;
+  const key = `${cityCode}-${typeCode}`;
 
   const findOptions: any = {
     upsert: true,
     returnDocument: "after",
   };
+
   if (session) {
     findOptions.session = session;
   }
@@ -111,7 +114,9 @@ async function generateSiteCode(
     );
 
   const sequence =
-    (result as any)?.sequence ?? (result as any)?.value?.sequence ?? 1;
+    (result as any)?.sequence ??
+    (result as any)?.value?.sequence ??
+    1;
 
   return `${cityCode}-${typeCode}-${String(
     sequence
@@ -125,48 +130,86 @@ async function generateSiteCode(
 export async function createSite(
   data: CreateSiteInput
 ): Promise<ISite> {
-  return withOptionalTransaction(async (session) => {
-    /*
-      1. Validate GPS
-    */
-    if (
-      !isInsideIndia(
-        data.gps.lat,
-        data.gps.lng
-      )
-    ) {
-      throw new Error(
-        "GPS coordinates must fall within India"
-      );
+  return withOptionalTransaction(
+    async (session) => {
+      /*
+        1. Validate GPS
+      */
+
+      if (
+        !isInsideIndia(
+          data.gps.lat,
+          data.gps.lng
+        )
+      ) {
+        throw new Error(
+          "GPS coordinates must fall within India"
+        );
+      }
+
+      /*
+        2. Validate dates
+      */
+
+      if (
+        Number.isNaN(
+          data.startDate.getTime()
+        )
+      ) {
+        throw new Error(
+          "Invalid site start date"
+        );
+      }
+
+      if (
+        Number.isNaN(
+          data.endDate.getTime()
+        )
+      ) {
+        throw new Error(
+          "Invalid site end date"
+        );
+      }
+
+      if (
+        data.endDate < data.startDate
+      ) {
+        throw new Error(
+          "endDate must be on or after startDate"
+        );
+      }
+
+      /*
+        3. Generate unique code
+      */
+
+      const code =
+        await generateSiteCode(
+          data.city,
+          data.type,
+          session
+        );
+
+      /*
+        4. Create site
+      */
+
+      const saveOptions: any = {};
+
+      if (session) {
+        saveOptions.session = session;
+      }
+
+      const site = new Site({
+        ...data,
+        code,
+      });
+
+      await site.save(saveOptions);
+
+      return site as unknown as ISite;
     }
-
-    /*
-      2. Generate unique code
-    */
-    const code =
-      await generateSiteCode(
-        data.city,
-        data.type,
-        session
-      );
-
-    /*
-      3. Create site
-    */
-    const saveOptions: any = {};
-    if (session) {
-      saveOptions.session = session;
-    }
-
-    const site = new Site({
-      ...data,
-      code,
-    });
-
-    await site.save(saveOptions);
-
-    return site as unknown as ISite;
-  });
+  );
 }
 
 /* ----------------------------------
@@ -176,7 +219,10 @@ export async function createSite(
 export async function getSites(
   filters: SiteFilters
 ) {
-  const query: Record<string, any> = {};
+  const query: Record<
+    string,
+    any
+  > = {};
 
   if (filters.city) {
     query.city = filters.city;
@@ -230,11 +276,14 @@ export async function getSiteById(
   if (
     !mongoose.Types.ObjectId.isValid(id)
   ) {
-    throw new Error("Invalid site ID");
+    throw new Error(
+      "Invalid site ID"
+    );
   }
 
   const site =
-    await Site.findById(id).lean();
+    await Site.findById(id)
+      .lean();
 
   if (!site) {
     throw new Error(
@@ -256,7 +305,9 @@ export async function updateSite(
   if (
     !mongoose.Types.ObjectId.isValid(id)
   ) {
-    throw new Error("Invalid site ID");
+    throw new Error(
+      "Invalid site ID"
+    );
   }
 
   /*
@@ -277,7 +328,75 @@ export async function updateSite(
   }
 
   /*
-    Code is never accepted from the client.
+    Validate dates when dates are updated.
+  */
+
+  if (data.startDate) {
+    if (
+      Number.isNaN(
+        data.startDate.getTime()
+      )
+    ) {
+      throw new Error(
+        "Invalid site start date"
+      );
+    }
+  }
+
+  if (data.endDate) {
+    if (
+      Number.isNaN(
+        data.endDate.getTime()
+      )
+    ) {
+      throw new Error(
+        "Invalid site end date"
+      );
+    }
+  }
+
+  /*
+    If only one date is updated, compare it
+    with the existing site's other date.
+  */
+
+  if (
+    data.startDate ||
+    data.endDate
+  ) {
+    const existingSite =
+      await Site.findById(id)
+        .select("startDate endDate")
+        .lean();
+
+    if (!existingSite) {
+      throw new Error(
+        "Site not found"
+      );
+    }
+
+    const finalStartDate =
+      data.startDate ??
+      existingSite.startDate;
+
+    const finalEndDate =
+      data.endDate ??
+      existingSite.endDate;
+
+    if (
+      finalStartDate &&
+      finalEndDate &&
+      finalEndDate < finalStartDate
+    ) {
+      throw new Error(
+        "endDate must be on or after startDate"
+      );
+    }
+  }
+
+  /*
+    Code is never accepted
+    from the client.
   */
 
   const updateData: any = {
@@ -291,7 +410,7 @@ export async function updateSite(
       id,
       updateData,
       {
-        new: true,
+        returnDocument: "after",
         runValidators: true,
       }
     ).lean();
@@ -313,21 +432,32 @@ interface CsvRow {
   city: string;
   type: string;
   address?: string;
+
   lat: number;
   lng: number;
+
+  startDate: Date;
+  endDate: Date;
+
   sizeWidth: number;
   sizeHeight: number;
+
   baseCostPerDay: number;
 }
 
 /*
-  Simple CSV parser.
-
   Expected CSV:
 
-  city,type,address,lat,lng,sizeWidth,sizeHeight,baseCostPerDay
-  Mumbai,Airport,Mumbai Airport,19.0896,72.8656,40,20,500000
+  city,type,address,lat,lng,startDate,endDate,sizeWidth,sizeHeight,baseCostPerDay
+
+  Example:
+
+  Mumbai,Airport,Mumbai Airport,19.0896,72.8656,2026-09-01,2026-12-31,40,20,500000
 */
+
+/* ----------------------------------
+   CSV PARSER
+----------------------------------- */
 
 function parseCsv(
   csv: string
@@ -335,7 +465,9 @@ function parseCsv(
   const lines = csv
     .trim()
     .split("\n")
-    .map((line) => line.trim())
+    .map((line) =>
+      line.trim()
+    )
     .filter(Boolean);
 
   if (lines.length < 2) {
@@ -344,41 +476,65 @@ function parseCsv(
     );
   }
 
-  const headers = lines[0]
-    .split(",")
-    .map((header) =>
-      header.trim()
-    );
+  const headers =
+    lines[0]
+      .split(",")
+      .map((header) =>
+        header.trim()
+      );
 
   return lines
     .slice(1)
     .map((line) => {
       const values =
-        line.split(",").map((value) =>
-          value.trim()
-        );
+        line
+          .split(",")
+          .map((value) =>
+            value.trim()
+          );
 
       const row: any = {};
 
       headers.forEach(
         (header, index) => {
-          row[header] = values[index];
+          row[header] =
+            values[index];
         }
       );
 
       return {
         city: row.city,
-        type: row.type,
-        address: row.address,
 
-        lat: Number(row.lat),
-        lng: Number(row.lng),
+        type: row.type,
+
+        address:
+          row.address,
+
+        lat: Number(
+          row.lat
+        ),
+
+        lng: Number(
+          row.lng
+        ),
+
+        startDate: new Date(
+          row.startDate
+        ),
+
+        endDate: new Date(
+          row.endDate
+        ),
 
         sizeWidth:
-          Number(row.sizeWidth),
+          Number(
+            row.sizeWidth
+          ),
 
         sizeHeight:
-          Number(row.sizeHeight),
+          Number(
+            row.sizeHeight
+          ),
 
         baseCostPerDay:
           Number(
@@ -397,67 +553,130 @@ function validateCsvRows(
 ) {
   const errors: string[] = [];
 
-  rows.forEach((row, index) => {
-    const rowNumber = index + 2;
+  rows.forEach(
+    (row, index) => {
+      const rowNumber =
+        index + 2;
 
-    if (!row.city) {
-      errors.push(
-        `Row ${rowNumber}: city is required`
-      );
-    }
+      if (!row.city) {
+        errors.push(
+          `Row ${rowNumber}: city is required`
+        );
+      }
 
-    if (
-      !Object.values(SiteType).includes(
-        row.type as SiteType
-      )
-    ) {
-      errors.push(
-        `Row ${rowNumber}: invalid site type`
-      );
-    }
+      if (
+        !Object.values(
+          SiteType
+        ).includes(
+          row.type as SiteType
+        )
+      ) {
+        errors.push(
+          `Row ${rowNumber}: invalid site type`
+        );
+      }
 
-    if (
-      Number.isNaN(row.lat) ||
-      Number.isNaN(row.lng)
-    ) {
-      errors.push(
-        `Row ${rowNumber}: invalid GPS`
-      );
-    }
+      /*
+        GPS validation
+      */
 
-    if (
-      !Number.isNaN(row.lat) &&
-      !Number.isNaN(row.lng) &&
-      !isInsideIndia(
-        row.lat,
-        row.lng
-      )
-    ) {
-      errors.push(
-        `Row ${rowNumber}: GPS must be within India`
-      );
-    }
+      if (
+        Number.isNaN(
+          row.lat
+        ) ||
+        Number.isNaN(
+          row.lng
+        )
+      ) {
+        errors.push(
+          `Row ${rowNumber}: invalid GPS`
+        );
+      }
 
-    if (
-      row.sizeWidth <= 0 ||
-      row.sizeHeight <= 0
-    ) {
-      errors.push(
-        `Row ${rowNumber}: invalid dimensions`
-      );
-    }
+      if (
+        !Number.isNaN(
+          row.lat
+        ) &&
+        !Number.isNaN(
+          row.lng
+        ) &&
+        !isInsideIndia(
+          row.lat,
+          row.lng
+        )
+      ) {
+        errors.push(
+          `Row ${rowNumber}: GPS must be within India`
+        );
+      }
 
-    if (
-      !Number.isInteger(
-        row.baseCostPerDay
-      ) ||
-      row.baseCostPerDay < 0
-    ) {
-      errors.push(
-        `Row ${rowNumber}: invalid base cost`
-      );
+      /*
+        Date validation
+      */
+
+      if (
+        Number.isNaN(
+          row.startDate.getTime()
+        )
+      ) {
+        errors.push(
+          `Row ${rowNumber}: invalid start date`
+        );
+      }
+
+      if (
+        Number.isNaN(
+          row.endDate.getTime()
+        )
+      ) {
+        errors.push(
+          `Row ${rowNumber}: invalid end date`
+        );
+      }
+
+      if (
+        !Number.isNaN(
+          row.startDate.getTime()
+        ) &&
+        !Number.isNaN(
+          row.endDate.getTime()
+        ) &&
+        row.endDate < row.startDate
+      ) {
+        errors.push(
+          `Row ${rowNumber}: end date must be on or after start date`
+        );
+      }
+
+      /*
+        Dimensions
+      */
+
+      if (
+        row.sizeWidth <= 0 ||
+        row.sizeHeight <= 0
+      ) {
+        errors.push(
+          `Row ${rowNumber}: invalid dimensions`
+        );
+      }
+
+      /*
+        Cost
+      */
+
+      if (
+        !Number.isInteger(
+          row.baseCostPerDay
+        ) ||
+        row.baseCostPerDay < 0
+      ) {
+        errors.push(
+          `Row ${rowNumber}: invalid base cost`
+        );
+      }
     }
-  });
+  );
 
   return errors;
 }
@@ -469,11 +688,14 @@ function validateCsvRows(
 export async function importSitesFromCsv(
   csv: string
 ) {
-  const rows = parseCsv(csv);
+  const rows =
+    parseCsv(csv);
 
   /*
     IMPORTANT:
+
     Validate EVERYTHING first.
+
     Do not write anything if even one
     row contains an error.
   */
@@ -481,7 +703,9 @@ export async function importSitesFromCsv(
   const errors =
     validateCsvRows(rows);
 
-  if (errors.length > 0) {
+  if (
+    errors.length > 0
+  ) {
     return {
       success: false,
       imported: 0,
@@ -489,51 +713,308 @@ export async function importSitesFromCsv(
     };
   }
 
-  return withOptionalTransaction(async (session) => {
-    const importedSites: ISite[] = [];
-    const createOptions: any = {};
-    if (session) {
-      createOptions.session = session;
-    }
+  return withOptionalTransaction(
+    async (session) => {
+      const importedSites: ISite[] =
+        [];
 
-    for (const row of rows) {
-      const code =
-        await generateSiteCode(
-          row.city,
-          row.type as SiteType,
-          session
+      const createOptions: any =
+        {};
+
+      if (session) {
+        createOptions.session =
+          session;
+      }
+
+      for (
+        const row of rows
+      ) {
+        const code =
+          await generateSiteCode(
+            row.city,
+            row.type as SiteType,
+            session
+          );
+
+        const site =
+          new Site({
+            code,
+
+            city:
+              row.city,
+
+            type:
+              row.type as SiteType,
+
+            address:
+              row.address,
+
+            gps: {
+              lat:
+                row.lat,
+
+              lng:
+                row.lng,
+            },
+
+            startDate:
+              row.startDate,
+
+            endDate:
+              row.endDate,
+
+            sizeWidth:
+              row.sizeWidth,
+
+            sizeHeight:
+              row.sizeHeight,
+
+            baseCostPerDay:
+              row.baseCostPerDay,
+
+            vendorId:
+              null,
+
+            status:
+              SiteStatus.ACTIVE,
+
+            photos: [],
+          });
+
+        await site.save(
+          createOptions
         );
 
-      const site = new Site({
-        code,
-        city: row.city,
-        type: row.type as SiteType,
-        address: row.address,
-        gps: {
-          lat: row.lat,
-          lng: row.lng,
-        },
-        sizeWidth: row.sizeWidth,
-        sizeHeight: row.sizeHeight,
-        baseCostPerDay: row.baseCostPerDay,
-        vendorId: null,
-        status: SiteStatus.ACTIVE,
-        photos: [],
-      });
+        importedSites.push(
+          site as unknown as ISite
+        );
+      }
 
-      await site.save(createOptions);
+      return {
+        success: true,
 
-      importedSites.push(
-        site as unknown as ISite
-      );
+        imported:
+          importedSites.length,
+
+        data:
+          importedSites,
+
+        errors: [],
+      };
     }
+  );
+}
+
+/* ----------------------------------
+   CROSS-MODULE SERVICE HELPERS
+----------------------------------- */
+
+export async function checkSitesExist(
+  siteIds: string[],
+  session?: mongoose.ClientSession
+): Promise<{
+  valid: boolean;
+  missingIds: string[];
+}> {
+  const validIds =
+    siteIds.filter(
+      (id) =>
+        mongoose.Types.ObjectId.isValid(
+          id
+        )
+    );
+
+  if (
+    validIds.length !==
+    siteIds.length
+  ) {
+    const invalidFormat =
+      siteIds.filter(
+        (id) =>
+          !mongoose.Types.ObjectId.isValid(
+            id
+          )
+      );
 
     return {
-      success: true,
-      imported:
-        importedSites.length,
-      data: importedSites,
-      errors: [],
+      valid: false,
+      missingIds:
+        invalidFormat,
     };
-  });
+  }
+
+  let query =
+    Site.find({
+      _id: {
+        $in: validIds.map(
+          (id) =>
+            new mongoose.Types.ObjectId(
+              id
+            )
+        ),
+      },
+
+      deletedAt: null,
+    }).select("_id");
+
+  if (session) {
+    query =
+      query.session(
+        session
+      );
+  }
+
+  const found =
+    await query.lean();
+
+  const foundIds =
+    new Set(
+      found.map(
+        (s) =>
+          s._id.toString()
+      )
+    );
+
+  const missingIds =
+    validIds.filter(
+      (id) =>
+        !foundIds.has(id)
+    );
+
+  return {
+    valid:
+      missingIds.length === 0,
+
+    missingIds,
+  };
+}
+
+export async function checkSitesActive(
+  siteIds: string[],
+  session?: mongoose.ClientSession
+): Promise<{
+  valid: boolean;
+  inactiveCodes: string[];
+}> {
+  let query =
+    Site.find({
+      _id: {
+        $in: siteIds.map(
+          (id) =>
+            new mongoose.Types.ObjectId(
+              id
+            )
+        ),
+      },
+
+      deletedAt: null,
+    }).select(
+      "_id code status"
+    );
+
+  if (session) {
+    query =
+      query.session(
+        session
+      );
+  }
+
+  const sites =
+    await query.lean();
+
+  const inactive =
+    sites.filter(
+      (s) =>
+        s.status !==
+        SiteStatus.ACTIVE
+    );
+
+  return {
+    valid:
+      inactive.length === 0,
+
+    inactiveCodes:
+      inactive.map(
+        (s) => s.code
+      ),
+  };
+}
+
+export async function getSitesByIds(
+  siteIds: string[],
+  fields?: string
+) {
+  let query =
+    Site.find({
+      _id: {
+        $in: siteIds.map(
+          (id) =>
+            new mongoose.Types.ObjectId(
+              id
+            )
+        ),
+      },
+
+      deletedAt: null,
+    });
+
+  if (fields) {
+    query =
+      query.select(
+        fields
+      );
+  }
+
+  return query.lean();
+}
+
+export async function getSitesByVendor(
+  vendorId: string
+) {
+  return Site.find({
+    vendorId:
+      new mongoose.Types.ObjectId(
+        vendorId
+      ),
+
+    deletedAt: null,
+  })
+    .select(
+      "code city type status startDate endDate gps"
+    )
+    .sort({
+      code: 1,
+    })
+    .lean();
+}
+
+export async function getAvailableSitesInCity(
+  city: string,
+  bookedSiteIds: string[]
+) {
+  return Site.find({
+    city,
+
+    status:
+      SiteStatus.ACTIVE,
+
+    deletedAt: null,
+
+    _id: {
+      $nin: bookedSiteIds.map(
+        (id) =>
+          new mongoose.Types.ObjectId(
+            id
+          )
+      ),
+    },
+  })
+    .populate(
+      "vendorId",
+      "name city"
+    )
+    .sort({
+      code: 1,
+    })
+    .lean();
 }
