@@ -8,18 +8,19 @@ import { leadsApi } from '@/modules/leads/api';
 import { LeadStatus, LeadSource, Lead, LogCallValues } from '@/modules/leads/types';
 import { Card, Button, Badge, Spinner, Field, SelectField, Alert } from '@/shared/ui';
 import LogCallModal from '@/modules/leads/component/log-call-modal';
+import { Timer } from 'lucide-react';
 
 const STATUS_STYLES: Record<string, string> = {
-  New: 'border-sky-200 bg-sky-50 text-sky-700',
-  Contacted: 'border-amber-200 bg-amber-50 text-amber-700',
-  Interested: 'border-cyan-200 bg-cyan-50 text-cyan-700',
-  Qualified: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-  'Proposal Sent': 'border-indigo-200 bg-indigo-50 text-indigo-700',
-  Negotiation: 'border-orange-200 bg-orange-50 text-orange-700',
-  Won: 'border-green-200 bg-green-50 text-green-700',
-  Lost: 'border-rose-200 bg-rose-50 text-rose-700',
-  Duplicate: 'border-red-200 bg-red-50 text-red-700',
-  duplicate: 'border-red-200 bg-red-50 text-red-700',
+  New: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300',
+  Contacted: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300',
+  Interested: 'border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-950/50 dark:text-cyan-300',
+  Qualified: 'border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-800 dark:bg-purple-950/50 dark:text-purple-300',
+  'Proposal Sent': 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300',
+  Negotiation: 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950/50 dark:text-orange-300',
+  Won: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300',
+  Lost: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300',
+  Duplicate: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-300',
+  duplicate: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-300',
 };
 
 function StatusBadge({ status }: { status: LeadStatus }) {
@@ -32,6 +33,20 @@ function StatusBadge({ status }: { status: LeadStatus }) {
       {status}
     </span>
   );
+}
+
+function formatDateTime(dateStr?: string | Date | null) {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
 }
 
 function SlaCountdown({ end }: { end?: string | null }) {
@@ -61,14 +76,16 @@ function SlaCountdown({ end }: { end?: string | null }) {
   if (hours > 0) {
     return (
       <span className="ml-2 inline-flex items-center text-xs font-medium text-[#8B2424] dark:text-red-400">
-        ⏱️ {hours}h {minutes}m
+        <Timer className="w-3.5 h-3.5 inline mr-1 shrink-0" />
+        {hours}h {minutes}m
       </span>
     );
   }
 
   return (
     <span className="ml-2 inline-flex items-center text-xs font-medium text-[#8B2424] dark:text-red-400">
-      ⏱️ {minutes}m {String(seconds).padStart(2, '0')}s
+      <Timer className="w-3.5 h-3.5 inline mr-1 shrink-0" />
+      {minutes}m {String(seconds).padStart(2, '0')}s
     </span>
   );
 }
@@ -150,7 +167,7 @@ export default function LeadsPage() {
   const displayedLeads = (data?.data ?? []).filter((l) => !claimedIds.includes(l._id || l.id));
 
   return (
-    <div className="space-y-6 py-8">
+    <div className="space-y-6 pb-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Leads</h1>
         <Link href="/leads/new">
@@ -271,10 +288,18 @@ export default function LeadsPage() {
                   return (
                     <tr key={lead._id || lead.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                       <td className="px-4 py-3">
-                        <div className="font-medium text-slate-900 dark:text-white">
+                        <div className="flex items-center gap-1.5 font-medium text-slate-900 dark:text-white">
                           <Link href={`/leads/${lead._id || lead.id}`} className="hover:underline">
                             {lead.companyName}
                           </Link>
+                          {Boolean(lead.cycle && lead.cycle > 1) && (
+                            <span
+                              title={`Repeat Client (Cycle ${lead.cycle})`}
+                              className="inline-flex items-center rounded px-1 py-0.2 text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/80 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800 shrink-0"
+                            >
+                              {lead.cycle}x
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs">{lead.city}</div>
                       </td>
@@ -297,8 +322,8 @@ export default function LeadsPage() {
                                 : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
                             }`}
                           >
-                            {new Date(lead.nextActionDate).toLocaleDateString()}
-                            {isOverdue && ' (Overdue)'}
+                            {formatDateTime(lead.nextActionDate)}
+                            {isOverdue && ''}
                           </span>
                         ) : (
                           <span className="text-xs text-slate-400">-</span>
@@ -323,7 +348,12 @@ export default function LeadsPage() {
                         ) : (
                           <div className="flex items-center gap-2">
                             <Link href={`/leads/${lead._id || lead.id}`}>
-                              <Button variant="ghost">View</Button>
+                              <Button
+                                variant="ghost"
+                                className="bg-blue-50 text-blue-700 border border-blue-200/60 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/50"
+                              >
+                                View
+                              </Button>
                             </Link>
                             <Button
                               variant="ghost"
