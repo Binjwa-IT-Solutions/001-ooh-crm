@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { quotationsApi } from '@/modules/quotations/api';
 import type { PublicProposalView } from '@/modules/quotations/types';
+import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 
 export default function PublicProposalPage() {
   const params = useParams<{ token?: string | string[] }>();
@@ -119,20 +120,23 @@ export default function PublicProposalPage() {
         )}
 
         {isExpired && !isAccepted && (
-          <div className="rounded-lg bg-amber-100 p-4 text-sm font-semibold text-amber-800 border border-amber-200">
-            ⚠️ This proposal expired on {new Date(proposal.validUntil).toLocaleDateString('en-IN')}. It can no longer be accepted.
+          <div className="flex items-center gap-2.5 rounded-lg bg-amber-100 p-4 text-sm font-semibold text-amber-800 border border-amber-200">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+            <span>This proposal expired on {new Date(proposal.validUntil).toLocaleDateString('en-IN')}. It can no longer be accepted.</span>
           </div>
         )}
 
         {isAccepted && (
-          <div className="rounded-lg bg-emerald-100 p-4 text-sm font-semibold text-emerald-800 border border-emerald-200">
-            ✓ This proposal was accepted on {proposal.acceptedAt ? new Date(proposal.acceptedAt).toLocaleDateString('en-IN') : 'date'}.
+          <div className="flex items-center gap-2.5 rounded-lg bg-emerald-100 p-4 text-sm font-semibold text-emerald-800 border border-emerald-200">
+            <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+            <span>This proposal was accepted on {proposal.acceptedAt ? new Date(proposal.acceptedAt).toLocaleDateString('en-IN') : 'date'}.</span>
           </div>
         )}
 
         {isRejected && (
-          <div className="rounded-lg bg-rose-100 p-4 text-sm font-semibold text-rose-800 border border-rose-200">
-            ✕ This proposal was declined.
+          <div className="flex items-center gap-2.5 rounded-lg bg-rose-100 p-4 text-sm font-semibold text-rose-800 border border-rose-200">
+            <XCircle className="w-5 h-5 text-rose-600 shrink-0" />
+            <span>This proposal was declined.</span>
           </div>
         )}
 

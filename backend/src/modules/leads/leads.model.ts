@@ -49,6 +49,7 @@ export interface ILeadStatusHistory {
   changedBy?: Types.ObjectId | null;
   reason?: string;
   changedAt: Date;
+  cycle?: number;
 }
 
 export interface IFollowUpLog {
@@ -105,6 +106,7 @@ export interface ILead extends BaseDocument {
   qualification?: ILeadQualification;
   managerApproval?: IManagerApproval;
   statusHistory?: ILeadStatusHistory[];
+  cycle?: number;
 }
 
 const statusHistorySchema = new Schema<ILeadStatusHistory>(
@@ -114,6 +116,7 @@ const statusHistorySchema = new Schema<ILeadStatusHistory>(
     changedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     reason: { type: String, trim: true },
     changedAt: { type: Date, default: Date.now },
+    cycle: { type: Number, default: 1 },
   },
   { _id: false },
 );
@@ -181,6 +184,7 @@ const leadSchema = new Schema<ILead>({
   firstResponseAt: { type: Date, default: null },
   statusHistory: { type: [statusHistorySchema], default: [] },
   callLogs: { type: [followUpLogSchema], default: [] },
+  cycle: { type: Number, default: 1, min: 1 },
 });
 
 leadSchema.plugin(basePlugin);

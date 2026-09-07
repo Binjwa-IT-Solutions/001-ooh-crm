@@ -7,6 +7,7 @@ import { quotationsApi } from '@/modules/quotations/api';
 import { api } from '@/shared/api/client';
 import { sessionStore } from '@/shared/auth/session-store';
 import type { Quotation } from '@/modules/quotations/types';
+import { Pencil, Upload, FileText, X } from 'lucide-react';
 
 export default function QuotationDetailPage() {
   const params = useParams<{ id?: string | string[] }>();
@@ -302,9 +303,10 @@ export default function QuotationDetailPage() {
             <button
               type="button"
               onClick={openEditModal}
-              className="rounded border border-[#8B2424] bg-white px-3 py-1.5 text-xs font-semibold text-[#8B2424] hover:bg-[#8B2424] hover:text-white transition shadow-sm dark:bg-slate-800"
+              className="inline-flex items-center gap-1.5 rounded border border-[#8B2424] bg-white px-3 py-1.5 text-xs font-semibold text-[#8B2424] hover:bg-[#8B2424] hover:text-white transition shadow-sm dark:bg-slate-800"
             >
-              ✏️ Edit Quotation
+              <Pencil className="w-3.5 h-3.5 shrink-0" />
+              <span>Edit Quotation</span>
             </button>
           )}
 
@@ -321,9 +323,10 @@ export default function QuotationDetailPage() {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploadLoading || pdfLoading}
-            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
           >
-            {uploadLoading ? 'Uploading...' : '📤 Upload Custom PDF'}
+            <Upload className="w-3.5 h-3.5 shrink-0" />
+            <span>{uploadLoading ? 'Uploading...' : 'Upload Custom PDF'}</span>
           </button>
 
           {pdfUrl && (
@@ -331,9 +334,10 @@ export default function QuotationDetailPage() {
               href={pdfUrl}
               target="_blank"
               rel="noreferrer"
-              className="rounded border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-300"
+              className="inline-flex items-center gap-1.5 rounded border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-300"
             >
-              📄 View PDF
+              <FileText className="w-3.5 h-3.5 shrink-0" />
+              <span>View PDF</span>
             </a>
           )}
 
@@ -483,9 +487,10 @@ export default function QuotationDetailPage() {
               <button
                 type="button"
                 onClick={() => setShowEditModal(false)}
-                className="text-slate-400 hover:text-slate-600 text-sm font-semibold"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-1"
+                aria-label="Close"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 

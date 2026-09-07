@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, Field, Button, Alert, TextAreaField, SelectField } from '@/shared/ui';
 import { LeadsSelect } from '@/modules/leads/components/leads-select';
 import { leadsApi } from '@/modules/leads/api';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import {
   LeadSource,
   FOLLOW_UP_TYPES,
@@ -164,16 +165,15 @@ export default function NewLeadPage() {
               />
 
               <Field
-                label="Email Address"
+                label="Email Address (Optional)"
                 name="email"
                 type="email"
                 placeholder="contact@company.com"
                 error={errors.email}
-                hint="Optional"
               />
 
               <Field
-                label="City"
+                label="City (Optional)"
                 name="city"
                 placeholder="e.g. Mumbai"
                 error={errors.city}
@@ -193,9 +193,19 @@ export default function NewLeadPage() {
               <button
                 type="button"
                 onClick={() => setShowFollowUpSection(!showFollowUpSection)}
-                className="text-xs font-medium text-red-600 dark:text-red-400 hover:underline"
+                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 transition"
               >
-                {showFollowUpSection ? '− Collapse' : '+ Expand'}
+                {showFollowUpSection ? (
+                  <>
+                    <ChevronUp className="w-3.5 h-3.5" />
+                    <span>Collapse</span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-3.5 h-3.5" />
+                    <span>Expand</span>
+                  </>
+                )}
               </button>
             </div>
 
