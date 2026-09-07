@@ -1,13 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type {
+  CampaignOption,
   PurchaseOrder,
   PurchaseOrderFormData,
   PurchaseOrderLineItem,
+  VendorOption,
 } from "../types";
 
+import {
+  getCampaignOptionsForPO,
+  getVendorOptionsForPO,
+} from "../api";
 import { getVendors } from "@/modules/vendors/api";
 
 interface Props {
@@ -18,14 +24,6 @@ interface Props {
   onSubmit: (
     data: PurchaseOrderFormData,
   ) => Promise<boolean>;
-}
-
-interface VendorOption {
-  _id: string;
-  name: string;
-  state?: string;
-  city?: string;
-  status?: "Active" | "Inactive";
 }
 
 const emptyItem = (): PurchaseOrderLineItem => ({
@@ -47,6 +45,12 @@ export default function PurchaseOrderForm({
   const [campaignId, setCampaignId] =
     useState("");
 
+  const [campaigns, setCampaigns] =
+    useState<CampaignOption[]>([]);
+
+  const [loadingCampaigns, setLoadingCampaigns] =
+    useState(false);
+
   const [vendorId, setVendorId] =
     useState("");
 
@@ -64,57 +68,68 @@ export default function PurchaseOrderForm({
   const [error, setError] = useState("");
 
   /**
-   * Load active vendors
+   * Load campaigns and active vendors
    */
   useEffect(() => {
     let mounted = true;
 
-    async function loadVendors() {
+    async function loadOptions() {
       try {
+        setLoadingCampaigns(true);
         setLoadingVendors(true);
 
-        const response = await getVendors({
-          status: "Active",
-        });
+        const [campaignRes, vendorRes] = await Promise.allSettled([
+          getCampaignOptionsForPO(),
+          getVendorOptionsForPO().catch(() =>
+            getVendors({ status: "Active" }),
+          ),
+        ]);
 
         if (!mounted) return;
 
-        const data = Array.isArray(response.data)
-          ? response.data
-          : [];
+        if (campaignRes.status === "fulfilled" && campaignRes.value?.data) {
+          const rawCampaigns = Array.isArray(campaignRes.value.data)
+            ? campaignRes.value.data
+            : [];
+          setCampaigns(rawCampaigns);
+        }
 
-        const activeVendors: VendorOption[] =
-          data
+        if (vendorRes.status === "fulfilled" && vendorRes.value?.data) {
+          const rawVendors = Array.isArray(vendorRes.value.data)
+            ? vendorRes.value.data
+            : [];
+
+          const activeVendors: VendorOption[] = rawVendors
             .filter(
               (vendor: any) =>
-                vendor?.status === "Active",
+                !vendor.status || vendor.status === "Active",
             )
             .map((vendor: any) => ({
               _id: String(vendor._id),
               name: vendor.name || "Unnamed Vendor",
               state: vendor.state,
               city: vendor.city,
-              status: vendor.status,
+              status: vendor.status || "Active",
+              contactPerson: vendor.contactPerson,
+              mobile: vendor.mobile,
             }));
 
-        setVendors(activeVendors);
+          setVendors(activeVendors);
+        }
       } catch (err) {
         console.error(
-          "Failed to load vendors:",
+          "Failed to load options for PO:",
           err,
         );
-
-        if (mounted) {
-          setVendors([]);
-        }
       } finally {
         if (mounted) {
+          setLoadingCampaigns(false);
           setLoadingVendors(false);
         }
       }
     }
 
-    loadVendors();
+    loadOptions();
 
     return () => {
       mounted = false;
@@ -359,58 +374,33 @@ export default function PurchaseOrderForm({
               </h3>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {/* Campaign ID */}
-                <Field
-                  label="Campaign ID"
+                {/* Campaign Selector */}
+                <CampaignSelector
                   value={campaignId}
-                  placeholder="Enter campaign ID"
+                  campaigns={campaigns}
+                  loading={loadingCampaigns}
+                  disabled={saving}
+                  fallbackName={
+                    typeof order?.campaignId === "object"
+                      ? order.campaignId?.name
+                      : undefined
+                  }
                   onChange={setCampaignId}
                 />
 
-                {/* Vendor */}
-                <div>
-                  <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#667085]">
-                    Vendor
-                  </label>
-
-                  <select
-                    value={vendorId}
-                    onChange={(e) =>
-                      setVendorId(e.target.value)
-                    }
-                    disabled={
-                      loadingVendors || saving
-                    }
-                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-900 outline-none transition focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA] disabled:cursor-not-allowed disabled:bg-[#F7F8FA]"
-                  >
-                    <option value="">
-                      {loadingVendors
-                        ? "Loading vendors..."
-                        : vendors.length === 0
-                          ? "No active vendors found"
-                          : "Select Active Vendor"}
-                    </option>
-
-                    {vendors.map((vendor) => (
-                      <option
-                        key={vendor._id}
-                        value={vendor._id}
-                      >
-                        {vendor.name}
-                        {vendor.city
-                          ? ` — ${vendor.city}`
-                          : ""}
-                      </option>
-                    ))}
-                  </select>
-
-                  {!loadingVendors &&
-                    vendors.length > 0 && (
-                      <p className="mt-1 text-xs text-[#667085]">
-                        Only active vendors are shown.
-                      </p>
-                    )}
-                </div>
+                {/* Vendor Selector */}
+                <VendorSelector
+                  value={vendorId}
+                  vendors={vendors}
+                  loading={loadingVendors}
+                  disabled={saving}
+                  fallbackName={
+                    typeof order?.vendorId === "object"
+                      ? order.vendorId?.name
+                      : undefined
+                  }
+                  onChange={setVendorId}
+                />
               </div>
             </section>
 
@@ -588,6 +578,8 @@ export default function PurchaseOrderForm({
               disabled={
                 saving ||
                 loadingVendors ||
+                loadingCampaigns ||
+                !campaignId ||
                 !vendorId
               }
               className="rounded-xl bg-[#8B2424] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#A8383B] disabled:cursor-not-allowed disabled:opacity-60"
@@ -601,6 +593,292 @@ export default function PurchaseOrderForm({
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Searchable Campaign Selector Component
+ */
+function CampaignSelector({
+  value,
+  campaigns,
+  loading,
+  disabled,
+  fallbackName,
+  onChange,
+}: {
+  value: string;
+  campaigns: CampaignOption[];
+  loading?: boolean;
+  disabled?: boolean;
+  fallbackName?: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  const selectedCampaign = campaigns.find((c) => c._id === value);
+
+  const filteredCampaigns = campaigns.filter((c) => {
+    if (!search.trim()) return true;
+    const term = search.toLowerCase();
+    return (
+      (c.name || "").toLowerCase().includes(term) ||
+      (c.campaignCode || "").toLowerCase().includes(term) ||
+      (c.city || "").toLowerCase().includes(term)
+    );
+  });
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#667085]">
+        Campaign <span className="text-[#8B2424]">*</span>
+      </label>
+
+      <button
+        type="button"
+        disabled={disabled || loading}
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex w-full items-center justify-between rounded-xl border border-gray-300 bg-white px-4 py-3 text-left text-sm font-medium text-gray-900 outline-none transition focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA] disabled:cursor-not-allowed disabled:bg-[#F7F8FA]"
+      >
+        <div className="truncate">
+          {selectedCampaign ? (
+            <div>
+              <span className="font-bold text-[#1F2937]">{selectedCampaign.name}</span>
+              {selectedCampaign.campaignCode && (
+                <span className="ml-2 text-xs font-semibold text-[#8B2424]">
+                  ({selectedCampaign.campaignCode})
+                </span>
+              )}
+              {selectedCampaign.city && (
+                <span className="ml-2 text-xs text-[#667085]">
+                  • {selectedCampaign.city}
+                </span>
+              )}
+            </div>
+          ) : fallbackName ? (
+            <span className="font-semibold text-gray-900">{fallbackName}</span>
+          ) : value ? (
+            <span className="text-gray-700">Campaign #{value.slice(-6)}</span>
+          ) : (
+            <span className="text-gray-400">
+              {loading ? "Loading campaigns..." : "Select Campaign"}
+            </span>
+          )}
+        </div>
+        <span className="ml-2 text-xs text-[#667085]">▾</span>
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 z-50 mt-1 max-h-64 overflow-hidden rounded-xl border border-[#E8E8EC] bg-white shadow-xl">
+          <div className="border-b border-gray-100 p-2">
+            <input
+              type="text"
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search campaign by name, code or city..."
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-900 placeholder:text-gray-400 outline-none focus:border-[#8B2424] focus:ring-1 focus:ring-[#F9DADA]"
+            />
+          </div>
+
+          <div className="max-h-48 overflow-y-auto divide-y divide-gray-50">
+            {filteredCampaigns.map((c) => {
+              const isSelected = c._id === value;
+              return (
+                <button
+                  key={c._id}
+                  type="button"
+                  onClick={() => {
+                    onChange(c._id);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className={`block w-full px-4 py-2.5 text-left transition ${
+                    isSelected
+                      ? "bg-[#FFF5F5] text-[#8B2424]"
+                      : "hover:bg-[#F9DADA] hover:text-[#8B2424] text-gray-900"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold">{c.name}</span>
+                    {c.campaignCode && (
+                      <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">
+                        {c.campaignCode}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-0.5 text-xs text-[#667085]">
+                    {c.city || "No city specified"}
+                    {c.status ? ` • ${c.status}` : ""}
+                  </div>
+                </button>
+              );
+            })}
+
+            {filteredCampaigns.length === 0 && (
+              <div className="px-4 py-4 text-center text-xs text-gray-500">
+                {campaigns.length === 0
+                  ? "No campaigns found"
+                  : "No matching campaigns found"}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Searchable Vendor Selector Component
+ */
+function VendorSelector({
+  value,
+  vendors,
+  loading,
+  disabled,
+  fallbackName,
+  onChange,
+}: {
+  value: string;
+  vendors: VendorOption[];
+  loading?: boolean;
+  disabled?: boolean;
+  fallbackName?: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  const selectedVendor = vendors.find((v) => v._id === value);
+
+  const filteredVendors = vendors.filter((v) => {
+    if (!search.trim()) return true;
+    const term = search.toLowerCase();
+    return (
+      (v.name || "").toLowerCase().includes(term) ||
+      (v.city || "").toLowerCase().includes(term) ||
+      (v.state || "").toLowerCase().includes(term) ||
+      (v.contactPerson || "").toLowerCase().includes(term)
+    );
+  });
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#667085]">
+        Vendor <span className="text-[#8B2424]">*</span>
+      </label>
+
+      <button
+        type="button"
+        disabled={disabled || loading}
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex w-full items-center justify-between rounded-xl border border-gray-300 bg-white px-4 py-3 text-left text-sm font-medium text-gray-900 outline-none transition focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA] disabled:cursor-not-allowed disabled:bg-[#F7F8FA]"
+      >
+        <div className="truncate">
+          {selectedVendor ? (
+            <div>
+              <span className="font-bold text-[#1F2937]">{selectedVendor.name}</span>
+              {selectedVendor.city && (
+                <span className="ml-2 text-xs text-[#667085]">
+                  — {selectedVendor.city}
+                  {selectedVendor.state ? `, ${selectedVendor.state}` : ""}
+                </span>
+              )}
+            </div>
+          ) : fallbackName ? (
+            <span className="font-semibold text-gray-900">{fallbackName}</span>
+          ) : value ? (
+            <span className="text-gray-700">Vendor #{value.slice(-6)}</span>
+          ) : (
+            <span className="text-gray-400">
+              {loading ? "Loading vendors..." : "Select Active Vendor"}
+            </span>
+          )}
+        </div>
+        <span className="ml-2 text-xs text-[#667085]">▾</span>
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 z-50 mt-1 max-h-64 overflow-hidden rounded-xl border border-[#E8E8EC] bg-white shadow-xl">
+          <div className="border-b border-gray-100 p-2">
+            <input
+              type="text"
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search vendor by name, city, or contact..."
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-900 placeholder:text-gray-400 outline-none focus:border-[#8B2424] focus:ring-1 focus:ring-[#F9DADA]"
+            />
+          </div>
+
+          <div className="max-h-48 overflow-y-auto divide-y divide-gray-50">
+            {filteredVendors.map((v) => {
+              const isSelected = v._id === value;
+              return (
+                <button
+                  key={v._id}
+                  type="button"
+                  onClick={() => {
+                    onChange(v._id);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className={`block w-full px-4 py-2.5 text-left transition ${
+                    isSelected
+                      ? "bg-[#FFF5F5] text-[#8B2424]"
+                      : "hover:bg-[#F9DADA] hover:text-[#8B2424] text-gray-900"
+                  }`}
+                >
+                  <div className="text-sm font-bold">{v.name}</div>
+                  <div className="mt-0.5 text-xs text-[#667085]">
+                    {v.contactPerson ? `${v.contactPerson} • ` : ""}
+                    {v.city ? `${v.city}${v.state ? `, ${v.state}` : ""}` : "No location"}
+                  </div>
+                </button>
+              );
+            })}
+
+            {filteredVendors.length === 0 && (
+              <div className="px-4 py-4 text-center text-xs text-gray-500">
+                {vendors.length === 0
+                  ? "No active vendors found"
+                  : "No matching vendors found"}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!loading && vendors.length > 0 && (
+        <p className="mt-1 text-xs text-[#667085]">
+          Only active vendors are shown.
+        </p>
+      )}
     </div>
   );
 }

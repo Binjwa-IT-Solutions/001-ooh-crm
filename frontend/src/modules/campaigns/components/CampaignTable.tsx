@@ -53,6 +53,14 @@ export default function CampaignTable({
               </th>
 
               <th className="whitespace-nowrap px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">
+                Client / Lead
+              </th>
+
+              <th className="whitespace-nowrap px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">
+                Manager
+              </th>
+
+              <th className="whitespace-nowrap px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">
                 City
               </th>
 
@@ -79,107 +87,129 @@ export default function CampaignTable({
           </thead>
 
           <tbody className="divide-y divide-gray-100">
-            {campaigns.map((campaign) => (
-              <tr
-                key={campaign._id}
-                onClick={() => onSelectCampaign?.(campaign)}
-                className={`cursor-pointer transition-colors ${
-                  selectedCampaignId === campaign._id
-                    ? "bg-[#FFF5F5] ring-2 ring-inset ring-[#8B2424]/30"
-                    : "hover:bg-gray-50"
-                }`}
-              >
-                <td className="whitespace-nowrap px-5 py-4">
-                  <span className="font-semibold text-gray-900">
-                    {campaign.campaignCode}
-                  </span>
-                </td>
+            {campaigns.map((campaign) => {
+              const leadInfo = getLeadDisplayName(campaign.leadId);
+              const managerName = getManagerDisplayName(campaign.assignedManager);
 
-                <td className="max-w-[220px] px-5 py-4">
-                  <span className="block truncate text-sm font-medium text-gray-900">
-                    {campaign.name}
-                  </span>
-                </td>
+              return (
+                <tr
+                  key={campaign._id}
+                  onClick={() => onSelectCampaign?.(campaign)}
+                  className={`cursor-pointer transition-colors ${
+                    selectedCampaignId === campaign._id
+                      ? "bg-[#FFF5F5] ring-2 ring-inset ring-[#8B2424]/30"
+                      : "hover:bg-gray-50"
+                  }`}
+                >
+                  <td className="whitespace-nowrap px-5 py-4">
+                    <span className="font-semibold text-gray-900">
+                      {campaign.campaignCode}
+                    </span>
+                  </td>
 
-                <td className="whitespace-nowrap px-5 py-4">
-                  <span className="text-sm text-gray-700">
-                    {campaign.city}
-                  </span>
-                </td>
+                  <td className="max-w-[200px] px-5 py-4">
+                    <span className="block truncate text-sm font-medium text-gray-900">
+                      {campaign.name}
+                    </span>
+                  </td>
 
-                <td className="whitespace-nowrap px-5 py-4">
-                  <div className="text-sm text-gray-700">
-                    <div>
-                      {formatDate(campaign.startDate)}
+                  <td className="max-w-[200px] px-5 py-4">
+                    <div className="truncate text-sm font-medium text-gray-900">
+                      {leadInfo.primary}
                     </div>
+                    {leadInfo.secondary && (
+                      <div className="truncate text-xs text-gray-500">
+                        {leadInfo.secondary}
+                      </div>
+                    )}
+                  </td>
 
-                    <div className="my-0.5 text-xs text-gray-400">
-                      to
+                  <td className="whitespace-nowrap px-5 py-4">
+                    <span className="inline-flex items-center gap-1.5 rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-800">
+                      <span className="text-gray-500">👤</span>
+                      {managerName}
+                    </span>
+                  </td>
+
+                  <td className="whitespace-nowrap px-5 py-4">
+                    <span className="text-sm text-gray-700">
+                      {campaign.city}
+                    </span>
+                  </td>
+
+                  <td className="whitespace-nowrap px-5 py-4">
+                    <div className="text-sm text-gray-700">
+                      <div>
+                        {formatDate(campaign.startDate)}
+                      </div>
+
+                      <div className="my-0.5 text-xs text-gray-400">
+                        to
+                      </div>
+
+                      <div>
+                        {formatDate(campaign.endDate)}
+                      </div>
                     </div>
+                  </td>
 
-                    <div>
-                      {formatDate(campaign.endDate)}
-                    </div>
-                  </div>
-                </td>
+                  <td className="whitespace-nowrap px-5 py-4">
+                    <span className="rounded-md bg-[#F9DADA] px-2.5 py-1 text-xs font-medium text-[#8B2424]">
+                      {campaign.siteIds.length}{" "}
+                      {campaign.siteIds.length === 1
+                        ? "site"
+                        : "sites"}
+                    </span>
+                  </td>
 
-                <td className="whitespace-nowrap px-5 py-4">
-                  <span className="rounded-md bg-[#F9DADA] px-2.5 py-1 text-xs font-medium text-[#8B2424]">
-                    {campaign.siteIds.length}{" "}
-                    {campaign.siteIds.length === 1
-                      ? "site"
-                      : "sites"}
-                  </span>
-                </td>
+                  <td className="whitespace-nowrap px-5 py-4">
+                    <span className="text-sm font-medium text-gray-900">
+                      {formatValue(
+                        campaign.contractedValue,
+                      )}
+                    </span>
+                  </td>
 
-                <td className="whitespace-nowrap px-5 py-4">
-                  <span className="text-sm font-medium text-gray-900">
-                    {formatValue(
-                      campaign.contractedValue,
-                    )}
-                  </span>
-                </td>
+                  <td className="whitespace-nowrap px-5 py-4">
+                    <StatusBadge status={campaign.status} />
+                  </td>
 
-                <td className="whitespace-nowrap px-5 py-4">
-                  <StatusBadge status={campaign.status} />
-                </td>
+                  <td className="whitespace-nowrap px-5 py-4 text-right">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEdit(campaign);
+                        }}
+                        className="rounded-lg border border-[#8B2424] bg-[#8B2424] px-3.5 py-2 text-sm font-medium text-[#F9DADA] transition hover:border-[#A8383B] hover:bg-[#A8383B] hover:text-white"
+                      >
+                        Edit
+                      </button>
 
-                <td className="whitespace-nowrap px-5 py-4 text-right">
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEdit(campaign);
-                      }}
-                      className="rounded-lg border border-[#8B2424] bg-[#8B2424] px-3.5 py-2 text-sm font-medium text-[#F9DADA] transition hover:border-[#A8383B] hover:bg-[#A8383B] hover:text-white"
-                    >
-                      Edit
-                    </button>
+                      {campaign.status === "Draft" && (
+                        <ActionButton
+                          label="Approve"
+                          onClick={() =>
+                            onStatusChange(
+                              campaign,
+                              "Approved",
+                            )
+                          }
+                        />
+                      )}
 
-                    {campaign.status === "Draft" && (
-                      <ActionButton
-                        label="Approve"
-                        onClick={() =>
-                          onStatusChange(
-                            campaign,
-                            "Approved",
-                          )
-                        }
-                      />
-                    )}
-
-                    {campaign.status === "Approved" && (
-                      <ActionButton
-                        label="Start"
-                        onClick={() =>
-                          onStatusChange(
-                            campaign,
-                            "InProgress",
-                          )
-                        }
-                      />
-                    )}
+                      {campaign.status === "Approved" && (
+                        <ActionButton
+                          label="Start"
+                          onClick={() =>
+                            onStatusChange(
+                              campaign,
+                              "InProgress",
+                            )
+                          }
+                        />
+                      )}
 
                     {campaign.status === "InProgress" && (
                       <ActionButton
@@ -212,12 +242,13 @@ export default function CampaignTable({
                   </div>
                 </td>
               </tr>
-            ))}
+            );
+          })}
 
             {campaigns.length === 0 && (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={10}
                   className="px-5 py-16 text-center"
                 >
                   <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F9DADA]">
@@ -349,4 +380,26 @@ function formatValue(value: number) {
     currency: "INR",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function getLeadDisplayName(lead: Campaign["leadId"]): {
+  primary: string;
+  secondary?: string;
+} {
+  if (!lead) return { primary: "—" };
+  if (typeof lead === "string") return { primary: `#${lead.slice(-6)}` };
+  const company = lead.companyName || lead.company;
+  const person = lead.contactPerson || lead.name;
+  if (company && person && company !== person) {
+    return { primary: company, secondary: person };
+  }
+  return { primary: company || person || lead.email || "—" };
+}
+
+function getManagerDisplayName(
+  manager: Campaign["assignedManager"],
+): string {
+  if (!manager) return "Unassigned";
+  if (typeof manager === "string") return `#${manager.slice(-6)}`;
+  return manager.name || manager.email || "Unassigned";
 }

@@ -58,8 +58,20 @@ export const updatePurchaseOrderSchema = z.object({
     .optional(),
 });
 
+export const purchaseOrderListQuerySchema = z.object({
+  search: z.string().trim().optional(),
+  status: z
+    .enum(["Draft", "Issued", "Accepted", "Cancelled"])
+    .optional(),
+  campaignId: z.string().trim().optional(),
+  vendorId: z.string().trim().optional(),
+});
+
 export type CreatePurchaseOrderInput =
   z.infer<typeof createPurchaseOrderSchema>;
 
 export type UpdatePurchaseOrderInput =
   z.infer<typeof updatePurchaseOrderSchema>;
+
+export type PurchaseOrderListQuery =
+  z.infer<typeof purchaseOrderListQuerySchema>;

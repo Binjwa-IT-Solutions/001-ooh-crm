@@ -8,6 +8,9 @@ import {
   getCampaignController,
   listCampaignsController,
   updateCampaignStatusController,
+  updateCampaignController,
+  listCampaignManagersController,
+  listCampaignLeadOptionsController,
 } from "./campaign.controller.js";
 
 const router = Router();
@@ -21,6 +24,7 @@ router.use(requireAuth);
  * ?status=Draft
  * ?city=Indore
  * ?manager=<id>
+ * ?search=keyword
  * ?startDate=2026-08-01
  * ?endDate=2026-08-31
  */
@@ -31,12 +35,39 @@ router.get(
 );
 
 /*
+ * GET /api/campaigns/managers
+ */
+router.get(
+  "/managers",
+  requirePermission("campaigns.view"),
+  listCampaignManagersController,
+);
+
+/*
+ * GET /api/campaigns/lead-options
+ */
+router.get(
+  "/lead-options",
+  requirePermission("campaigns.view"),
+  listCampaignLeadOptionsController,
+);
+
+/*
  * GET /api/campaigns/:id
  */
 router.get(
   "/:id",
   requirePermission("campaigns.view"),
   getCampaignController,
+);
+
+/*
+ * PUT /api/campaigns/:id
+ */
+router.put(
+  "/:id",
+  requirePermission("campaigns.manage"),
+  updateCampaignController,
 );
 
 /*
@@ -73,4 +104,4 @@ router.post(
   createCampaignFromQuotationController,
 );
 
-export default router;
+export default router;

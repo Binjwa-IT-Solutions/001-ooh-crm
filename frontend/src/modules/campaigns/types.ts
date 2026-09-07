@@ -9,8 +9,12 @@ export interface CampaignLead {
   _id: string;
   name?: string;
   company?: string;
+  companyName?: string;
+  contactPerson?: string;
   email?: string;
   phone?: string;
+  mobile?: string;
+  city?: string;
 }
 
 export interface CampaignQuotation {
@@ -24,6 +28,7 @@ export interface CampaignManager {
   _id: string;
   name?: string;
   email?: string;
+  role?: string;
 }
 
 export interface CampaignSite {
@@ -81,6 +86,8 @@ export interface Campaign {
 }
 
 export interface CampaignFilters {
+  search?: string;
+
   status?: CampaignStatus;
 
   city?: string;
@@ -90,6 +97,22 @@ export interface CampaignFilters {
   startDate?: string;
 
   endDate?: string;
+}
+
+export interface LeadOption {
+  _id: string;
+  companyName: string;
+  contactPerson?: string;
+  email?: string;
+  mobile?: string;
+  city?: string;
+}
+
+export interface ManagerOption {
+  _id: string;
+  name: string;
+  email?: string;
+  role?: string;
 }
 
 export interface CreateCampaignPayload {

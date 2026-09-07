@@ -27,6 +27,7 @@ export default function CampaignPage() {
     error,
     reload: onReload,
     addCampaign: onCreate,
+    editCampaign: onUpdate,
     changeStatus: onUpdateStatus,
   } = useCampaigns(filters);
 
@@ -41,6 +42,36 @@ export default function CampaignPage() {
 
   const filteredCampaigns = useMemo(() => {
     return campaigns.filter((campaign) => {
+      const searchMatch = !filters.search?.trim() || (() => {
+        const term = filters.search.trim().toLowerCase();
+        const nameMatch = (campaign.name || "").toLowerCase().includes(term);
+        const codeMatch = (campaign.campaignCode || "").toLowerCase().includes(term);
+        const cityMatch2 = (campaign.city || "").toLowerCase().includes(term);
+
+        let leadMatch = false;
+        if (campaign.leadId) {
+          if (typeof campaign.leadId === "object") {
+            const comp = campaign.leadId.companyName || campaign.leadId.company || "";
+            const person = campaign.leadId.contactPerson || campaign.leadId.name || "";
+            leadMatch = comp.toLowerCase().includes(term) || person.toLowerCase().includes(term);
+          } else {
+            leadMatch = campaign.leadId.toLowerCase().includes(term);
+          }
+        }
+
+        let managerMatch2 = false;
+        if (campaign.assignedManager) {
+          if (typeof campaign.assignedManager === "object") {
+            const mName = campaign.assignedManager.name || "";
+            managerMatch2 = mName.toLowerCase().includes(term);
+          } else {
+            managerMatch2 = campaign.assignedManager.toLowerCase().includes(term);
+          }
+        }
+
+        return nameMatch || codeMatch || cityMatch2 || leadMatch || managerMatch2;
+      })();
+
       const cityMatch =
         !filters.city ||
         campaign.city
@@ -54,9 +85,17 @@ export default function CampaignPage() {
         campaign.status === filters.status;
 
       const managerMatch =
-        !filters.manager ||
-        campaign.assignedManager ===
-          filters.manager;
+        !filters.manager || (() => {
+          if (typeof campaign.assignedManager === "object" && campaign.assignedManager) {
+            return (
+              campaign.assignedManager._id === filters.manager ||
+              (campaign.assignedManager.name || "")
+                .toLowerCase()
+                .includes(filters.manager.toLowerCase())
+            );
+          }
+          return campaign.assignedManager === filters.manager;
+        })();
 
       const startDateMatch =
         !filters.startDate ||
@@ -69,6 +108,7 @@ export default function CampaignPage() {
           new Date(filters.endDate);
 
       return (
+        searchMatch &&
         cityMatch &&
         statusMatch &&
         managerMatch &&
@@ -108,15 +148,17 @@ export default function CampaignPage() {
   async function handleFormSuccess(
     data: Parameters<typeof onCreate>[0],
   ) {
-    const created = await onCreate(data);
+    if (selectedCampaign?._id) {
+      await onUpdate(selectedCampaign._id, data);
+    } else {
+      const created = await onCreate(data);
+      if (created?._id) {
+        setActiveCampaignId(created._id);
+      }
+    }
 
     setShowForm(false);
     setSelectedCampaign(null);
-
-    if (created?._id) {
-      setActiveCampaignId(created._id);
-    }
-
     await onReload();
   }
 

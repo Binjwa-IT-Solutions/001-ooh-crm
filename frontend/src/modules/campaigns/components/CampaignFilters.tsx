@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { getCampaignManagers } from "../api";
+import type { ManagerOption } from "../types";
 
 interface Props {
   filters: {
+    search?: string;
     status?: string;
     city?: string;
     manager?: string;
@@ -30,6 +33,25 @@ export default function CampaignFilters({
   const [statusOpen, setStatusOpen] = useState(false);
   const statusRef = useRef<HTMLDivElement>(null);
 
+  const [managerOpen, setManagerOpen] = useState(false);
+  const managerRef = useRef<HTMLDivElement>(null);
+  const [managers, setManagers] = useState<ManagerOption[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    getCampaignManagers()
+      .then((res) => {
+        if (mounted && res.data) {
+          setManagers(res.data);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
       if (
@@ -37,6 +59,12 @@ export default function CampaignFilters({
         !statusRef.current.contains(event.target as Node)
       ) {
         setStatusOpen(false);
+      }
+      if (
+        managerRef.current &&
+        !managerRef.current.contains(event.target as Node)
+      ) {
+        setManagerOpen(false);
       }
     };
 
@@ -47,17 +75,19 @@ export default function CampaignFilters({
     };
   }, []);
 
+  const selectedManager = managers.find((m) => m._id === filters.manager);
+
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       {/* Header */}
-      <div className="mb-5 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold text-gray-900">
-            Filters
+            Campaign Filters & Search
           </h2>
 
           <p className="mt-1 text-sm text-gray-500">
-            Filter campaigns by status, city, manager and date range.
+            Search by name, code, lead, manager, city or filter by status and date range.
           </p>
         </div>
 
@@ -66,11 +96,61 @@ export default function CampaignFilters({
           onClick={onReset}
           className="rounded-lg px-3 py-2 text-sm font-medium text-[#8B2424] transition hover:bg-[#F9DADA]"
         >
-          Reset
+          Reset All
         </button>
       </div>
 
-      {/* Filters */}
+      {/* SEARCH BAR */}
+      <div className="mb-4">
+        <div className="relative">
+          <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-gray-400">
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+          </span>
+
+          <input
+            type="text"
+            value={filters.search ?? ""}
+            onChange={(event) =>
+              onChange({
+                ...filters,
+                search: event.target.value,
+              })
+            }
+            placeholder="Search campaigns by name, code, lead / client, manager, city..."
+            className="w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-10 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+          />
+
+          {filters.search && (
+            <button
+              type="button"
+              onClick={() =>
+                onChange({
+                  ...filters,
+                  search: "",
+                })
+              }
+              className="absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-gray-400 hover:text-gray-600"
+              title="Clear search"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Filters Grid */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
         {/* Status */}
         <div ref={statusRef} className="relative">
@@ -130,6 +210,64 @@ export default function CampaignFilters({
           )}
         </div>
 
+        {/* Manager Filter */}
+        <div ref={managerRef} className="relative">
+          <label className="mb-1.5 block text-sm font-medium text-gray-900">
+            Manager
+          </label>
+
+          <button
+            type="button"
+            onClick={() => setManagerOpen(!managerOpen)}
+            className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+          >
+            <span className="truncate">
+              {selectedManager ? selectedManager.name : filters.manager || "All Managers"}
+            </span>
+
+            <span className="text-gray-500">▾</span>
+          </button>
+
+          {managerOpen && (
+            <div className="absolute left-0 right-0 z-20 mt-1 max-h-56 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+              <button
+                type="button"
+                onClick={() => {
+                  onChange({
+                    ...filters,
+                    manager: "",
+                  });
+                  setManagerOpen(false);
+                }}
+                className="block w-full cursor-pointer px-4 py-2.5 text-left text-gray-900 transition hover:bg-[#F9DADA] hover:text-[#8B2424]"
+              >
+                All Managers
+              </button>
+
+              {managers.map((m) => (
+                <button
+                  key={m._id}
+                  type="button"
+                  onClick={() => {
+                    onChange({
+                      ...filters,
+                      manager: m._id,
+                    });
+                    setManagerOpen(false);
+                  }}
+                  className={`block w-full cursor-pointer px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
+                    filters.manager === m._id
+                      ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
+                      : "text-gray-900"
+                  }`}
+                >
+                  {m.name} {m.role ? `(${m.role})` : ""}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* City */}
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-900">
@@ -146,26 +284,6 @@ export default function CampaignFilters({
               })
             }
             placeholder="Enter city"
-            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder:text-gray-500 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
-          />
-        </div>
-
-        {/* Manager */}
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-900">
-            Manager
-          </label>
-
-          <input
-            type="text"
-            value={filters.manager ?? ""}
-            onChange={(event) =>
-              onChange({
-                ...filters,
-                manager: event.target.value,
-              })
-            }
-            placeholder="Manager ID"
             className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder:text-gray-500 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
           />
         </div>

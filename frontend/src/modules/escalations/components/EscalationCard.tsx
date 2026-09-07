@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowUpRight } from "lucide-react";
 import type { Escalation } from "../types";
 
 import {
@@ -31,10 +32,11 @@ export default function EscalationCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span
-              className={`rounded-full px-3 py-1.5 text-xs font-bold ${getLevelClass(
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${getLevelClass(
                 escalation.level,
               )}`}
             >
+              <ArrowUpRight className="h-3.5 w-3.5" />
               {getLevelLabel(
                 escalation.level,
               )}

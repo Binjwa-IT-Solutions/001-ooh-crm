@@ -4,12 +4,18 @@ import type {
   CampaignResponse,
   CampaignStatus,
   CreateCampaignPayload,
+  LeadOption,
+  ManagerOption,
 } from "./types";
 
 import { api } from "@/shared/api/client";
 
 function buildQuery(filters: CampaignFilters): string {
   const params = new URLSearchParams();
+
+  if (filters.search?.trim()) {
+    params.set("search", filters.search.trim());
+  }
 
   if (filters.status) {
     params.set("status", filters.status);
@@ -53,6 +59,16 @@ export async function createCampaign(
   );
 }
 
+export async function updateCampaign(
+  id: string,
+  payload: CreateCampaignPayload,
+): Promise<CampaignResponse> {
+  return api.put<CampaignResponse>(
+    `/api/campaigns/${id}`,
+    payload,
+  );
+}
+
 export async function updateCampaignStatus(
   id: string,
   status: CampaignStatus,
@@ -63,4 +79,24 @@ export async function updateCampaignStatus(
       status,
     },
   );
+}
+
+export async function getCampaignManagers(): Promise<{
+  success: boolean;
+  data: ManagerOption[];
+}> {
+  return api.get<{
+    success: boolean;
+    data: ManagerOption[];
+  }>("/api/campaigns/managers");
+}
+
+export async function getCampaignLeadOptions(): Promise<{
+  success: boolean;
+  data: LeadOption[];
+}> {
+  return api.get<{
+    success: boolean;
+    data: LeadOption[];
+  }>("/api/campaigns/lead-options");
 }

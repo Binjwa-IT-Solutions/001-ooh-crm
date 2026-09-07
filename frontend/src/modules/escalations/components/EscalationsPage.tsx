@@ -4,6 +4,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { ArrowUpRight, CheckCircle2 } from "lucide-react";
 
 import {
   countByLevel,
@@ -67,21 +68,27 @@ export default function EscalationsPage() {
     <div className="space-y-5">
       {/* Header */}
       <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-sm font-bold tracking-wide text-[#8B2424]">
-              ESCALATION ENGINE
-            </p>
-
-            <h1 className="mt-1 text-2xl font-bold text-gray-900">
-              Escalations
-            </h1>
-
-            <p className="mt-1 max-w-2xl text-sm text-gray-500">
-              Monitor automatically triggered
-              task escalations and exception
-              activity.
-            </p>
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#8B2424] to-[#A8333B] text-white shadow-md ring-4 ring-[#F9DADA]">
+              <ArrowUpRight className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#8B2424]">
+                  SLA Operations
+                </span>
+                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-600">
+                  Automated Engine
+                </span>
+              </div>
+              <h1 className="mt-1 text-2xl font-bold text-gray-900">
+                Task Escalations
+              </h1>
+              <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                Monitor automatically routed task SLA elevations and resolution history.
+              </p>
+            </div>
           </div>
 
           <button
@@ -319,15 +326,15 @@ function EmptyState({
 }) {
   const title =
     level === "ALL"
-      ? "No escalations found"
+      ? "All tasks on schedule"
       : `No ${getLevelLabel(
           level,
-        )} records found`;
+        )} records`;
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-12 text-center shadow-sm">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F9DADA] text-[#8B2424]">
-        !
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 ring-4 ring-emerald-100/60">
+        <CheckCircle2 className="h-6 w-6" />
       </div>
 
       <h3 className="mt-4 text-base font-semibold text-gray-900">
@@ -335,9 +342,9 @@ function EmptyState({
       </h3>
 
       <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
-        Escalations will appear here
-        automatically when overdue tasks
-        reach an escalation threshold.
+        {level === "ALL"
+          ? "No active escalations. Automated routing triggers if tasks breach their SLA deadline windows."
+          : `There are currently no tasks in the ${getLevelLabel(level)} tier.`}
       </p>
     </div>
   );

@@ -5,10 +5,13 @@ import {
   PurchaseOrder,
   type IPurchaseOrderLineItem,
 } from "./purchase-order.model.js";
+import { Vendor } from "../vendors/vendor.model.js";
+import Campaign from "../campaigns/campaign.model.js";
 
 import type {
   CreatePurchaseOrderInput,
   UpdatePurchaseOrderInput,
+  PurchaseOrderListQuery,
 } from "./purchase-order.validator.js";
 
 import { findActiveVendorById } from "../vendors/vendor.service.js";
@@ -138,19 +141,77 @@ async function generatePONumber(): Promise<string> {
    LIST PURCHASE ORDERS
 ========================================================= */
 
-export async function listPurchaseOrders() {
-  return PurchaseOrder.find()
+export async function listPurchaseOrders(
+  filters: PurchaseOrderListQuery = {},
+) {
+  const query: Record<string, any> = {};
+
+  if (filters.status && filters.status.trim()) {
+    query.status = filters.status.trim();
+  }
+
+  if (filters.campaignId && mongoose.isValidObjectId(filters.campaignId)) {
+    query.campaignId = new mongoose.Types.ObjectId(filters.campaignId);
+  }
+
+  if (filters.vendorId && mongoose.isValidObjectId(filters.vendorId)) {
+    query.vendorId = new mongoose.Types.ObjectId(filters.vendorId);
+  }
+
+  if (filters.search?.trim()) {
+    const searchRegex = new RegExp(filters.search.trim(), "i");
+
+    const [matchingVendors, matchingCampaigns] = await Promise.all([
+      Vendor.find({
+        $or: [
+          { name: searchRegex },
+          { contactPerson: searchRegex },
+          { city: searchRegex },
+        ],
+      })
+        .select("_id")
+        .lean(),
+      Campaign.find({
+        $or: [
+          { name: searchRegex },
+          { campaignCode: searchRegex },
+          { city: searchRegex },
+        ],
+      })
+        .select("_id")
+        .lean(),
+    ]);
+
+    const vendorIds = matchingVendors.map((v) => v._id);
+    const campaignIds = matchingCampaigns.map((c) => c._id);
+
+    const orConditions: any[] = [
+      { poNumber: searchRegex },
+    ];
+
+    if (vendorIds.length > 0) {
+      orConditions.push({ vendorId: { $in: vendorIds } });
+    }
+
+    if (campaignIds.length > 0) {
+      orConditions.push({ campaignId: { $in: campaignIds } });
+    }
+
+    query.$or = orConditions;
+  }
+
+  return PurchaseOrder.find(query)
     .populate(
       "vendorId",
-      "name city state",
+      "name city state status contactPerson mobile email",
     )
     .populate(
       "campaignId",
-      "name",
+      "name campaignCode city startDate endDate status",
     )
     .populate(
       "lineItems.siteId",
-      "code city type baseCostPerDay",
+      "code name city type baseCostPerDay",
     )
     .sort({
       createdAt: -1,
@@ -175,15 +236,15 @@ export async function getPurchaseOrderById(
     await PurchaseOrder.findById(id)
       .populate(
         "vendorId",
-        "name city state",
+        "name city state status contactPerson mobile email",
       )
       .populate(
         "campaignId",
-        "name",
+        "name campaignCode city startDate endDate status",
       )
       .populate(
         "lineItems.siteId",
-        "code city type baseCostPerDay",
+        "code name city type baseCostPerDay",
       )
       .lean();
 
@@ -194,6 +255,28 @@ export async function getPurchaseOrderById(
   }
 
   return po;
+}
+
+/* =========================================================
+   OPTIONS FOR PURCHASE ORDER CREATION
+========================================================= */
+
+export async function listCampaignOptionsForPO() {
+  return Campaign.find(
+    {},
+    "_id name campaignCode city status startDate endDate",
+  )
+    .sort({ createdAt: -1 })
+    .lean();
+}
+
+export async function listVendorOptionsForPO() {
+  return Vendor.find(
+    { status: "Active" },
+    "_id name city state status contactPerson mobile",
+  )
+    .sort({ name: 1 })
+    .lean();
 }
 
 /* =========================================================
@@ -348,7 +431,7 @@ export async function createPurchaseOrder(
       updatedBy: userId,
     });
 
-  return po.toObject();
+  return getPurchaseOrderById(po._id.toString());
 }
 
 /* =========================================================
@@ -466,7 +549,7 @@ export async function updatePurchaseOrder(
 
   await existing.save();
 
-  return existing.toObject();
+  return getPurchaseOrderById(existing._id.toString());
 }
 
 /* =========================================================
@@ -534,7 +617,7 @@ export async function issuePurchaseOrder(
 
   await po.save();
 
-  return po.toObject();
+  return getPurchaseOrderById(po._id.toString());
 }
 
 /* =========================================================
@@ -561,7 +644,7 @@ export async function cancelPurchaseOrder(
   }
 
   if (po.status === "Cancelled") {
-    return po.toObject();
+    return getPurchaseOrderById(po._id.toString());
   }
 
   if (
@@ -580,5 +663,5 @@ export async function cancelPurchaseOrder(
 
   await po.save();
 
-  return po.toObject();
+  return getPurchaseOrderById(po._id.toString());
 }

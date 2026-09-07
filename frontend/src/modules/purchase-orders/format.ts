@@ -17,19 +17,21 @@ export function formatDate(value?: string) {
 export function getVendorName(
   vendor: PurchaseOrder["vendorId"],
 ) {
+  if (!vendor) return "—";
   if (typeof vendor === "string") {
     return vendor;
   }
 
-  return vendor?.name ?? "Unknown Vendor";
+  return vendor?.name || "Unknown Vendor";
 }
 
 export function getCampaignName(
   campaign: PurchaseOrder["campaignId"],
 ) {
+  if (!campaign) return "—";
   if (typeof campaign === "string") {
     return campaign;
   }
 
-  return campaign?.name ?? "Unknown Campaign";
+  return campaign?.name || "Unknown Campaign";
 }

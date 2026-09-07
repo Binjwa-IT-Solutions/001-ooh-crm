@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { usePurchaseOrders } from "@/modules/purchase-orders/hooks/usePurchaseOrders";
 
@@ -18,6 +18,17 @@ import type {
 } from "@/modules/purchase-orders/types";
 
 export default function PurchaseOrdersPage() {
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   const {
     orders,
     loading,
@@ -27,10 +38,10 @@ export default function PurchaseOrdersPage() {
     editOrder,
     issueOrder,
     cancelOrder,
-  } = usePurchaseOrders();
-
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
+  } = usePurchaseOrders({
+    search: debouncedSearch,
+    status: status || undefined,
+  });
 
   const [formOpen, setFormOpen] = useState(false);
 
@@ -44,32 +55,16 @@ export default function PurchaseOrdersPage() {
     const value = search.trim().toLowerCase();
 
     return orders.filter((order) => {
-      /*
-       * Vendor can be:
-       * - string ObjectId
-       * - populated vendor object
-       * - null
-       */
       const vendor =
         typeof order.vendorId === "string"
           ? order.vendorId
-          : order.vendorId?.name ?? "Unknown Vendor";
+          : `${order.vendorId?.name ?? ""} ${order.vendorId?.city ?? ""} ${order.vendorId?.state ?? ""}`;
 
-      /*
-       * Campaign can be:
-       * - string ObjectId
-       * - populated campaign object
-       * - null
-       */
       const campaign =
         typeof order.campaignId === "string"
           ? order.campaignId
-          : order.campaignId?.name ?? "Unknown Campaign";
+          : `${order.campaignId?.name ?? ""} ${order.campaignId?.campaignCode ?? ""} ${order.campaignId?.city ?? ""}`;
 
-      /*
-       * PO number can also be protected
-       * against unexpected null values.
-       */
       const poNumber = order.poNumber ?? "";
 
       const searchMatch =

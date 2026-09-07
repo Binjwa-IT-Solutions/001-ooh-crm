@@ -8,6 +8,8 @@ import Campaign, {
 } from "./campaign.model.js";
 
 import { Quotation } from "../quotations/quotations.model.js";
+import { Lead } from "../leads/leads.model.js";
+import { AuthUser } from "../../core/auth/auth-model.js";
 import { createBooking, releaseCampaignBookings } from "../bookings/booking.service.js";
 import { checkSitesExist } from "../sites/site.service.js";
 import { generateForCampaign } from "../tasks/task.service.js";
@@ -39,6 +41,7 @@ type CampaignFilters = {
   manager?: string;
   startDate?: Date;
   endDate?: Date;
+  search?: string;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -450,6 +453,12 @@ export async function createCampaign(
         session,
       });
 
+      await campaign.populate([
+        { path: "leadId", select: "companyName contactPerson email mobile city" },
+        { path: "assignedManager", select: "name email role" },
+        { path: "siteIds", select: "name code city type size baseCostPerDay" },
+      ]);
+
       return campaign;
     },
   );
@@ -591,6 +600,12 @@ export async function createFromQuotation(
         session,
       });
 
+      await campaign.populate([
+        { path: "leadId", select: "companyName contactPerson email mobile city" },
+        { path: "assignedManager", select: "name email role" },
+        { path: "siteIds", select: "name code city type size baseCostPerDay" },
+      ]);
+
       return campaign;
     },
   );
@@ -604,12 +619,10 @@ export async function listCampaigns(
   filters: CampaignFilters,
   ctx: RequestContext,
 ) {
-  const query: Record<string, any> =
-    {};
+  const query: Record<string, any> = {};
 
   if (filters.status) {
-    query.status =
-      filters.status;
+    query.status = filters.status;
   }
 
   if (filters.city?.trim()) {
@@ -620,15 +633,16 @@ export async function listCampaigns(
   }
 
   if (filters.manager?.trim()) {
-    if (
-      Types.ObjectId.isValid(
-        filters.manager,
-      )
-    ) {
-      query.assignedManager =
-        new Types.ObjectId(
-          filters.manager,
-        );
+    const trimmedManager = filters.manager.trim();
+    if (Types.ObjectId.isValid(trimmedManager)) {
+      query.assignedManager = new Types.ObjectId(trimmedManager);
+    } else {
+      const matchingManagers = await AuthUser.find({
+        name: new RegExp(trimmedManager, "i"),
+      })
+        .select("_id")
+        .lean();
+      query.assignedManager = { $in: matchingManagers.map((m) => m._id) };
     }
   }
 
@@ -638,28 +652,67 @@ export async function listCampaigns(
    * If both dates are supplied, find campaigns
    * whose start date falls within the range.
    */
-
-  if (
-    filters.startDate ||
-    filters.endDate
-  ) {
+  if (filters.startDate || filters.endDate) {
     query.startDate = {};
 
     if (filters.startDate) {
-      query.startDate.$gte =
-        filters.startDate;
+      query.startDate.$gte = filters.startDate;
     }
 
     if (filters.endDate) {
-      query.startDate.$lte =
-        filters.endDate;
+      query.startDate.$lte = filters.endDate;
     }
+  }
+
+  /*
+   * Search filtering across Campaign name, campaign code, city,
+   * Lead (company name, contact person), and Manager name.
+   */
+  if (filters.search?.trim()) {
+    const searchRegex = new RegExp(filters.search.trim(), "i");
+
+    const [matchingLeads, matchingUsers] = await Promise.all([
+      Lead.find({
+        $or: [
+          { companyName: searchRegex },
+          { contactPerson: searchRegex },
+          { email: searchRegex },
+          { mobile: searchRegex },
+        ],
+      })
+        .select("_id")
+        .lean(),
+      AuthUser.find({
+        name: searchRegex,
+      })
+        .select("_id")
+        .lean(),
+    ]);
+
+    const leadIds = matchingLeads.map((l) => l._id);
+    const userIds = matchingUsers.map((u) => u._id);
+
+    const searchConditions: any[] = [
+      { name: searchRegex },
+      { campaignCode: searchRegex },
+      { city: searchRegex },
+    ];
+
+    if (leadIds.length > 0) {
+      searchConditions.push({ leadId: { $in: leadIds } });
+    }
+
+    if (userIds.length > 0) {
+      searchConditions.push({ assignedManager: { $in: userIds } });
+    }
+
+    query.$or = searchConditions;
   }
 
   return Campaign.find(query)
     .populate(
       "leadId",
-      "name company email",
+      "companyName contactPerson email mobile city",
     )
     .populate(
       "siteIds",
@@ -667,7 +720,7 @@ export async function listCampaigns(
     )
     .populate(
       "assignedManager",
-      "name email",
+      "name email role",
     )
     .sort({
       createdAt: -1,
@@ -694,7 +747,7 @@ export async function getCampaign(
     await Campaign.findById(id)
       .populate(
         "leadId",
-        "name company email phone",
+        "companyName contactPerson email mobile city",
       )
       .populate(
         "quotationId",
@@ -706,7 +759,7 @@ export async function getCampaign(
       )
       .populate(
         "assignedManager",
-        "name email",
+        "name email role",
       );
 
   if (!campaign) {
@@ -716,6 +769,75 @@ export async function getCampaign(
   }
 
   return campaign;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Update Campaign                                                            */
+/* -------------------------------------------------------------------------- */
+
+export async function updateCampaign(
+  id: string,
+  input: Partial<CreateCampaignInput>,
+  ctx: RequestContext,
+): Promise<ICampaign> {
+  if (!Types.ObjectId.isValid(id)) {
+    throw new Error("Invalid campaign id");
+  }
+
+  const campaign = await Campaign.findById(id);
+  if (!campaign) {
+    throw new Error("Campaign not found");
+  }
+
+  if (input.name !== undefined) campaign.name = input.name;
+  if (input.leadId !== undefined) {
+    if (!Types.ObjectId.isValid(input.leadId)) {
+      throw new Error("Invalid lead id");
+    }
+    campaign.leadId = new Types.ObjectId(input.leadId);
+  }
+  if (input.city !== undefined) campaign.city = input.city;
+  if (input.startDate !== undefined) campaign.startDate = input.startDate;
+  if (input.endDate !== undefined) campaign.endDate = input.endDate;
+  if (input.siteIds !== undefined) {
+    await validateSitesExist(input.siteIds);
+    campaign.siteIds = input.siteIds.map((sid) => new Types.ObjectId(sid));
+  }
+  if (input.contractedValue !== undefined) campaign.contractedValue = input.contractedValue;
+  if (input.assignedManager !== undefined) {
+    campaign.assignedManager =
+      input.assignedManager && Types.ObjectId.isValid(input.assignedManager)
+        ? new Types.ObjectId(input.assignedManager)
+        : undefined;
+  }
+
+  assertValidDates(campaign.startDate, campaign.endDate);
+
+  await campaign.save();
+
+  await campaign.populate([
+    { path: "leadId", select: "companyName contactPerson email mobile city" },
+    { path: "assignedManager", select: "name email role" },
+    { path: "siteIds", select: "name code city type size baseCostPerDay" },
+  ]);
+
+  return campaign;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Campaign Form Helpers: Managers & Lead Options                             */
+/* -------------------------------------------------------------------------- */
+
+export async function listCampaignManagers() {
+  return AuthUser.find({ status: "Active" }, "_id name email role")
+    .sort({ name: 1 })
+    .lean();
+}
+
+export async function listCampaignLeadOptions() {
+  return Lead.find({ status: { $ne: "Lost" } }, "_id companyName contactPerson city email mobile")
+    .sort({ companyName: 1 })
+    .lean();
 }
 
 /* -------------------------------------------------------------------------- */

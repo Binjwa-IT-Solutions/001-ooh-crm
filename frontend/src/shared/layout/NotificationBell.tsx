@@ -8,7 +8,7 @@ import {
   Check,
   CheckCheck,
   ExternalLink,
-  ShieldAlert,
+  ArrowUpRight,
   AlertTriangle,
   Clock,
 } from "lucide-react";
@@ -199,12 +199,12 @@ export default function NotificationBell() {
                     <div
                       className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
                         isEscalation
-                          ? "bg-[#F9DADA] text-[#8B2424]"
+                          ? "bg-gradient-to-br from-[#8B2424] to-[#A8333B] text-white shadow-xs"
                           : "bg-blue-100 text-blue-700"
                       }`}
                     >
                       {isEscalation ? (
-                        <ShieldAlert className="h-4 w-4" />
+                        <ArrowUpRight className="h-4 w-4" />
                       ) : (
                         <Bell className="h-4 w-4" />
                       )}

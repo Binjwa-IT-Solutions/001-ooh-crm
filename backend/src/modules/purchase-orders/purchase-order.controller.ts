@@ -3,6 +3,7 @@ import type { Request, Response, NextFunction } from "express";
 import {
   createPurchaseOrderSchema,
   updatePurchaseOrderSchema,
+  purchaseOrderListQuerySchema,
 } from "./purchase-order.validator.js";
 
 import * as purchaseOrderService from "./purchase-order.service.js";
@@ -13,7 +14,42 @@ export async function list(
   next: NextFunction,
 ) {
   try {
-    const data = await purchaseOrderService.listPurchaseOrders();
+    const query = purchaseOrderListQuerySchema.parse(req.query);
+    const data = await purchaseOrderService.listPurchaseOrders(query);
+
+    res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function campaignOptions(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const data = await purchaseOrderService.listCampaignOptionsForPO();
+
+    res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function vendorOptions(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const data = await purchaseOrderService.listVendorOptionsForPO();
 
     res.status(200).json({
       success: true,
