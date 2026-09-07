@@ -1,10 +1,18 @@
 import {
-  Document,
   Model,
   Schema,
   Types,
   model,
 } from "mongoose";
+
+import {
+  basePlugin,
+  type BaseDocument,
+} from "../../core/db/basePlugin.js";
+
+/* ----------------------------------
+   SITE TYPE
+----------------------------------- */
 
 export enum SiteType {
   AIRPORT = "Airport",
@@ -15,24 +23,46 @@ export enum SiteType {
   OTHER = "Other",
 }
 
+/* ----------------------------------
+   SITE STATUS
+----------------------------------- */
+
 export enum SiteStatus {
   ACTIVE = "Active",
   MAINTENANCE = "Maintenance",
   INACTIVE = "Inactive",
 }
 
+/* ----------------------------------
+   GPS
+----------------------------------- */
+
 export interface IGps {
   lat: number;
   lng: number;
 }
 
-export interface ISite extends Document {
+/* ----------------------------------
+   SITE
+----------------------------------- */
+
+export interface ISite extends BaseDocument {
   code: string;
   city: string;
   type: SiteType;
   address?: string;
 
+  /*
+   * GPS coordinates selected from
+   * browser/device location.
+   */
   gps: IGps;
+
+  /*
+   * Availability window for this site.
+   */
+  startDate: Date;
+  endDate: Date;
 
   sizeWidth: number;
   sizeHeight: number;
@@ -45,10 +75,11 @@ export interface ISite extends Document {
   status: SiteStatus;
 
   photos: string[];
-
-  createdAt: Date;
-  updatedAt: Date;
 }
+
+/* ----------------------------------
+   GPS SCHEMA
+----------------------------------- */
 
 const gpsSchema = new Schema<IGps>(
   {
@@ -70,6 +101,10 @@ const gpsSchema = new Schema<IGps>(
     _id: false,
   }
 );
+
+/* ----------------------------------
+   SITE SCHEMA
+----------------------------------- */
 
 const siteSchema = new Schema<ISite>(
   {
@@ -100,9 +135,30 @@ const siteSchema = new Schema<ISite>(
       trim: true,
     },
 
+    /*
+     * GPS is required.
+     *
+     * Frontend should obtain these values
+     * using browser/device GPS.
+     */
     gps: {
       type: gpsSchema,
       required: true,
+    },
+
+    /*
+     * Availability window.
+     */
+    startDate: {
+      type: Date,
+      required: true,
+      index: true,
+    },
+
+    endDate: {
+      type: Date,
+      required: true,
+      index: true,
     },
 
     sizeWidth: {
@@ -140,11 +196,10 @@ const siteSchema = new Schema<ISite>(
       type: [String],
       default: [],
     },
-  },
-  {
-    timestamps: true,
   }
 );
+
+siteSchema.plugin(basePlugin);
 
 export const Site: Model<ISite> =
   model<ISite>("Site", siteSchema);

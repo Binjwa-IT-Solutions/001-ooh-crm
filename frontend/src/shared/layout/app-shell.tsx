@@ -16,6 +16,7 @@ import {
   Camera,
   ArrowDownToLine,
   ArrowUpFromLine,
+  ArrowUpRight,
   BarChart3,
   TrendingUp,
   Clock,
@@ -34,6 +35,7 @@ import { useAuth } from '../auth/auth-context';
 import { ROLE_LABELS } from '../auth/types';
 import { Button, cx } from '../ui';
 import { type LucideIcon } from 'lucide-react';
+import NotificationBell from './NotificationBell';
 import { PageHeaderProvider } from './page-header-context';
 import { PageHeader } from './page-header';
 
@@ -63,7 +65,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: '/purchase-orders', label: 'Purchase Orders', icon: ShoppingCart, permission: 'purchase_orders.view' },
       { href: '/campaigns', label: 'Campaigns', icon: Megaphone, permission: 'campaigns.view' },
       { href: '/tasks', label: 'Tasks', icon: ClipboardCheck, permission: 'tasks.view' },
-      { href: '/escalations', label: 'Escalations', icon: AlertTriangle, permission: 'tasks.view' },
+      { href: '/escalations', label: 'Escalations', icon: ArrowUpRight, permission: 'tasks.view' },
       { href: '/proofs', label: 'Proofs', icon: Camera, permission: 'proofs.view' },
     ],
   },
@@ -217,10 +219,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
                 <div className="flex items-center gap-x-3">
                   {/* Notification Bell */}
-                  <button type="button" className="p-2 text-[#687280] hover:text-[#1F2937] rounded-xl border border-[#E6E8EC] shadow-sm h-10 w-10 flex items-center justify-center transition-colors hover:bg-slate-50">
-                    <span className="sr-only">View notifications</span>
-                    <Bell className="h-5 w-5" />
-                  </button>
+                  <NotificationBell />
 
                   {/* Profile Pill */}
                   <div className="flex items-center gap-2 border border-[#E6E8EC] rounded-full p-1 pr-3 shadow-sm cursor-pointer hover:bg-slate-50 transition-colors bg-white">
@@ -229,7 +228,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     </div>
                     <div className="hidden sm:flex flex-col text-left mr-1">
                       <span className="text-[13px] font-semibold leading-none text-[#1F2937]">
-                        {user?.name ?? 'Rajveer'}
+                        {user?.name ?? 'User'}
                       </span>
                       <span className="text-[11px] font-medium text-[#687280] mt-0.5 capitalize">
                         {user ? (ROLE_LABELS[user.role] ?? user.role) : 'Admin'}

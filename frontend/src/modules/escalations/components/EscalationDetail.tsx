@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowUpRight } from "lucide-react";
 import type { Escalation } from "../types";
 
 import {
@@ -30,16 +31,21 @@ export default function EscalationDetail({
         }
       >
         <div className="flex items-start justify-between border-b border-gray-200 p-5">
-          <div>
-            <p className="text-xs font-bold tracking-wide text-[#8B2424]">
-              ESCALATION DETAILS
-            </p>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#8B2424] to-[#A8333B] text-white shadow-sm ring-2 ring-[#F9DADA]">
+              <ArrowUpRight className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold tracking-wider text-[#8B2424] uppercase">
+                ESCALATION DETAILS
+              </p>
 
-            <h2 className="mt-1 text-xl font-bold text-gray-900">
-              {getLevelLabel(
-                escalation.level,
-              )}
-            </h2>
+              <h2 className="mt-0.5 text-lg font-bold text-gray-900">
+                {getLevelLabel(
+                  escalation.level,
+                )}
+              </h2>
+            </div>
           </div>
 
           <button
@@ -58,7 +64,8 @@ export default function EscalationDetail({
               escalation.level,
             )}`}
           >
-            <p className="text-sm font-bold">
+            <p className="text-sm font-bold flex items-center gap-1.5">
+              <ArrowUpRight className="h-4 w-4" />
               {getLevelLabel(
                 escalation.level,
               )}
@@ -73,8 +80,12 @@ export default function EscalationDetail({
 
           <div className="space-y-4">
             <Row
-              label="Task ID"
-              value={`#${escalation.taskId}`}
+              label="Task"
+              value={
+                typeof escalation.taskId === "object" && escalation.taskId !== null
+                  ? (escalation.taskId as any).title || (escalation.taskId as any)._id
+                  : escalation.taskId
+              }
             />
 
             <Row

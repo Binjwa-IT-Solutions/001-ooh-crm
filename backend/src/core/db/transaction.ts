@@ -17,32 +17,40 @@ export async function withOptionalTransaction<T>(
 
   try {
     session = await mongoose.startSession();
-    session.startTransaction();
-    const result = await fn(session);
-    await session.commitTransaction();
-    return result;
-  } catch (err) {
-    // If transactions are not supported (standalone), fall back to no session
-    const errMsg = (err as Error).message ?? '';
-    if (
-      errMsg.includes('Transaction numbers are only allowed') ||
-      errMsg.includes('does not support transactions') ||
-      errMsg.includes('not supported') ||
-      errMsg.includes('MongoServerError')
-    ) {
-      if (session) {
+    try {
+      session.startTransaction();
+      const result = await fn(session);
+      await session.commitTransaction();
+      return result;
+    } catch (txErr) {
+      // If transaction fails, retry without session
+      const errMsg = (txErr as Error).message ?? '';
+      if (
+        errMsg.includes('Transaction numbers are only allowed') ||
+        errMsg.includes('does not support transactions') ||
+        errMsg.includes('not supported') ||
+        errMsg.includes('MongoServerError') ||
+        errMsg.includes('retryable writes') ||
+        errMsg.includes('retryWrites') ||
+        errMsg.includes('transactions are only') ||
+        errMsg.includes('not replica set')
+      ) {
         try { await session.abortTransaction(); } catch { /* ignore */ }
+        session.endSession();
+        // Retry without a transaction
+        return fn(undefined);
       }
-      // Retry without a transaction
-      return fn(undefined);
-    }
-    if (session) {
       try { await session.abortTransaction(); } catch { /* ignore */ }
+      throw txErr;
+    }
+  } catch (err) {
+    if (session) {
+      try { session.endSession(); } catch { /* ignore */ }
     }
     throw err;
   } finally {
     if (session) {
-      session.endSession();
+      try { session.endSession(); } catch { /* ignore */ }
     }
   }
 }

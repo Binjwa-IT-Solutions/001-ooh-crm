@@ -1,11 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { usePurchaseOrders } from "@/modules/purchase-orders/hooks/usePurchaseOrders";
+
 import PurchaseOrderFilters from "@/modules/purchase-orders/components/PurchaseOrderFilters";
+
 import PurchaseOrderTable from "@/modules/purchase-orders/components/PurchaseOrderTable";
+
 import PurchaseOrderForm from "@/modules/purchase-orders/components/PurchaseOrderForm";
+
 import PurchaseOrderDetails from "@/modules/purchase-orders/components/PurchaseOrderDetails";
 
 import type {
@@ -14,6 +18,17 @@ import type {
 } from "@/modules/purchase-orders/types";
 
 export default function PurchaseOrdersPage() {
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   const {
     orders,
     loading,
@@ -23,13 +38,16 @@ export default function PurchaseOrdersPage() {
     editOrder,
     issueOrder,
     cancelOrder,
-  } = usePurchaseOrders();
+  } = usePurchaseOrders({
+    search: debouncedSearch,
+    status: status || undefined,
+  });
 
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+
   const [editingOrder, setEditingOrder] =
     useState<PurchaseOrder | null>(null);
+
   const [detailsOrder, setDetailsOrder] =
     useState<PurchaseOrder | null>(null);
 
@@ -40,16 +58,18 @@ export default function PurchaseOrdersPage() {
       const vendor =
         typeof order.vendorId === "string"
           ? order.vendorId
-          : order.vendorId.name;
+          : `${order.vendorId?.name ?? ""} ${order.vendorId?.city ?? ""} ${order.vendorId?.state ?? ""}`;
 
       const campaign =
         typeof order.campaignId === "string"
           ? order.campaignId
-          : order.campaignId.name;
+          : `${order.campaignId?.name ?? ""} ${order.campaignId?.campaignCode ?? ""} ${order.campaignId?.city ?? ""}`;
+
+      const poNumber = order.poNumber ?? "";
 
       const searchMatch =
         !value ||
-        order.poNumber.toLowerCase().includes(value) ||
+        poNumber.toLowerCase().includes(value) ||
         vendor.toLowerCase().includes(value) ||
         campaign.toLowerCase().includes(value);
 
@@ -81,13 +101,18 @@ export default function PurchaseOrdersPage() {
     data: PurchaseOrderFormData,
   ) {
     if (editingOrder) {
-      return editOrder(editingOrder._id, data);
+      return editOrder(
+        editingOrder._id,
+        data,
+      );
     }
 
     return addOrder(data);
   }
 
-  async function handleIssue(order: PurchaseOrder) {
+  async function handleIssue(
+    order: PurchaseOrder,
+  ) {
     if (
       !window.confirm(
         `Are you sure you want to issue ${order.poNumber}? Once issued, it cannot be edited.`,
@@ -99,7 +124,9 @@ export default function PurchaseOrdersPage() {
     await issueOrder(order._id);
   }
 
-  async function handleCancel(order: PurchaseOrder) {
+  async function handleCancel(
+    order: PurchaseOrder,
+  ) {
     if (
       !window.confirm(
         `Are you sure you want to cancel ${order.poNumber}?`,
@@ -158,7 +185,8 @@ export default function PurchaseOrdersPage() {
             title="Draft"
             value={
               orders.filter(
-                (order) => order.status === "Draft",
+                (order) =>
+                  order.status === "Draft",
               ).length
             }
           />
@@ -167,7 +195,8 @@ export default function PurchaseOrdersPage() {
             title="Issued"
             value={
               orders.filter(
-                (order) => order.status === "Issued",
+                (order) =>
+                  order.status === "Issued",
               ).length
             }
           />
@@ -176,7 +205,8 @@ export default function PurchaseOrdersPage() {
             title="Cancelled"
             value={
               orders.filter(
-                (order) => order.status === "Cancelled",
+                (order) =>
+                  order.status === "Cancelled",
               ).length
             }
           />
@@ -230,7 +260,9 @@ export default function PurchaseOrdersPage() {
       {detailsOrder && (
         <PurchaseOrderDetails
           order={detailsOrder}
-          onClose={() => setDetailsOrder(null)}
+          onClose={() =>
+            setDetailsOrder(null)
+          }
         />
       )}
     </main>

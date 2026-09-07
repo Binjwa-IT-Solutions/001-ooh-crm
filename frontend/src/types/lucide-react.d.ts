@@ -36,6 +36,7 @@ declare module 'lucide-react' {
   export const CalendarDays: LucideIcon;
   export const Camera: LucideIcon;
   export const Check: LucideIcon;
+  export const CheckCheck: LucideIcon;
   export const CheckCircle: LucideIcon;
   export const CheckCircle2: LucideIcon;
   export const ChevronDown: LucideIcon;
@@ -47,10 +48,12 @@ declare module 'lucide-react' {
   export const CreditCard: LucideIcon;
   export const DollarSign: LucideIcon;
   export const Download: LucideIcon;
+  export const ExternalLink: LucideIcon;
   export const File: LucideIcon;
   export const FileBarChart: LucideIcon;
   export const FileText: LucideIcon;
   export const Filter: LucideIcon;
+  export const Info: LucideIcon;
   export const Layers: LucideIcon;
   export const LayoutDashboard: LucideIcon;
   export const LayoutGrid: LucideIcon;
@@ -63,7 +66,9 @@ declare module 'lucide-react' {
   export const Menu: LucideIcon;
   export const Phone: LucideIcon;
   export const Plus: LucideIcon;
+  export const RefreshCw: LucideIcon;
   export const Search: LucideIcon;
+  export const ShieldAlert: LucideIcon;
   export const ShieldCheck: LucideIcon;
   export const ShoppingCart: LucideIcon;
   export const Sparkles: LucideIcon;

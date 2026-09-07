@@ -3,9 +3,17 @@ export type EscalationLevel =
   | "L2"
   | "L3";
 
+export interface EscalationTaskSummary {
+  _id: string;
+  title?: string;
+  type?: string;
+  deadline?: string;
+  status?: string;
+}
+
 export interface Escalation {
   _id: string;
-  taskId: string;
+  taskId: string | EscalationTaskSummary;
   level: EscalationLevel;
   triggeredAt: string;
   notifiedUserIds: string[];

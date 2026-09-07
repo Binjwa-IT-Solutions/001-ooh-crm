@@ -11,10 +11,11 @@ import {
 } from "../api";
 import type {
   PurchaseOrder,
+  PurchaseOrderFilters,
   PurchaseOrderFormData,
 } from "../types";
 
-export function usePurchaseOrders() {
+export function usePurchaseOrders(initialFilters?: PurchaseOrderFilters) {
   const [orders, setOrders] = useState<
     PurchaseOrder[]
   >([]);
@@ -22,13 +23,13 @@ export function usePurchaseOrders() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const loadOrders = useCallback(async () => {
+  const loadOrders = useCallback(async (filters?: PurchaseOrderFilters) => {
     try {
       setLoading(true);
       setError("");
 
-      const response =
-        await getPurchaseOrders();
+      const queryFilters = filters ?? initialFilters;
+      const response = await getPurchaseOrders(queryFilters);
 
       setOrders(response.data || []);
     } catch (error) {
@@ -40,7 +41,7 @@ export function usePurchaseOrders() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [initialFilters?.search, initialFilters?.status, initialFilters?.campaignId, initialFilters?.vendorId]);
 
   useEffect(() => {
     loadOrders();

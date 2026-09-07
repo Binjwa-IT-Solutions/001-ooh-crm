@@ -4,122 +4,68 @@ import type {
   CampaignResponse,
   CampaignStatus,
   CreateCampaignPayload,
+  LeadOption,
+  ManagerOption,
 } from "./types";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:5000";
+import { api } from "@/shared/api/client";
 
-async function request<T>(
-  path: string,
-  options?: RequestInit,
-): Promise<T> {
-  const response =
-    await fetch(
-      `${API_BASE_URL}${path}`,
-      {
-        ...options,
+function buildQuery(filters: CampaignFilters): string {
+  const params = new URLSearchParams();
 
-        headers: {
-          "Content-Type":
-            "application/json",
-
-          ...(options?.headers || {}),
-        },
-
-        credentials: "include",
-      },
-    );
-
-  let data: any = null;
-
-  try {
-    data = await response.json();
-  } catch {
-    data = null;
+  if (filters.search?.trim()) {
+    params.set("search", filters.search.trim());
   }
-
-  if (!response.ok) {
-    throw new Error(
-      data?.message ||
-        data?.error ||
-        "Something went wrong",
-    );
-  }
-
-  return data;
-}
-
-function buildQuery(
-  filters: CampaignFilters,
-): string {
-  const params =
-    new URLSearchParams();
 
   if (filters.status) {
-    params.set(
-      "status",
-      filters.status,
-    );
+    params.set("status", filters.status);
   }
 
   if (filters.city?.trim()) {
-    params.set(
-      "city",
-      filters.city.trim(),
-    );
+    params.set("city", filters.city.trim());
   }
 
   if (filters.manager?.trim()) {
-    params.set(
-      "manager",
-      filters.manager.trim(),
-    );
+    params.set("manager", filters.manager.trim());
   }
 
   if (filters.startDate) {
-    params.set(
-      "startDate",
-      filters.startDate,
-    );
+    params.set("startDate", filters.startDate);
   }
 
   if (filters.endDate) {
-    params.set(
-      "endDate",
-      filters.endDate,
-    );
+    params.set("endDate", filters.endDate);
   }
 
-  const query =
-    params.toString();
+  const query = params.toString();
 
-  return query
-    ? `?${query}`
-    : "";
+  return query ? `?${query}` : "";
 }
 
 export async function getCampaigns(
   filters: CampaignFilters = {},
 ): Promise<CampaignListResponse> {
-  return request<CampaignListResponse>(
-    `/api/campaigns${buildQuery(
-      filters,
-    )}`,
+  return api.get<CampaignListResponse>(
+    `/api/campaigns${buildQuery(filters)}`,
   );
 }
 
 export async function createCampaign(
   payload: CreateCampaignPayload,
 ): Promise<CampaignResponse> {
-  return request<CampaignResponse>(
+  return api.post<CampaignResponse>(
     "/api/campaigns",
-    {
-      method: "POST",
-      body: JSON.stringify(
-        payload,
-      ),
-    },
+    payload,
+  );
+}
+
+export async function updateCampaign(
+  id: string,
+  payload: CreateCampaignPayload,
+): Promise<CampaignResponse> {
+  return api.put<CampaignResponse>(
+    `/api/campaigns/${id}`,
+    payload,
   );
 }
 
@@ -127,13 +73,30 @@ export async function updateCampaignStatus(
   id: string,
   status: CampaignStatus,
 ): Promise<CampaignResponse> {
-  return request<CampaignResponse>(
+  return api.patch<CampaignResponse>(
     `/api/campaigns/${id}/status`,
     {
-      method: "PATCH",
-      body: JSON.stringify({
-        status,
-      }),
+      status,
     },
   );
+}
+
+export async function getCampaignManagers(): Promise<{
+  success: boolean;
+  data: ManagerOption[];
+}> {
+  return api.get<{
+    success: boolean;
+    data: ManagerOption[];
+  }>("/api/campaigns/managers");
+}
+
+export async function getCampaignLeadOptions(): Promise<{
+  success: boolean;
+  data: LeadOption[];
+}> {
+  return api.get<{
+    success: boolean;
+    data: LeadOption[];
+  }>("/api/campaigns/lead-options");
 }

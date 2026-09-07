@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { requireAuth } from "../../core/auth/auth-middleware.js";
+import { requirePermission } from "../../core/rbac/index.js";
 
 import {
   createCampaignController,
@@ -6,9 +8,14 @@ import {
   getCampaignController,
   listCampaignsController,
   updateCampaignStatusController,
+  updateCampaignController,
+  listCampaignManagersController,
+  listCampaignLeadOptionsController,
 } from "./campaign.controller.js";
 
 const router = Router();
+
+router.use(requireAuth);
 
 /*
  * GET /api/campaigns
@@ -17,12 +24,32 @@ const router = Router();
  * ?status=Draft
  * ?city=Indore
  * ?manager=<id>
+ * ?search=keyword
  * ?startDate=2026-08-01
  * ?endDate=2026-08-31
  */
 router.get(
   "/",
+  requirePermission("campaigns.view"),
   listCampaignsController,
+);
+
+/*
+ * GET /api/campaigns/managers
+ */
+router.get(
+  "/managers",
+  requirePermission("campaigns.view"),
+  listCampaignManagersController,
+);
+
+/*
+ * GET /api/campaigns/lead-options
+ */
+router.get(
+  "/lead-options",
+  requirePermission("campaigns.view"),
+  listCampaignLeadOptionsController,
 );
 
 /*
@@ -30,7 +57,17 @@ router.get(
  */
 router.get(
   "/:id",
+  requirePermission("campaigns.view"),
   getCampaignController,
+);
+
+/*
+ * PUT /api/campaigns/:id
+ */
+router.put(
+  "/:id",
+  requirePermission("campaigns.manage"),
+  updateCampaignController,
 );
 
 /*
@@ -38,6 +75,7 @@ router.get(
  */
 router.post(
   "/",
+  requirePermission("campaigns.manage"),
   createCampaignController,
 );
 
@@ -51,6 +89,7 @@ router.post(
  */
 router.patch(
   "/:id/status",
+  requirePermission("campaigns.manage"),
   updateCampaignStatusController,
 );
 
@@ -58,17 +97,10 @@ router.patch(
  * B3 -> D1
  *
  * Create campaign when quotation is accepted.
- *
- * Body:
- * {
- *   "quotationId": "..."
- * }
- *
- * This route is optional if B3 directly imports
- * createFromQuotation() as a service method.
  */
 router.post(
   "/from-quotation",
+  requirePermission("campaigns.manage"),
   createCampaignFromQuotationController,
 );
 

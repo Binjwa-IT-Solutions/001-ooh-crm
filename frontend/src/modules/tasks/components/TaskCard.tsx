@@ -1,4 +1,4 @@
-import { ShieldAlert, AlertTriangle, Clock } from "lucide-react";
+import { ArrowUpRight, Clock } from "lucide-react";
 import type { Task } from "../types";
 import { getExpectedEscalationLevel, getLevelClass } from "@/modules/escalations/format";
 
@@ -40,12 +40,13 @@ export default function TaskCard({
               <button
                 type="button"
                 onClick={() => onOpenEscalation?.(task)}
-                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold transition hover:opacity-90 cursor-pointer ${getLevelClass(
+                title="View SLA escalation tier"
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold transition hover:opacity-90 cursor-pointer ${getLevelClass(
                   expectedLevel
                 )}`}
               >
-                <ShieldAlert className="h-3 w-3" />
-                {expectedLevel} Escalation
+                <ArrowUpRight className="h-3 w-3" />
+                SLA {expectedLevel}
               </button>
             )}
           </div>
@@ -84,7 +85,7 @@ export default function TaskCard({
                 title="View escalation status and SLA history"
                 className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition hover:border-[#8B2424] hover:bg-[#FFF7F7] hover:text-[#8B2424] focus:outline-none focus:ring-2 focus:ring-[#F9DADA] cursor-pointer"
               >
-                <ShieldAlert className="h-3.5 w-3.5 text-[#8B2424]" />
+                <ArrowUpRight className="h-3.5 w-3.5 text-[#8B2424]" />
                 Escalation
               </button>
             )}

@@ -44,16 +44,16 @@ export function getLevelClass(
 ): string {
   switch (level) {
     case "L1":
-      return "bg-[#F9DADA] text-[#8B2424]";
+      return "bg-slate-100 text-slate-700 border border-slate-200/80";
 
     case "L2":
-      return "bg-orange-100 text-orange-700";
+      return "bg-amber-50 text-amber-800 border border-amber-200/80";
 
     case "L3":
-      return "bg-red-100 text-red-700";
+      return "bg-rose-50 text-rose-800 border border-rose-200/80";
 
     default:
-      return "bg-gray-100 text-gray-700";
+      return "bg-gray-100 text-gray-700 border border-gray-200";
   }
 }
 
@@ -62,13 +62,13 @@ export function getLevelBorderClass(
 ): string {
   switch (level) {
     case "L1":
-      return "border-l-[#8B2424]";
+      return "border-l-slate-400";
 
     case "L2":
-      return "border-l-orange-500";
+      return "border-l-amber-500";
 
     case "L3":
-      return "border-l-red-600";
+      return "border-l-rose-500";
 
     default:
       return "border-l-gray-300";

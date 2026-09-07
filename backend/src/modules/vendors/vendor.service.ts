@@ -1,250 +1,193 @@
-import type { Request } from "express";
 import mongoose from "mongoose";
 
 import { Vendor } from "./vendor.model.js";
 import { Site } from "../sites/site.model.js";
 
-import type {
-  CreateVendorInput,
-  UpdateVendorInput,
-} from "./vendor.validator.js";
-
-type RequestContext =
-  NonNullable<Request["ctx"]>;
-
-interface VendorListFilters {
+export interface VendorFilters {
   search?: string;
   state?: string;
   city?: string;
+  status?: "Active" | "Inactive";
 }
 
-function getRole(
-  ctx: RequestContext,
-): string {
-  return String(
-    (
-      ctx as {
-        user?: {
-          role?: string;
-        };
-      }
-    ).user?.role ?? "",
-  );
-}
-
-function canViewBankDetails(
-  ctx: RequestContext,
-): boolean {
-  const role = getRole(ctx);
-
-  return (
-    role === "Admin" ||
-    role === "admin" ||
-    role === "Finance" ||
-    role === "finance"
-  );
-}
-
-function sanitizeVendor(
-  vendor: Record<string, any>,
-  ctx: RequestContext,
-) {
-  if (!canViewBankDetails(ctx)) {
-    delete vendor.bankAccountNumber;
-    delete vendor.ifsc;
-  }
-
-  return vendor;
+export interface VendorStateFilter {
+  state: string;
+  vendorCount: number;
+  cityCount: number;
+  cities: string[];
 }
 
 /* ----------------------------------
-   LIST VENDORS
+   GET VENDORS WITH BACKEND FILTER
 ----------------------------------- */
 
-export async function listVendors(
-  ctx: RequestContext,
-  filters: VendorListFilters = {},
+export async function getVendors(
+  filters: VendorFilters = {},
 ) {
-  const { search, state, city } = filters;
-
-  const filter: Record<string, any> = {
+  const query: Record<string, any> = {
     deletedAt: null,
   };
 
-  if (search?.trim()) {
-    const value = search.trim();
+  /* SEARCH */
+  if (filters.search?.trim()) {
+    const search = filters.search.trim();
 
-    filter.$or = [
-      { name: { $regex: value, $options: "i" } },
-      { state: { $regex: value, $options: "i" } },
-      { city: { $regex: value, $options: "i" } },
+    query.$or = [
+      {
+        name: {
+          $regex: search,
+          $options: "i",
+        },
+      },
+      {
+        state: {
+          $regex: search,
+          $options: "i",
+        },
+      },
+      {
+        city: {
+          $regex: search,
+          $options: "i",
+        },
+      },
       {
         contactPerson: {
-          $regex: value,
+          $regex: search,
           $options: "i",
         },
       },
       {
         mobile: {
-          $regex: value,
+          $regex: search,
           $options: "i",
         },
       },
       {
-        panNumber: {
-          $regex: value,
-          $options: "i",
-        },
-      },
-      {
-        msmeNumber: {
-          $regex: value,
+        email: {
+          $regex: search,
           $options: "i",
         },
       },
       {
         gstNumber: {
-          $regex: value,
+          $regex: search,
           $options: "i",
         },
       },
     ];
   }
 
-  if (state?.trim()) {
-    filter.state = {
-      $regex: `^${state.trim()}$`,
-      $options: "i",
-    };
+  /* STATE FILTER */
+  if (filters.state?.trim()) {
+    query.state = filters.state.trim();
   }
 
-  if (city?.trim()) {
-    filter.city = {
-      $regex: `^${city.trim()}$`,
-      $options: "i",
-    };
+  /* CITY FILTER */
+  if (filters.city?.trim()) {
+    query.city = filters.city.trim();
   }
 
-  const vendors = await Vendor.find(filter)
-    .sort({ createdAt: -1 })
+  /* STATUS FILTER */
+  if (filters.status) {
+    query.status = filters.status;
+  }
+
+  return Vendor.find(query)
+    .sort({
+      createdAt: -1,
+    })
     .lean();
-
-  return vendors.map((vendor) =>
-    sanitizeVendor(
-      { ...vendor },
-      ctx,
-    ),
-  );
 }
 
+
 /* ----------------------------------
-   DYNAMIC FILTER OPTIONS
-   State -> Cities
+   GET VENDOR FILTER OPTIONS
 ----------------------------------- */
 
 export async function getVendorFilters(
-  ctx: RequestContext,
-  state?: string,
+  selectedState?: string,
 ) {
-  const stateFilter: Record<string, any> = {
+  const query: Record<string, any> = {
     deletedAt: null,
   };
 
-  if (state?.trim()) {
-    stateFilter.state = {
-      $regex: `^${state.trim()}$`,
-      $options: "i",
-    };
+  if (selectedState?.trim()) {
+    query.state = selectedState.trim();
   }
 
-  const vendors = await Vendor.find(
-    stateFilter,
-  )
+  const vendors = await Vendor.find(query)
     .select("state city")
     .lean();
 
-  const states = [
-    ...new Set(
+  const stateMap = new Map<
+    string,
+    {
+      cities: Set<string>;
+      vendorCount: number;
+    }
+  >();
+
+  for (const vendor of vendors) {
+    if (!vendor.state) continue;
+
+    if (!stateMap.has(vendor.state)) {
+      stateMap.set(vendor.state, {
+        cities: new Set<string>(),
+        vendorCount: 0,
+      });
+    }
+
+    const stateData = stateMap.get(vendor.state)!;
+
+    stateData.vendorCount += 1;
+
+    if (vendor.city) {
+      stateData.cities.add(vendor.city);
+    }
+  }
+
+  const states: VendorStateFilter[] = Array.from(
+    stateMap.entries(),
+  )
+    .map(([state, data]) => ({
+      state,
+      vendorCount: data.vendorCount,
+      cityCount: data.cities.size,
+      cities: Array.from(data.cities).sort(),
+    }))
+    .sort((a, b) =>
+      a.state.localeCompare(b.state),
+    );
+
+  /* ALL CITIES */
+  const cities = Array.from(
+    new Set(
       vendors
-        .map((vendor) =>
-          vendor.state?.trim(),
-        )
+        .map((vendor) => vendor.city)
         .filter(Boolean),
     ),
-  ].sort();
-
-  const cities = [
-    ...new Set(
-      vendors
-        .map((vendor) =>
-          vendor.city?.trim(),
-        )
-        .filter(Boolean),
-    ),
-  ].sort();
-
-  const stateSummary = await Vendor.aggregate([
-    {
-      $match: {
-        deletedAt: null,
-      },
-    },
-    {
-      $group: {
-        _id: {
-          state: "$state",
-          city: "$city",
-        },
-        vendorCount: {
-          $sum: 1,
-        },
-      },
-    },
-    {
-      $group: {
-        _id: "$_id.state",
-        vendorCount: {
-          $sum: "$vendorCount",
-        },
-        cities: {
-          $addToSet: "$_id.city",
-        },
-      },
-    },
-    {
-      $project: {
-        _id: 0,
-        state: "$_id",
-        vendorCount: 1,
-        cityCount: {
-          $size: "$cities",
-        },
-        cities: 1,
-      },
-    },
-    {
-      $sort: {
-        state: 1,
-      },
-    },
-  ]);
+  ).sort();
 
   return {
-    states: stateSummary,
+    states,
     cities,
   };
 }
+
 
 /* ----------------------------------
    GET VENDOR BY ID
 ----------------------------------- */
 
-export async function getVendorById(
-  id: string,
-  ctx: RequestContext,
-) {
-  if (!mongoose.isValidObjectId(id)) {
-    throw new Error("Invalid vendor ID");
+export async function getVendorById(id: string) {
+  if (
+    !id ||
+    !mongoose.Types.ObjectId.isValid(id)
+  ) {
+    throw new Error(
+      `Invalid vendor id: ${id}`,
+    );
   }
 
   const vendor = await Vendor.findOne({
@@ -253,34 +196,81 @@ export async function getVendorById(
   }).lean();
 
   if (!vendor) {
-    throw new Error("Vendor not found");
+    throw new Error(
+      `Vendor not found: ${id}`,
+    );
   }
 
-  return sanitizeVendor(
-    { ...vendor },
-    ctx,
-  );
+  return vendor;
 }
+
+
+/* ----------------------------------
+   FIND ACTIVE VENDOR
+----------------------------------- */
+
+export async function findActiveVendorById(
+  id: string,
+) {
+  if (
+    !id ||
+    !mongoose.Types.ObjectId.isValid(id)
+  ) {
+    throw new Error(
+      `Invalid vendor id: ${id}`,
+    );
+  }
+
+  const vendor = await Vendor.findOne({
+    _id: id,
+    deletedAt: null,
+  }).lean();
+
+  if (!vendor) {
+    throw new Error(
+      `Vendor not found: ${id}`,
+    );
+  }
+
+  if (vendor.status !== "Active") {
+    throw new Error(
+      `Vendor "${vendor.name}" is ${vendor.status}. Only Active vendors can be used for Purchase Orders.`,
+    );
+  }
+
+  return vendor;
+}
+
 
 /* ----------------------------------
    CREATE VENDOR
 ----------------------------------- */
 
-export async function createVendor(
-  input: CreateVendorInput,
-  ctx: RequestContext,
-) {
+export async function createVendor(input: {
+  name: string;
+  state: string;
+  city: string;
+  siteOwnerName?: string;
+  contactPerson?: string;
+  mobile?: string;
+  email?: string;
+  address?: string;
+  panNumber?: string;
+  msmeNumber?: string;
+  gstNumber?: string;
+  paymentTerms?: string;
+  bankAccountNumber?: string;
+  ifsc?: string;
+  status?: "Active" | "Inactive";
+}) {
   const vendor = await Vendor.create({
     ...input,
-    createdBy: ctx.user?.id,
-    updatedBy: ctx.user?.id,
+    status: input.status ?? "Active",
   });
 
-  return sanitizeVendor(
-    vendor.toObject(),
-    ctx,
-  );
+  return vendor.toObject();
 }
+
 
 /* ----------------------------------
    UPDATE VENDOR
@@ -288,11 +278,31 @@ export async function createVendor(
 
 export async function updateVendor(
   id: string,
-  input: UpdateVendorInput,
-  ctx: RequestContext,
+  input: Partial<{
+    name: string;
+    state: string;
+    city: string;
+    siteOwnerName: string;
+    contactPerson: string;
+    mobile: string;
+    email: string;
+    address: string;
+    panNumber: string;
+    msmeNumber: string;
+    gstNumber: string;
+    paymentTerms: string;
+    bankAccountNumber: string;
+    ifsc: string;
+    status: "Active" | "Inactive";
+  }>,
 ) {
-  if (!mongoose.isValidObjectId(id)) {
-    throw new Error("Invalid vendor ID");
+  if (
+    !id ||
+    !mongoose.Types.ObjectId.isValid(id)
+  ) {
+    throw new Error(
+      `Invalid vendor id: ${id}`,
+    );
   }
 
   const vendor =
@@ -302,10 +312,7 @@ export async function updateVendor(
         deletedAt: null,
       },
       {
-        $set: {
-          ...input,
-          updatedBy: ctx.user?.id,
-        },
+        $set: input,
       },
       {
         returnDocument: "after",
@@ -314,25 +321,41 @@ export async function updateVendor(
     ).lean();
 
   if (!vendor) {
-    throw new Error("Vendor not found");
+    throw new Error(
+      `Vendor not found: ${id}`,
+    );
   }
 
-  return sanitizeVendor(
-    { ...vendor },
-    ctx,
-  );
+  return vendor;
 }
+
 
 /* ----------------------------------
-   DEACTIVATE VENDOR
+   DELETE VENDOR
 ----------------------------------- */
 
-export async function deactivateVendor(
+export async function deleteVendor(
   id: string,
-  ctx: RequestContext,
 ) {
-  if (!mongoose.isValidObjectId(id)) {
-    throw new Error("Invalid vendor ID");
+  if (
+    !id ||
+    !mongoose.Types.ObjectId.isValid(id)
+  ) {
+    throw new Error(
+      `Invalid vendor id: ${id}`,
+    );
+  }
+
+  const linkedSites =
+    await Site.countDocuments({
+      vendorId: id,
+      deletedAt: null,
+    });
+
+  if (linkedSites > 0) {
+    throw new Error(
+      "Vendor has linked sites. Deactivate the vendor instead of deleting it.",
+    );
   }
 
   const vendor =
@@ -343,38 +366,59 @@ export async function deactivateVendor(
       },
       {
         $set: {
-          status: "Inactive",
-          updatedBy: ctx.user?.id,
+          deletedAt: new Date(),
         },
       },
       {
         returnDocument: "after",
-        runValidators: true,
       },
     ).lean();
 
   if (!vendor) {
-    throw new Error("Vendor not found");
+    throw new Error(
+      `Vendor not found: ${id}`,
+    );
   }
 
-  return sanitizeVendor(
-    { ...vendor },
-    ctx,
-  );
+  return vendor;
 }
 
+
+/* ----------------------------------
+   GET SITES LINKED TO VENDOR
+----------------------------------- */
+
 export async function getSitesByVendor(
-  id: string,
+  vendorId: string,
 ) {
-  if (!mongoose.isValidObjectId(id)) {
-    throw new Error("Invalid vendor ID");
+  if (
+    !vendorId ||
+    !mongoose.Types.ObjectId.isValid(vendorId)
+  ) {
+    throw new Error(
+      `Invalid vendor id: ${vendorId}`,
+    );
+  }
+
+  const vendor = await Vendor.findOne({
+    _id: vendorId,
+    deletedAt: null,
+  })
+    .select("_id name")
+    .lean();
+
+  if (!vendor) {
+    throw new Error(
+      `Vendor not found: ${vendorId}`,
+    );
   }
 
   return Site.find({
-    vendorId: id,
+    vendorId,
     deletedAt: null,
   })
-    .select("code city type status")
-    .sort({ code: 1 })
+    .sort({
+      createdAt: -1,
+    })
     .lean();
 }

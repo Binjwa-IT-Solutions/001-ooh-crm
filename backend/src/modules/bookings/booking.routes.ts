@@ -13,11 +13,26 @@ import {
   siteAvailability,
   availableSites,
   releaseCampaignBookings,
+  bookingHistory,
 } from "./booking.controller.js";
 
 const router = Router();
 
 router.use(requireAuth);
+
+/* -------------------------------------------------------------------------- */
+/* Booking History                                                            */
+/* -------------------------------------------------------------------------- */
+
+router.get(
+  "/",
+  requirePermission("sites.view"),
+  bookingHistory,
+);
+
+/* -------------------------------------------------------------------------- */
+/* Site Availability                                                          */
+/* -------------------------------------------------------------------------- */
 
 router.get(
   "/sites/available",
@@ -31,14 +46,22 @@ router.get(
   siteAvailability,
 );
 
+/* -------------------------------------------------------------------------- */
+/* Create Booking                                                             */
+/* -------------------------------------------------------------------------- */
+
 router.post(
-  "/bookings",
+  "/",
   requirePermission("bookings.manage"),
   createBooking,
 );
 
+/* -------------------------------------------------------------------------- */
+/* Release Campaign Bookings                                                  */
+/* -------------------------------------------------------------------------- */
+
 router.delete(
-  "/bookings/campaign/:campaignId",
+  "/campaign/:campaignId",
   requirePermission("bookings.manage"),
   releaseCampaignBookings,
 );

@@ -1,32 +1,59 @@
 "use client";
 
-import {useCallback,useState} from "react";
-import { getAvailableSites, createBooking, releaseCampaignBookings } from "../api";
-import type { AvailableSite, BookingPayload } from "../types";
+import {
+  useCallback,
+  useState,
+} from "react";
+
+import {
+  getAvailableSites,
+  createBooking,
+  releaseCampaignBookings,
+  getBookingHistory,
+} from "../api";
+
+import type {
+  AvailableSite,
+  Booking,
+  BookingPayload,
+} from "../types";
 
 export function useBooking() {
-  const [sites, setSites] = useState<AvailableSite[]>([]);
+  const [sites, setSites] =
+    useState<AvailableSite[]>([]);
 
-  const [loading, setLoading] = useState(false);
+  const [bookings, setBookings] =
+    useState<Booking[]>([]);
 
-  const [bookingLoading, setBookingLoading] = useState(false);
+  const [loading, setLoading] =
+    useState(false);
 
-  const [error, setError] = useState("");
+  const [bookingLoading, setBookingLoading] =
+    useState(false);
 
-  const searchAvailability = useCallback(
+  const [error, setError] =
+    useState("");
+
+  /* ------------------------------------------------------------------------ */
+  /* Search Availability                                                      */
+  /* ------------------------------------------------------------------------ */
+
+  const searchAvailability =
+    useCallback(
       async (
         city: string,
         from: string,
-        to: string
+        to: string,
       ) => {
         try {
           setLoading(true);
           setError("");
 
-          const result = await getAvailableSites(
+          const result =
+            await getAvailableSites(
               city,
               from,
-              to
+              to,
             );
 
           setSites(result);
@@ -45,46 +72,87 @@ export function useBooking() {
           setLoading(false);
         }
       },
-      []
+      [],
     );
 
-  const bookSite = useCallback(
-    async (
-      data: BookingPayload
-    ) => {
+  /* ------------------------------------------------------------------------ */
+  /* Create Booking                                                           */
+  /* ------------------------------------------------------------------------ */
+
+  const bookSite =
+    useCallback(
+      async (
+        data: BookingPayload,
+      ) => {
+        try {
+          setBookingLoading(true);
+          setError("");
+
+          const result =
+            await createBooking(data);
+
+          return result;
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Booking failed";
+
+          setError(message);
+
+          throw error;
+        } finally {
+          setBookingLoading(false);
+        }
+      },
+      [],
+    );
+
+  /* ------------------------------------------------------------------------ */
+  /* Load Booking History                                                    */
+  /* ------------------------------------------------------------------------ */
+
+  const loadBookingHistory =
+    useCallback(async () => {
       try {
-        setBookingLoading(true);
+        setLoading(true);
         setError("");
 
-        const result = await createBooking(data);
+        const result =
+          await getBookingHistory();
+
+        setBookings(result);
 
         return result;
       } catch (error) {
         const message =
           error instanceof Error
             ? error.message
-            : "Booking failed";
+            : "Failed to load booking history";
 
         setError(message);
 
         throw error;
       } finally {
-        setBookingLoading(false);
+        setLoading(false);
       }
-    },
-    []
-  );
+    }, []);
 
-  const releaseBookings = useCallback(
+  /* ------------------------------------------------------------------------ */
+  /* Release Bookings                                                         */
+  /* ------------------------------------------------------------------------ */
+
+  const releaseBookings =
+    useCallback(
       async (
-        campaignId: string
+        campaignId: string,
       ) => {
         try {
           setLoading(true);
           setError("");
 
           return await releaseCampaignBookings(
-            campaignId
+            campaignId,
           );
         } catch (error) {
           const message =
@@ -99,17 +167,19 @@ export function useBooking() {
           setLoading(false);
         }
       },
-      []
+      [],
     );
 
   return {
     sites,
+    bookings,
     loading,
     bookingLoading,
     error,
 
     searchAvailability,
     bookSite,
+    loadBookingHistory,
     releaseBookings,
 
     setError,

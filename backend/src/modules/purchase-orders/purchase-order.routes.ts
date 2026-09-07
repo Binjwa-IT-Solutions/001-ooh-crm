@@ -15,6 +15,18 @@ router.get(
 );
 
 router.get(
+  "/campaign-options",
+  requirePermission("purchase_orders.view"),
+  controller.campaignOptions,
+);
+
+router.get(
+  "/vendor-options",
+  requirePermission("purchase_orders.view"),
+  controller.vendorOptions,
+);
+
+router.get(
   "/:id",
   requirePermission("purchase_orders.view"),
   controller.getById,

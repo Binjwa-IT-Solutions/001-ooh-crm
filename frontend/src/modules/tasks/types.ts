@@ -19,6 +19,7 @@ export interface TaskCampaign {
 
 export interface TaskSite {
   _id: string;
+  code?: string;
   name?: string;
   city?: string;
 }

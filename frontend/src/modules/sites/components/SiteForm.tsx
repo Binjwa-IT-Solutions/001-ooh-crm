@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { createSite, updateSite } from "../api";
-
 import type {
+  CreateSiteData,
   Site,
   SiteType,
   SiteStatus,
@@ -14,46 +13,50 @@ interface Props {
   site?: Site | null;
   onClose: () => void;
   onSuccess: () => void;
+  onSubmit: (data: CreateSiteData) => Promise<void>;
 }
 
 export default function SiteForm({
   site,
   onClose,
   onSuccess,
+  onSubmit,
 }: Props) {
   const [city, setCity] = useState("");
-  const [type, setType] =
-    useState<SiteType>("Airport");
-
+  const [type, setType] = useState<SiteType>("Airport");
   const [address, setAddress] = useState("");
+
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
+
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
   const [width, setWidth] = useState("");
   const [height, setHeight] = useState("");
   const [cost, setCost] = useState("");
+
   const [vendorId, setVendorId] = useState("");
   const [photos, setPhotos] = useState("");
+
   const [status, setStatus] =
     useState<SiteStatus>("Active");
 
-  const [loading, setLoading] =
-    useState(false);
+  const [loading, setLoading] = useState(false);
+  const [gpsLoading, setGpsLoading] = useState(false);
 
-  const [error, setError] =
-    useState("");
+  const [error, setError] = useState("");
+  const [gpsError, setGpsError] = useState("");
 
-  const [typeOpen, setTypeOpen] =
-    useState(false);
+  const [typeOpen, setTypeOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
 
-  const [statusOpen, setStatusOpen] =
-    useState(false);
+  const typeRef = useRef<HTMLDivElement>(null);
+  const statusRef = useRef<HTMLDivElement>(null);
 
-  const typeRef =
-    useRef<HTMLDivElement>(null);
-
-  const statusRef =
-    useRef<HTMLDivElement>(null);
-
+  /* -----------------------------------------
+     Load existing site
+  ----------------------------------------- */
   useEffect(() => {
     if (!site) return;
 
@@ -61,29 +64,26 @@ export default function SiteForm({
     setType(site.type);
     setAddress(site.address || "");
 
-    setLat(
-      String(site.gps.lat)
+    setLat(String(site.gps?.lat ?? ""));
+    setLng(String(site.gps?.lng ?? ""));
+
+    setStartDate(
+      site.startDate
+        ? String(site.startDate).slice(0, 10)
+        : ""
     );
 
-    setLng(
-      String(site.gps.lng)
+    setEndDate(
+      site.endDate
+        ? String(site.endDate).slice(0, 10)
+        : ""
     );
 
-    setWidth(
-      String(site.sizeWidth)
-    );
+    setWidth(String(site.sizeWidth ?? ""));
+    setHeight(String(site.sizeHeight ?? ""));
+    setCost(String(site.baseCostPerDay ?? ""));
 
-    setHeight(
-      String(site.sizeHeight)
-    );
-
-    setCost(
-      String(site.baseCostPerDay)
-    );
-
-    setVendorId(
-      site.vendorId || ""
-    );
+    setVendorId(site.vendorId || "");
 
     setPhotos(
       site.photos?.join(", ") || ""
@@ -92,12 +92,12 @@ export default function SiteForm({
     setStatus(site.status);
   }, [site]);
 
+  /* -----------------------------------------
+     Close dropdown on outside click
+  ----------------------------------------- */
   useEffect(() => {
-    function handleOutsideClick(
-      event: MouseEvent
-    ) {
-      const target =
-        event.target as Node;
+    const close = (e: MouseEvent) => {
+      const target = e.target as Node;
 
       if (
         typeRef.current &&
@@ -112,60 +112,150 @@ export default function SiteForm({
       ) {
         setStatusOpen(false);
       }
-    }
+    };
 
     document.addEventListener(
       "mousedown",
-      handleOutsideClick
+      close
     );
 
     return () => {
       document.removeEventListener(
         "mousedown",
-        handleOutsideClick
+        close
       );
     };
   }, []);
 
+  /* -----------------------------------------
+     Get GPS
+  ----------------------------------------- */
+  const handleGetGPS = () => {
+    setGpsError("");
+
+    if (!navigator.geolocation) {
+      setGpsError(
+        "GPS is not supported."
+      );
+      return;
+    }
+
+    setGpsLoading(true);
+
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const {
+          latitude,
+          longitude,
+        } = coords;
+
+        if (
+          latitude < 6 ||
+          latitude > 37.5 ||
+          longitude < 68 ||
+          longitude > 97.5
+        ) {
+          setGpsError(
+            "Location must be within India."
+          );
+        } else {
+          setLat(latitude.toString());
+          setLng(longitude.toString());
+        }
+
+        setGpsLoading(false);
+      },
+      () => {
+        setGpsError(
+          "Location permission denied or unavailable."
+        );
+
+        setGpsLoading(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0,
+      }
+    );
+  };
+
+  /* -----------------------------------------
+     Submit
+  ----------------------------------------- */
   async function handleSubmit(
-    event: React.FormEvent<HTMLFormElement>
+    e: React.FormEvent<HTMLFormElement>
   ) {
-    event.preventDefault();
+    e.preventDefault();
 
     setError("");
 
+    /* City */
     if (!city.trim()) {
-      setError("City is required.");
-      return;
-    }
-
-    if (!lat || !lng) {
-      setError(
-        "Latitude and longitude are required."
+      return setError(
+        "City is required."
       );
-      return;
     }
 
+    /* Address */
+    if (!address.trim()) {
+      return setError(
+        "Address is required."
+      );
+    }
+
+    /* GPS */
+    if (!lat || !lng) {
+      return setError(
+        "Please select location using GPS."
+      );
+    }
+
+    /* Dates */
+    if (!startDate) {
+      return setError(
+        "Start date is required."
+      );
+    }
+
+    if (!endDate) {
+      return setError(
+        "End date is required."
+      );
+    }
+
+    if (
+      new Date(startDate) >
+      new Date(endDate)
+    ) {
+      return setError(
+        "End date cannot be before start date."
+      );
+    }
+
+    /* Size */
     if (!width || !height) {
-      setError(
+      return setError(
         "Width and height are required."
       );
-      return;
     }
 
+    /* Cost */
     if (!cost) {
-      setError(
+      return setError(
         "Base cost per day is required."
       );
-      return;
     }
 
     const latitude = Number(lat);
     const longitude = Number(lng);
+
     const siteWidth = Number(width);
     const siteHeight = Number(height);
+
     const dailyCost = Number(cost);
 
+    /* GPS validation */
     if (
       !Number.isFinite(latitude) ||
       !Number.isFinite(longitude) ||
@@ -174,50 +264,51 @@ export default function SiteForm({
       longitude < 68 ||
       longitude > 97.5
     ) {
-      setError(
+      return setError(
         "GPS coordinates must fall within India."
       );
-      return;
     }
 
+    /* Size validation */
     if (
       !Number.isFinite(siteWidth) ||
       siteWidth <= 0 ||
       !Number.isFinite(siteHeight) ||
       siteHeight <= 0
     ) {
-      setError(
+      return setError(
         "Width and height must be greater than 0."
       );
-      return;
     }
 
+    /* Cost validation */
     if (
-      !Number.isFinite(dailyCost) ||
-      dailyCost < 0 ||
-      !Number.isInteger(dailyCost)
+      !Number.isInteger(dailyCost) ||
+      dailyCost < 0
     ) {
-      setError(
+      return setError(
         "Base cost per day must be a nonnegative whole number."
       );
-      return;
     }
 
     try {
       setLoading(true);
 
-      const data = {
+      const data: CreateSiteData = {
         city: city.trim(),
 
         type,
 
-        address:
-          address.trim() || undefined,
+        address: address.trim(),
 
         gps: {
           lat: latitude,
           lng: longitude,
         },
+
+        startDate,
+
+        endDate,
 
         sizeWidth: siteWidth,
 
@@ -225,33 +316,25 @@ export default function SiteForm({
 
         baseCostPerDay: dailyCost,
 
-        vendorId:
-          vendorId.trim() || null,
+        vendorId: vendorId.trim()
+          ? vendorId.trim()
+          : null,
 
         status,
 
         photos: photos
           .split(",")
-          .map((photo) =>
-            photo.trim()
-          )
+          .map((p) => p.trim())
           .filter(Boolean),
       };
 
-      if (site) {
-        await updateSite(
-          site._id,
-          data
-        );
-      } else {
-        await createSite(data);
-      }
+      await onSubmit(data);
 
       onSuccess();
-    } catch (error) {
+    } catch (err) {
       setError(
-        error instanceof Error
-          ? error.message
+        err instanceof Error
+          ? err.message
           : "Failed to save site."
       );
     } finally {
@@ -259,6 +342,9 @@ export default function SiteForm({
     }
   }
 
+  /* -----------------------------------------
+     Options
+  ----------------------------------------- */
   const typeOptions: SiteType[] = [
     "Airport",
     "Highway",
@@ -297,13 +383,12 @@ export default function SiteForm({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-2xl leading-none text-gray-500 transition hover:bg-[#F9DADA] hover:text-[#8B2424]"
+            className="rounded-lg p-2 text-2xl text-gray-500 hover:bg-[#F9DADA] hover:text-[#8B2424]"
           >
             ×
           </button>
         </div>
 
-        {/* Form */}
         <form
           onSubmit={handleSubmit}
           className="overflow-y-auto"
@@ -323,8 +408,8 @@ export default function SiteForm({
               {/* City */}
               <div>
                 <label className="mb-1.5 block text-sm font-semibold text-gray-900">
-                  City
-                  <span className="ml-1 text-red-500">
+                  City{" "}
+                  <span className="text-red-500">
                     *
                   </span>
                 </label>
@@ -337,7 +422,7 @@ export default function SiteForm({
                     setCity(e.target.value)
                   }
                   placeholder="Enter city"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder:text-gray-400 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
                 />
               </div>
 
@@ -347,8 +432,8 @@ export default function SiteForm({
                 className="relative"
               >
                 <label className="mb-1.5 block text-sm font-semibold text-gray-900">
-                  Type
-                  <span className="ml-1 text-red-500">
+                  Type{" "}
+                  <span className="text-red-500">
                     *
                   </span>
                 </label>
@@ -359,11 +444,9 @@ export default function SiteForm({
                     setTypeOpen(!typeOpen);
                     setStatusOpen(false);
                   }}
-                  className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+                  className="flex w-full items-center justify-between rounded-lg border border-gray-300 px-4 py-2.5 text-left hover:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
                 >
-                  <span>
-                    {type}
-                  </span>
+                  {type}
 
                   <span className="text-[#8B2424]">
                     ▾
@@ -371,7 +454,7 @@ export default function SiteForm({
                 </button>
 
                 {typeOpen && (
-                  <div className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+                  <div className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded-lg border bg-white shadow-lg">
                     {typeOptions.map(
                       (option) => (
                         <button
@@ -381,10 +464,10 @@ export default function SiteForm({
                             setType(option);
                             setTypeOpen(false);
                           }}
-                          className={`block w-full cursor-pointer px-4 py-2.5 text-left transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
+                          className={`block w-full px-4 py-2.5 text-left hover:bg-[#F9DADA] hover:text-[#8B2424] ${
                             type === option
                               ? "bg-[#F9DADA] text-[#8B2424]"
-                              : "text-gray-900"
+                              : ""
                           }`}
                         >
                           {option}
@@ -401,8 +484,8 @@ export default function SiteForm({
                 className="relative"
               >
                 <label className="mb-1.5 block text-sm font-semibold text-gray-900">
-                  Status
-                  <span className="ml-1 text-red-500">
+                  Status{" "}
+                  <span className="text-red-500">
                     *
                   </span>
                 </label>
@@ -415,11 +498,9 @@ export default function SiteForm({
                     );
                     setTypeOpen(false);
                   }}
-                  className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+                  className="flex w-full items-center justify-between rounded-lg border border-gray-300 px-4 py-2.5 text-left hover:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
                 >
-                  <span>
-                    {status}
-                  </span>
+                  {status}
 
                   <span className="text-[#8B2424]">
                     ▾
@@ -427,24 +508,20 @@ export default function SiteForm({
                 </button>
 
                 {statusOpen && (
-                  <div className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+                  <div className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded-lg border bg-white shadow-lg">
                     {statusOptions.map(
                       (option) => (
                         <button
                           key={option}
                           type="button"
                           onClick={() => {
-                            setStatus(
-                              option
-                            );
-                            setStatusOpen(
-                              false
-                            );
+                            setStatus(option);
+                            setStatusOpen(false);
                           }}
-                          className={`block w-full cursor-pointer px-4 py-2.5 text-left transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
+                          className={`block w-full px-4 py-2.5 text-left hover:bg-[#F9DADA] hover:text-[#8B2424] ${
                             status === option
                               ? "bg-[#F9DADA] text-[#8B2424]"
-                              : "text-gray-900"
+                              : ""
                           }`}
                         >
                           {option}
@@ -459,73 +536,132 @@ export default function SiteForm({
             {/* Address */}
             <div>
               <label className="mb-1.5 block text-sm font-semibold text-gray-900">
-                Address
+                Address{" "}
+                <span className="text-red-500">
+                  *
+                </span>
               </label>
 
               <input
                 type="text"
+                required
                 value={address}
                 onChange={(e) =>
                   setAddress(e.target.value)
                 }
                 placeholder="Enter full address"
-                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder:text-gray-400 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
               />
             </div>
 
-            {/* GPS */}
+            {/* Dates */}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 
+              {/* Start Date */}
               <div>
                 <label className="mb-1.5 block text-sm font-semibold text-gray-900">
-                  Latitude
-                  <span className="ml-1 text-red-500">
+                  Start Date{" "}
+                  <span className="text-red-500">
                     *
                   </span>
                 </label>
 
                 <input
-                  type="number"
-                  step="any"
+                  type="date"
                   required
-                  value={lat}
+                  value={startDate}
                   onChange={(e) =>
-                    setLat(e.target.value)
+                    setStartDate(
+                      e.target.value
+                    )
                   }
-                  placeholder="e.g. 22.7196"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder:text-gray-400 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
                 />
               </div>
 
+              {/* End Date */}
               <div>
                 <label className="mb-1.5 block text-sm font-semibold text-gray-900">
-                  Longitude
-                  <span className="ml-1 text-red-500">
+                  End Date{" "}
+                  <span className="text-red-500">
                     *
                   </span>
                 </label>
 
                 <input
-                  type="number"
-                  step="any"
+                  type="date"
                   required
-                  value={lng}
-                  onChange={(e) =>
-                    setLng(e.target.value)
+                  min={
+                    startDate ||
+                    undefined
                   }
-                  placeholder="e.g. 75.8577"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder:text-gray-400 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+                  value={endDate}
+                  onChange={(e) =>
+                    setEndDate(
+                      e.target.value
+                    )
+                  }
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
                 />
               </div>
             </div>
 
-            {/* Size + Cost */}
+            {/* GPS */}
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold text-gray-900">
+                GPS Location{" "}
+                <span className="text-red-500">
+                  *
+                </span>
+              </label>
+
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-gray-300 bg-gray-50 p-3">
+
+                <div>
+                  {lat && lng ? (
+                    <p className="text-xs text-gray-600">
+                      Lat:{" "}
+                      {Number(lat).toFixed(6)}
+                      {" • "}
+                      Lng:{" "}
+                      {Number(lng).toFixed(6)}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500">
+                      Select location using GPS
+                    </p>
+                  )}
+
+                  {gpsError && (
+                    <p className="mt-1 text-xs text-red-600">
+                      {gpsError}
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGetGPS}
+                  disabled={gpsLoading}
+                  className="shrink-0 rounded-lg bg-[#8B2424] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#F9DADA] hover:text-[#8B2424] disabled:opacity-60"
+                >
+                  {gpsLoading
+                    ? "Detecting..."
+                    : lat && lng
+                      ? "Update Location"
+                      : "Use Current Location"}
+                </button>
+              </div>
+            </div>
+
+            {/* Size / Cost */}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
 
+              {/* Width */}
               <div>
                 <label className="mb-1.5 block text-sm font-semibold text-gray-900">
-                  Width
-                  <span className="ml-1 text-red-500">
+                  Width{" "}
+                  <span className="text-red-500">
                     *
                   </span>
                 </label>
@@ -539,14 +675,15 @@ export default function SiteForm({
                     setWidth(e.target.value)
                   }
                   placeholder="Enter width"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder:text-gray-400 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
                 />
               </div>
 
+              {/* Height */}
               <div>
                 <label className="mb-1.5 block text-sm font-semibold text-gray-900">
-                  Height
-                  <span className="ml-1 text-red-500">
+                  Height{" "}
+                  <span className="text-red-500">
                     *
                   </span>
                 </label>
@@ -560,14 +697,15 @@ export default function SiteForm({
                     setHeight(e.target.value)
                   }
                   placeholder="Enter height"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder:text-gray-400 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
                 />
               </div>
 
+              {/* Cost */}
               <div>
                 <label className="mb-1.5 block text-sm font-semibold text-gray-900">
-                  Base Cost / Day
-                  <span className="ml-1 text-red-500">
+                  Base Cost / Day{" "}
+                  <span className="text-red-500">
                     *
                   </span>
                 </label>
@@ -581,7 +719,7 @@ export default function SiteForm({
                     setCost(e.target.value)
                   }
                   placeholder="Enter cost in paise"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder:text-gray-400 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
                 />
               </div>
             </div>
@@ -596,12 +734,10 @@ export default function SiteForm({
                 type="text"
                 value={vendorId}
                 onChange={(e) =>
-                  setVendorId(
-                    e.target.value
-                  )
+                  setVendorId(e.target.value)
                 }
                 placeholder="Enter vendor ID (optional)"
-                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder:text-gray-400 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
               />
             </div>
 
@@ -618,7 +754,7 @@ export default function SiteForm({
                   setPhotos(e.target.value)
                 }
                 placeholder="Enter photo URLs separated by comma"
-                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder:text-gray-400 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
               />
 
               <p className="mt-1.5 text-xs text-gray-500">
@@ -635,7 +771,7 @@ export default function SiteForm({
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="rounded-lg border border-[#8B2424] bg-[#F9DADA] px-5 py-2.5 font-semibold text-[#8B2424] transition hover:bg-[#8B2424] hover:text-[#F9DADA] focus:outline-none focus:ring-2 focus:ring-[#F9DADA] focus:ring-offset-2 disabled:opacity-50"
+              className="rounded-lg border border-[#8B2424] bg-[#F9DADA] px-5 py-2.5 font-semibold text-[#8B2424] hover:bg-[#8B2424] hover:text-[#F9DADA] disabled:opacity-50"
             >
               Cancel
             </button>
@@ -643,7 +779,7 @@ export default function SiteForm({
             <button
               type="submit"
               disabled={loading}
-              className="rounded-lg bg-[#8B2424] px-6 py-2.5 font-semibold text-[#F9DADA] shadow-sm transition hover:bg-[#A8383B] focus:outline-none focus:ring-2 focus:ring-[#F9DADA] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-[#8B2424] px-6 py-2.5 font-semibold text-[#F9DADA] hover:bg-[#A8383B] disabled:opacity-50"
             >
               {loading
                 ? "Saving..."
@@ -651,7 +787,6 @@ export default function SiteForm({
                   ? "Update Site"
                   : "Save Site"}
             </button>
-
           </div>
         </form>
       </div>

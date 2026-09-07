@@ -19,7 +19,15 @@ export interface PurchaseOrder {
   poNumber: string;
   campaignId:
     | string
-    | { _id: string; name: string };
+    | {
+        _id: string;
+        name: string;
+        campaignCode?: string;
+        city?: string;
+        startDate?: string;
+        endDate?: string;
+        status?: string;
+      };
   vendorId:
     | string
     | {
@@ -27,6 +35,10 @@ export interface PurchaseOrder {
         name: string;
         state?: string;
         city?: string;
+        status?: string;
+        contactPerson?: string;
+        mobile?: string;
+        email?: string;
       };
   lineItems: PurchaseOrderLineItem[];
   totalAmount: number;
@@ -44,6 +56,33 @@ export interface PurchaseOrderFormData {
     PurchaseOrderLineItem,
     "amount" | "days"
   >[];
+}
+
+export interface CampaignOption {
+  _id: string;
+  name: string;
+  campaignCode?: string;
+  city?: string;
+  status?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface VendorOption {
+  _id: string;
+  name: string;
+  state?: string;
+  city?: string;
+  status?: string;
+  contactPerson?: string;
+  mobile?: string;
+}
+
+export interface PurchaseOrderFilters {
+  search?: string;
+  status?: string;
+  campaignId?: string;
+  vendorId?: string;
 }
 
 export interface PurchaseOrdersResponse {

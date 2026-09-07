@@ -24,6 +24,7 @@ const escalationSchema =
     {
       taskId: {
         type: Schema.Types.ObjectId,
+        ref: "Task",
         required: true,
         index: true,
       },

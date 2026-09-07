@@ -11,7 +11,10 @@ import {
   createFromQuotation,
   getCampaign,
   listCampaigns,
+  updateCampaign,
   updateCampaignStatus,
+  listCampaignManagers,
+  listCampaignLeadOptions,
 } from "./campaign.service.js";
 
 import { CampaignStatus } from "./campaign.model.js";
@@ -65,6 +68,8 @@ export async function listCampaignsController(
     const campaigns =
       await listCampaigns(
         {
+          search: query.search,
+
           status: query.status
             ? (query.status as CampaignStatus)
             : undefined,
@@ -211,6 +216,68 @@ export async function createCampaignFromQuotationController(
       message:
         error?.message ??
         "Failed to create campaign from quotation",
+    });
+  }
+}
+
+export async function updateCampaignController(
+  req: Request,
+  res: Response,
+) {
+  try {
+    const input = createCampaignSchema.partial().parse(req.body);
+
+    const campaign = await updateCampaign(
+      req.params.id as string,
+      input,
+      getContext(req),
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Campaign updated successfully",
+      data: campaign,
+    });
+  } catch (error: any) {
+    return res.status(400).json({
+      success: false,
+      message: error?.message ?? "Failed to update campaign",
+    });
+  }
+}
+
+export async function listCampaignManagersController(
+  _req: Request,
+  res: Response,
+) {
+  try {
+    const managers = await listCampaignManagers();
+    return res.status(200).json({
+      success: true,
+      data: managers,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: error?.message ?? "Failed to fetch campaign managers",
+    });
+  }
+}
+
+export async function listCampaignLeadOptionsController(
+  _req: Request,
+  res: Response,
+) {
+  try {
+    const leads = await listCampaignLeadOptions();
+    return res.status(200).json({
+      success: true,
+      data: leads,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: error?.message ?? "Failed to fetch lead options",
     });
   }
 }

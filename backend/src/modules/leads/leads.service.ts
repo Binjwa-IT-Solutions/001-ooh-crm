@@ -254,7 +254,7 @@ export class LeadsService {
           },
         },
       },
-      { new: true },
+      { returnDocument: 'after' },
     ).populate('assignedTo claimedBy', 'name email role');
 
     if (!updated) {

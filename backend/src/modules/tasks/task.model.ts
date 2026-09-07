@@ -1,4 +1,5 @@
-import { Schema, model } from "mongoose";
+import { Schema, model, Types } from "mongoose";
+import { basePlugin, type BaseDocument } from "../../core/db/basePlugin.js";
 
 export type TaskType =
   | "Printing"
@@ -12,7 +13,20 @@ export type TaskStatus =
   | "InProgress"
   | "Completed";
 
-const taskSchema = new Schema(
+export interface ITask extends BaseDocument {
+  campaignId: Types.ObjectId;
+  siteId: Types.ObjectId;
+  title: string;
+  type: TaskType;
+  assignedTo?: Types.ObjectId | null;
+  deadline: Date;
+  status: TaskStatus;
+  proofRequired: boolean;
+  proofId?: Types.ObjectId | null;
+  completedAt?: Date | null;
+}
+
+const taskSchema = new Schema<ITask>(
   {
     campaignId: {
       type: Schema.Types.ObjectId,
@@ -82,11 +96,10 @@ const taskSchema = new Schema(
       type: Date,
       default: null,
     },
-  },
-  {
-    timestamps: true,
-  },
+  }
 );
+
+taskSchema.plugin(basePlugin);
 
 taskSchema.index({
   campaignId: 1,
@@ -94,7 +107,7 @@ taskSchema.index({
   type: 1,
 });
 
-export const Task = model(
+export const Task = model<ITask>(
   "Task",
   taskSchema,
-);
+);
