@@ -74,6 +74,10 @@ declare module 'lucide-react' {
   export const Sparkles: LucideIcon;
   export const Table: LucideIcon;
   export const Target: LucideIcon;
+  export const Timer: LucideIcon;
+  export const MessageSquare: LucideIcon;
+  export const Pencil: LucideIcon;
+  export const RotateCw: LucideIcon;
   export const TrendingDown: LucideIcon;
   export const TrendingUp: LucideIcon;
   export const Upload: LucideIcon;
@@ -82,6 +86,7 @@ declare module 'lucide-react' {
   export const Users2: LucideIcon;
   export const UserX: LucideIcon;
   export const X: LucideIcon;
+  export const XCircle: LucideIcon;
 
   // Fallback to allow any other named icon imports
   const icons: Record<string, LucideIcon>;
