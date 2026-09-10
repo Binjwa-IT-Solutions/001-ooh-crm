@@ -190,17 +190,73 @@ export class LeadsService {
     const now = new Date();
     const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    const rawMobile = String(payload.mobile || payload.phone || payload.contactNumber || '').trim();
-    const digitsOnly = rawMobile.replace(/\D/g, '');
-    const mobile = digitsOnly.length >= 10 ? digitsOnly.slice(-10) : (digitsOnly || rawMobile);
+    // Inbound Email Parsing & Extraction
+    let emailContactPerson: string | undefined;
+    let emailAddress: string | undefined;
+    let emailMobile: string | undefined;
+    let emailCity: string | undefined;
+    let emailNotes: string | undefined;
 
-    const companyName = payload.company_name || payload.companyName || payload.company || payload.name || 'Web Lead';
-    const contactPerson = payload.contactPerson || payload.name || 'Prospective Client';
-    const email = payload.email ? String(payload.email).trim().toLowerCase() : undefined;
-    const city = payload.city || payload.area || undefined;
+    if (source === 'Email' || payload.from || payload.subject || payload.text || payload.body) {
+      // 1. Extract Sender Name & Email from "From" header
+      const fromStr = String(payload.from || '').trim();
+      if (fromStr) {
+        const fromMatch = fromStr.match(/^([^<]+)<([^>]+)>$/);
+        if (fromMatch) {
+          emailContactPerson = fromMatch[1].trim().replace(/^["']|["']$/g, '');
+          emailAddress = fromMatch[2].trim().toLowerCase();
+        } else if (fromStr.includes('@')) {
+          emailAddress = fromStr.toLowerCase();
+          const localPart = fromStr.split('@')[0].replace(/[._-]/g, ' ');
+          emailContactPerson = localPart.charAt(0).toUpperCase() + localPart.slice(1);
+        }
+      }
+
+      // 2. Combine text and body, strip HTML tags
+      const rawText = String(payload.text || payload.body || payload.message || payload.html || '').trim();
+      const plainText = rawText.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ');
+
+      // 3. Check for structured fields (e.g. from website forms forwarded via email)
+      const nameMatch = plainText.match(/(?:Name|Contact Person|Full Name)\s*[:=-]\s*([^\n\r,;]+)/i);
+      if (nameMatch) emailContactPerson = nameMatch[1].trim();
+
+      const cityMatch = plainText.match(/(?:City|Location|Area)\s*[:=-]\s*([^\n\r,;]+)/i);
+      if (cityMatch) emailCity = cityMatch[1].trim();
+
+      const phoneMatch = plainText.match(/(?:Phone|Mobile|Contact|Cell|Tel|WhatsApp)\s*[:=-]\s*([^\n\r,;]+)/i);
+      if (phoneMatch) {
+        emailMobile = phoneMatch[1].trim();
+      }
+
+      // 4. Fallback: Search for Indian 10-digit mobile number regex across the whole email body
+      if (!emailMobile) {
+        const genericPhoneMatch = plainText.match(/(?:(?:\+|00)?91[\s.-]?)?[6-9]\d{4}[\s.-]?\d{5}|[6-9]\d{9}/);
+        if (genericPhoneMatch) {
+          emailMobile = genericPhoneMatch[0].trim();
+        }
+      }
+
+      // 5. Build rich notes with subject and full message
+      const noteSections: string[] = [];
+      if (payload.subject) noteSections.push(`Subject: ${payload.subject}`);
+      if (payload.from) noteSections.push(`From: ${payload.from}`);
+      if (plainText) noteSections.push(`Message:\n${plainText.trim()}`);
+      if (noteSections.length > 0) {
+        emailNotes = `[Email Lead Details]\n${noteSections.join('\n')}`;
+      }
+    }
+
+    const rawMobile = String(payload.mobile || payload.phone || payload.contactNumber || emailMobile || '').trim();
+    const digitsOnly = rawMobile.replace(/\D/g, '');
+    const mobile = digitsOnly.length >= 10 ? digitsOnly.slice(-10) : (digitsOnly || rawMobile || 'Not Provided');
+
+    const contactPerson = payload.contactPerson || payload.name || emailContactPerson || 'Prospective Client';
+    const companyName = payload.company_name || payload.companyName || payload.company || contactPerson || 'Web Lead';
+    const email = payload.email ? String(payload.email).trim().toLowerCase() : (emailAddress || undefined);
+    const city = payload.city || payload.area || emailCity || undefined;
 
     // Rich contextual note for Justdial / third-party leads
-    let notes: string | undefined;
+    let notes: string | undefined = emailNotes;
     if (source === 'JustDial' || payload.leadid || payload.category) {
       const noteParts: string[] = [];
       if (payload.leadid) noteParts.push(`JD Lead ID: ${payload.leadid}`);
@@ -213,12 +269,20 @@ export class LeadsService {
       }
     }
 
-    const existing = await Lead.findOne({
-      mobile,
+    const duplicateFilter: Record<string, any> = {
       source: source as LeadSource,
       createdAt: { $gte: windowStart },
       deletedAt: null,
-    }).exec();
+    };
+    if (mobile !== 'Not Provided') {
+      duplicateFilter.mobile = mobile;
+    } else if (email) {
+      duplicateFilter.email = email;
+    } else {
+      duplicateFilter._id = null;
+    }
+
+    const existing = await Lead.findOne(duplicateFilter).exec();
 
     const status: LeadStatus = existing ? 'Duplicate' : 'New';
 
@@ -248,7 +312,7 @@ export class LeadsService {
     if (status === 'New' && mongoose.connection.readyState === 1) {
       try {
         const recipients = await AuthUser.find({
-          role: { $in: ['admin', 'manager', 'sales'] },
+          role: { $in: ['admin', 'manager', 'sales_agent'] },
           deletedAt: null,
         }).select('_id');
 

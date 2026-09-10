@@ -86,12 +86,29 @@ export const intakeLeadSchema = z
     category: z.string().trim().optional(),
     leadid: z.string().trim().optional(),
     lead_type: z.string().trim().optional(),
+    // Inbound email fields
+    from: z.string().trim().optional(),
+    to: z.string().trim().optional(),
+    subject: z.string().trim().optional(),
+    text: z.string().trim().optional(),
+    body: z.string().trim().optional(),
+    message: z.string().trim().optional(),
+    html: z.string().trim().optional(),
     source: z.enum(LEAD_SOURCES).optional(),
   })
   .passthrough()
   .refine(
-    (data) => Boolean(data.mobile || data.phone || data.contactNumber),
-    { message: 'Mobile or phone is required', path: ['mobile'] }
+    (data) => Boolean(
+      data.mobile ||
+      data.phone ||
+      data.contactNumber ||
+      data.from ||
+      data.email ||
+      data.text ||
+      data.body ||
+      data.message
+    ),
+    { message: 'Lead contact info (mobile, phone, or email/message) is required', path: ['mobile'] }
   );
 
 export const changeStatusSchema = z.object({

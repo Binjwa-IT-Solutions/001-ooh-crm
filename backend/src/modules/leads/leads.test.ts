@@ -298,3 +298,56 @@ test('intakeLead detects duplicate JustDial lead within 24h', async () => {
   );
 });
 
+test('intakeLead parses structured email payload and starts SLA', async () => {
+  await withPatchedModel(
+    {
+      findOne: () => ({ exec: async () => null }),
+      create: async (payload: any) => payload,
+    },
+    async () => {
+      const emailPayload = {
+        from: 'Web Inquiries <noreply@mediaoctus.com>',
+        subject: 'New Website Inquiry',
+        text: 'Name: Rajesh Agrawal\nPhone: +91 98930 11223\nCity: Bhopal\nMessage: Need hoarding on MP Nagar',
+      };
+
+      const created: any = await LeadsService.intakeLead('Email', emailPayload);
+
+      assert.equal(created.status, 'New');
+      assert.equal(created.source, 'Email');
+      assert.equal(created.contactPerson, 'Rajesh Agrawal');
+      assert.equal(created.mobile, '9893011223');
+      assert.equal(created.city, 'Bhopal');
+      assert.ok(created.qualification?.notes?.includes('Need hoarding on MP Nagar'));
+      assert.ok(created.slaTimerEnd instanceof Date, 'SLA timer must be activated');
+    },
+  );
+});
+
+test('intakeLead parses unstructured free-text email and extracts phone via regex', async () => {
+  await withPatchedModel(
+    {
+      findOne: () => ({ exec: async () => null }),
+      create: async (payload: any) => payload,
+    },
+    async () => {
+      const emailPayload = {
+        from: 'Pooja Mehta <pooja.mehta@gmail.com>',
+        subject: 'Rate card inquiry',
+        text: 'Hello team, please share quotation for billboards on Ring Road. You can reach me at 9826198765.',
+      };
+
+      const created: any = await LeadsService.intakeLead('Email', emailPayload);
+
+      assert.equal(created.status, 'New');
+      assert.equal(created.source, 'Email');
+      assert.equal(created.contactPerson, 'Pooja Mehta');
+      assert.equal(created.email, 'pooja.mehta@gmail.com');
+      assert.equal(created.mobile, '9826198765');
+      assert.ok(created.qualification?.notes?.includes('Rate card inquiry'));
+      assert.ok(created.slaTimerEnd instanceof Date);
+    },
+  );
+});
+
+
