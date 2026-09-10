@@ -1,4 +1,4 @@
-import { Types } from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 import { RequestContext } from '../../core/context.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../core/errors/index.js';
 import { scopedFind, scopedFindOne, scopedCount } from '../../core/scoping/index.js';
@@ -12,6 +12,7 @@ import {
 import { STATUS_TRANSITIONS } from './leads.validator.js';
 import { toObjectId } from '../../core/db/basePlugin.js';
 import { AuthUser } from '../../core/auth/auth-model.js';
+import { notifyMany } from '../../core/notifications/index.js';
 
 export class LeadsService {
   /**
@@ -120,7 +121,7 @@ export class LeadsService {
       deletedAt: null,
     }).exec();
 
-    let status: LeadStatus = existing ? 'Duplicate' : 'New';
+    const status: LeadStatus = existing ? 'Duplicate' : 'New';
 
     const leadData: any = {
       ...data,
@@ -189,11 +190,28 @@ export class LeadsService {
     const now = new Date();
     const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    const mobile = payload.mobile || payload.phone || payload.contactNumber;
-    const companyName = payload.companyName || payload.company || payload.name || 'Web Lead';
+    const rawMobile = String(payload.mobile || payload.phone || payload.contactNumber || '').trim();
+    const digitsOnly = rawMobile.replace(/\D/g, '');
+    const mobile = digitsOnly.length >= 10 ? digitsOnly.slice(-10) : (digitsOnly || rawMobile);
+
+    const companyName = payload.company_name || payload.companyName || payload.company || payload.name || 'Web Lead';
     const contactPerson = payload.contactPerson || payload.name || 'Prospective Client';
-    const email = payload.email || undefined;
-    const city = payload.city || undefined;
+    const email = payload.email ? String(payload.email).trim().toLowerCase() : undefined;
+    const city = payload.city || payload.area || undefined;
+
+    // Rich contextual note for Justdial / third-party leads
+    let notes: string | undefined;
+    if (source === 'JustDial' || payload.leadid || payload.category) {
+      const noteParts: string[] = [];
+      if (payload.leadid) noteParts.push(`JD Lead ID: ${payload.leadid}`);
+      if (payload.category) noteParts.push(`Category: ${payload.category}`);
+      if (payload.area) noteParts.push(`Area: ${payload.area}`);
+      if (payload.pincode) noteParts.push(`Pincode: ${payload.pincode}`);
+      if (payload.lead_type) noteParts.push(`Type: ${payload.lead_type}`);
+      if (noteParts.length > 0) {
+        notes = `[JustDial Lead Details]\n${noteParts.join(' | ')}`;
+      }
+    }
 
     const existing = await Lead.findOne({
       mobile,
@@ -211,10 +229,12 @@ export class LeadsService {
       mobile,
       email,
       city,
+      qualification: notes ? { notes, city } : (city ? { city } : undefined),
       rawPayload: payload,
       receivedAt: now,
       status,
       notifiedAt: now,
+      slaTimerEnd: status === 'New' ? new Date(now.getTime() + 24 * 60 * 60 * 1000) : undefined,
       statusHistory: [
         {
           to: status,
@@ -223,6 +243,29 @@ export class LeadsService {
         },
       ],
     });
+
+    // Notify Admin, Manager, and Sales agents on new external lead intake
+    if (status === 'New' && mongoose.connection.readyState === 1) {
+      try {
+        const recipients = await AuthUser.find({
+          role: { $in: ['admin', 'manager', 'sales'] },
+          deletedAt: null,
+        }).select('_id');
+
+        const recipientIds = recipients.map((r: any) => r._id);
+        if (recipientIds.length > 0) {
+          await notifyMany(recipientIds, {
+            type: 'leads.new_intake',
+            title: `New Lead from ${source}!`,
+            body: `${companyName || contactPerson} (${mobile}) just arrived from ${source}.`,
+            link: `/leads/${lead._id}`,
+          });
+        }
+      } catch (err) {
+        // Best-effort: notification failure must never block lead creation
+        console.error('[intakeLead] Notification failed:', err);
+      }
+    }
 
     return lead;
   }

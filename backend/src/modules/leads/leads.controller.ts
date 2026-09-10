@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { UnauthorizedError } from '../../core/errors/index.js';
 import { LeadsService } from './leads.service.js';
 import {
   createLeadSchema,
@@ -43,6 +44,17 @@ export class LeadsController {
   }
 
   static async intake(req: Request, res: Response) {
+    const expectedSecret = process.env.WEBHOOK_SECRET || 'ooh_crm_secret_2026';
+    const providedSecret =
+      (req.headers['x-webhook-secret'] as string) ||
+      (req.headers['x-api-key'] as string) ||
+      (req.query.secret as string) ||
+      (req.query.key as string);
+
+    if (expectedSecret && providedSecret !== expectedSecret) {
+      throw new UnauthorizedError('Invalid or missing webhook secret token');
+    }
+
     const payload = intakeLeadSchema.parse(req.body);
     const source = (req.query.source as string) || payload.source || 'Website';
     const lead = await LeadsService.intakeLead(source, payload);
