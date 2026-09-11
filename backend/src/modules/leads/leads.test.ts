@@ -10,15 +10,15 @@ const FAKE_USER_CTX = { user: { id: '64b7f9a1c2d3e4f5a6b7c8d9', role: 'sales' } 
 function withPatchedModel(patches: Partial<typeof Lead>, fn: () => Promise<void>) {
   const originals: Partial<Record<string, any>> = {};
   for (const k of Object.keys(patches)) {
-    // @ts-ignore
+    // @ts-expect-error testing mock
     originals[k] = (Lead as any)[k];
-    // @ts-ignore
+    // @ts-expect-error testing mock
     (Lead as any)[k] = (patches as any)[k];
   }
 
   return fn().finally(() => {
     for (const k of Object.keys(patches)) {
-      // @ts-ignore
+      // @ts-expect-error testing mock
       (Lead as any)[k] = originals[k];
     }
   });
@@ -220,3 +220,163 @@ test('managerApproveLead records approval and remarks', async () => {
     LeadsService.getLead = origGetLead;
   }
 });
+
+test('intakeLead parses and sanitizes JustDial payload and starts SLA', async () => {
+  await withPatchedModel(
+    {
+      findOne: () => ({ exec: async () => null }),
+      create: async (payload: any) => payload,
+    },
+    async () => {
+      const jdPayload = {
+        leadid: 'JD-2026-984210',
+        lead_type: 'FRESH',
+        name: 'Amitabh Sharma',
+        mobile: '+91 98260-12345',
+        email: 'AMITABH@GMAIL.COM',
+        category: 'Outdoor Hoarding Advertising',
+        city: 'Indore',
+        area: 'Vijay Nagar',
+        pincode: '452010',
+      };
+
+      const created: any = await LeadsService.intakeLead('JustDial', jdPayload);
+
+      assert.equal(created.status, 'New');
+      assert.equal(created.source, 'JustDial');
+      assert.equal(created.mobile, '9826012345'); // Sanitized to 10 digits
+      assert.equal(created.contactPerson, 'Amitabh Sharma');
+      assert.equal(created.companyName, 'Amitabh Sharma');
+      assert.equal(created.email, 'amitabh@gmail.com');
+      assert.equal(created.city, 'Indore');
+      assert.ok(created.qualification?.notes?.includes('JD Lead ID: JD-2026-984210'));
+      assert.ok(created.qualification?.notes?.includes('Category: Outdoor Hoarding Advertising'));
+      assert.ok(created.qualification?.notes?.includes('Area: Vijay Nagar'));
+      assert.ok(created.slaTimerEnd instanceof Date, '24h SLA timer should be set');
+      assert.deepEqual(created.rawPayload, jdPayload);
+    },
+  );
+});
+
+test('intakeLead detects duplicate JustDial lead within 24h', async () => {
+  const now = new Date();
+  const previous = {
+    mobile: '9826012345',
+    source: 'JustDial',
+    createdAt: new Date(now.getTime() - 2 * 60 * 60 * 1000),
+  };
+
+  await withPatchedModel(
+    {
+      findOne: (query: any) => {
+        if (
+          query.mobile === previous.mobile &&
+          query.source === previous.source &&
+          previous.createdAt >= query.createdAt.$gte
+        ) {
+          return { exec: async () => previous };
+        }
+        return { exec: async () => null };
+      },
+      create: async (payload: any) => payload,
+    },
+    async () => {
+      const jdPayload = {
+        leadid: 'JD-2026-999999',
+        name: 'Amitabh Sharma',
+        mobile: '9826012345',
+        category: 'Billboard',
+      };
+
+      const created: any = await LeadsService.intakeLead('JustDial', jdPayload);
+
+      assert.equal(created.status, 'Duplicate');
+      assert.equal(created.source, 'JustDial');
+      assert.equal(created.slaTimerEnd, undefined, 'Duplicate lead should not start SLA');
+      assert.equal(created.statusHistory[0].reason, 'Duplicate within 24h');
+    },
+  );
+});
+
+test('intakeLead parses structured email payload and starts SLA', async () => {
+  await withPatchedModel(
+    {
+      findOne: () => ({ exec: async () => null }),
+      create: async (payload: any) => payload,
+    },
+    async () => {
+      const emailPayload = {
+        from: 'Web Inquiries <noreply@mediaoctus.com>',
+        subject: 'New Website Inquiry',
+        text: 'Name: Rajesh Agrawal\nPhone: +91 98930 11223\nCity: Bhopal\nMessage: Need hoarding on MP Nagar',
+      };
+
+      const created: any = await LeadsService.intakeLead('Email', emailPayload);
+
+      assert.equal(created.status, 'New');
+      assert.equal(created.source, 'Email');
+      assert.equal(created.contactPerson, 'Rajesh Agrawal');
+      assert.equal(created.mobile, '9893011223');
+      assert.equal(created.city, 'Bhopal');
+      assert.ok(created.qualification?.notes?.includes('Need hoarding on MP Nagar'));
+      assert.ok(created.slaTimerEnd instanceof Date, 'SLA timer must be activated');
+    },
+  );
+});
+
+test('intakeLead parses unstructured free-text email and extracts phone via regex', async () => {
+  await withPatchedModel(
+    {
+      findOne: () => ({ exec: async () => null }),
+      create: async (payload: any) => payload,
+    },
+    async () => {
+      const emailPayload = {
+        from: 'Pooja Mehta <pooja.mehta@gmail.com>',
+        subject: 'Rate card inquiry',
+        text: 'Hello team, please share quotation for billboards on Ring Road. You can reach me at 9826198765.',
+      };
+
+      const created: any = await LeadsService.intakeLead('Email', emailPayload);
+
+      assert.equal(created.status, 'New');
+      assert.equal(created.source, 'Email');
+      assert.equal(created.contactPerson, 'Pooja Mehta');
+      assert.equal(created.email, 'pooja.mehta@gmail.com');
+      assert.equal(created.mobile, '9826198765');
+      assert.ok(created.qualification?.notes?.includes('Rate card inquiry'));
+      assert.ok(created.slaTimerEnd instanceof Date);
+    },
+  );
+});
+
+test('intakeLead parses website payload with separate firstName, lastName and comments', async () => {
+  await withPatchedModel(
+    {
+      findOne: () => ({ exec: async () => null }),
+      create: async (payload: any) => payload,
+    },
+    async () => {
+      const webPayload = {
+        firstName: 'Rohan',
+        lastName: 'Patel',
+        phone: '+91 98250 12345',
+        email: 'rohan.patel@example.com',
+        comments: 'Need 3 hoardings on SG Highway for 1 month',
+      };
+
+      const created: any = await LeadsService.intakeLead('Website', webPayload);
+
+      assert.equal(created.status, 'New');
+      assert.equal(created.source, 'Website');
+      assert.equal(created.contactPerson, 'Rohan Patel');
+      assert.equal(created.mobile, '9825012345');
+      assert.equal(created.email, 'rohan.patel@example.com');
+      assert.equal(created.qualification?.notes, 'Need 3 hoardings on SG Highway for 1 month');
+      assert.ok(created.slaTimerEnd instanceof Date);
+    },
+  );
+});
+
+
+

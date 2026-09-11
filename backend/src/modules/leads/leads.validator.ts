@@ -4,7 +4,6 @@ import {
   LEAD_STATUSES,
   LOCATION_PREFERENCES,
   FOLLOW_UP_TYPES,
-  FOLLOW_UP_REASONS,
 } from './leads.model.js';
 
 export const objectIdSchema = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid object ID');
@@ -74,14 +73,48 @@ export const createLeadSchema = z.object({
 // A1: Intake schema must never fail on unexpected fields
 export const intakeLeadSchema = z
   .object({
-    companyName: z.string().trim().optional().default('Web Lead'),
-    contactPerson: z.string().trim().optional().default('Prospective Client'),
-    mobile: z.string().trim().min(1, 'Mobile is required'),
+    companyName: z.string().trim().optional(),
+    contactPerson: z.string().trim().optional(),
+    name: z.string().trim().optional(),
+    firstName: z.string().trim().optional(),
+    lastName: z.string().trim().optional(),
+    first_name: z.string().trim().optional(),
+    last_name: z.string().trim().optional(),
+    comments: z.string().trim().optional(),
+    mobile: z.string().trim().optional(),
+    phone: z.string().trim().optional(),
+    contactNumber: z.string().trim().optional(),
     email: z.string().trim().optional(),
     city: z.string().trim().optional(),
-    source: z.enum(LEAD_SOURCES).optional().default('Website'),
+    area: z.string().trim().optional(),
+    pincode: z.string().trim().optional(),
+    category: z.string().trim().optional(),
+    leadid: z.string().trim().optional(),
+    lead_type: z.string().trim().optional(),
+    // Inbound email fields
+    from: z.string().trim().optional(),
+    to: z.string().trim().optional(),
+    subject: z.string().trim().optional(),
+    text: z.string().trim().optional(),
+    body: z.string().trim().optional(),
+    message: z.string().trim().optional(),
+    html: z.string().trim().optional(),
+    source: z.enum(LEAD_SOURCES).optional(),
   })
-  .passthrough();
+  .passthrough()
+  .refine(
+    (data) => Boolean(
+      data.mobile ||
+      data.phone ||
+      data.contactNumber ||
+      data.from ||
+      data.email ||
+      data.text ||
+      data.body ||
+      data.message
+    ),
+    { message: 'Lead contact info (mobile, phone, or email/message) is required', path: ['mobile'] }
+  );
 
 export const changeStatusSchema = z.object({
   status: z.enum(LEAD_STATUSES),
