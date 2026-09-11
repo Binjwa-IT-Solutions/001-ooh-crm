@@ -350,4 +350,33 @@ test('intakeLead parses unstructured free-text email and extracts phone via rege
   );
 });
 
+test('intakeLead parses website payload with separate firstName, lastName and comments', async () => {
+  await withPatchedModel(
+    {
+      findOne: () => ({ exec: async () => null }),
+      create: async (payload: any) => payload,
+    },
+    async () => {
+      const webPayload = {
+        firstName: 'Rohan',
+        lastName: 'Patel',
+        phone: '+91 98250 12345',
+        email: 'rohan.patel@example.com',
+        comments: 'Need 3 hoardings on SG Highway for 1 month',
+      };
+
+      const created: any = await LeadsService.intakeLead('Website', webPayload);
+
+      assert.equal(created.status, 'New');
+      assert.equal(created.source, 'Website');
+      assert.equal(created.contactPerson, 'Rohan Patel');
+      assert.equal(created.mobile, '9825012345');
+      assert.equal(created.email, 'rohan.patel@example.com');
+      assert.equal(created.qualification?.notes, 'Need 3 hoardings on SG Highway for 1 month');
+      assert.ok(created.slaTimerEnd instanceof Date);
+    },
+  );
+});
+
+
 

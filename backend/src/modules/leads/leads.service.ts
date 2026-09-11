@@ -250,12 +250,17 @@ export class LeadsService {
     const digitsOnly = rawMobile.replace(/\D/g, '');
     const mobile = digitsOnly.length >= 10 ? digitsOnly.slice(-10) : (digitsOnly || rawMobile || 'Not Provided');
 
-    const contactPerson = payload.contactPerson || payload.name || emailContactPerson || 'Prospective Client';
+    const combinedName = [
+      payload.firstName || payload.first_name || payload['First Name'],
+      payload.lastName || payload.last_name || payload['Last Name'],
+    ].filter(Boolean).join(' ').trim();
+
+    const contactPerson = payload.contactPerson || payload.name || combinedName || emailContactPerson || 'Prospective Client';
     const companyName = payload.company_name || payload.companyName || payload.company || contactPerson || 'Web Lead';
     const email = payload.email ? String(payload.email).trim().toLowerCase() : (emailAddress || undefined);
     const city = payload.city || payload.area || emailCity || undefined;
 
-    // Rich contextual note for Justdial / third-party leads
+    // Rich contextual note for Justdial / third-party / website leads
     let notes: string | undefined = emailNotes;
     if (source === 'JustDial' || payload.leadid || payload.category) {
       const noteParts: string[] = [];
@@ -267,6 +272,8 @@ export class LeadsService {
       if (noteParts.length > 0) {
         notes = `[JustDial Lead Details]\n${noteParts.join(' | ')}`;
       }
+    } else if (!notes && (payload.comments || payload.comment || payload.message || payload.questions || payload['Comments / Questions'])) {
+      notes = String(payload.comments || payload.comment || payload.message || payload.questions || payload['Comments / Questions']).trim();
     }
 
     const duplicateFilter: Record<string, any> = {
