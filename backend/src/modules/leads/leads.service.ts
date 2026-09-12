@@ -13,6 +13,7 @@ import { STATUS_TRANSITIONS } from './leads.validator.js';
 import { toObjectId } from '../../core/db/basePlugin.js';
 import { AuthUser } from '../../core/auth/auth-model.js';
 import { notifyMany } from '../../core/notifications/index.js';
+import { extractLeadWithGemini } from './leads.ai.js';
 
 export class LeadsService {
   /**
@@ -196,27 +197,17 @@ export class LeadsService {
     let emailMobile: string | undefined;
     let emailCity: string | undefined;
     let emailNotes: string | undefined;
+    let emailCompanyName: string | undefined;
+    let emailBudgetPaise: number | undefined;
+    let emailLocationPreference: any | undefined;
+    let emailCampaignDuration: string | undefined;
 
     if (source === 'Email' || payload.from || payload.subject || payload.text || payload.body) {
-      // 1. Extract Sender Name & Email from "From" header
-      const fromStr = String(payload.from || '').trim();
-      if (fromStr) {
-        const fromMatch = fromStr.match(/^([^<]+)<([^>]+)>$/);
-        if (fromMatch) {
-          emailContactPerson = fromMatch[1].trim().replace(/^["']|["']$/g, '');
-          emailAddress = fromMatch[2].trim().toLowerCase();
-        } else if (fromStr.includes('@')) {
-          emailAddress = fromStr.toLowerCase();
-          const localPart = fromStr.split('@')[0].replace(/[._-]/g, ' ');
-          emailContactPerson = localPart.charAt(0).toUpperCase() + localPart.slice(1);
-        }
-      }
-
-      // 2. Combine text and body, strip HTML tags
+      // 1. Combine text and body, strip HTML tags
       const rawText = String(payload.text || payload.body || payload.message || payload.html || '').trim();
       const plainText = rawText.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ');
 
-      // 3. Check for structured fields (e.g. from website forms forwarded via email)
+      // 2. Check for explicit structured form fields first (e.g. Website Form forwarded via email: Name: ..., Phone: ...)
       const nameMatch = plainText.match(/(?:Name|Contact Person|Full Name)\s*[:=-]\s*([^\n\r,;]+)/i);
       if (nameMatch) emailContactPerson = nameMatch[1].trim();
 
@@ -224,11 +215,53 @@ export class LeadsService {
       if (cityMatch) emailCity = cityMatch[1].trim();
 
       const phoneMatch = plainText.match(/(?:Phone|Mobile|Contact|Cell|Tel|WhatsApp)\s*[:=-]\s*([^\n\r,;]+)/i);
-      if (phoneMatch) {
-        emailMobile = phoneMatch[1].trim();
+      if (phoneMatch) emailMobile = phoneMatch[1].trim();
+
+      // 3. Optional Gemini AI Extraction (Runs when GEMINI_API_KEY is configured and not in unit test mock)
+      if (process.env.GEMINI_API_KEY && process.env.NODE_ENV !== 'test') {
+        try {
+          const aiData = await extractLeadWithGemini({
+            from: payload.from,
+            subject: payload.subject,
+            text: payload.text || payload.body || payload.message,
+          });
+          if (aiData) {
+            if (!emailContactPerson && aiData.contactPerson) emailContactPerson = aiData.contactPerson;
+            if (aiData.companyName) emailCompanyName = aiData.companyName;
+            if (!emailAddress && aiData.email) emailAddress = aiData.email;
+            if (!emailMobile && aiData.mobile) emailMobile = aiData.mobile;
+            if (!emailCity && aiData.city) emailCity = aiData.city;
+            if (aiData.budgetInRupees && !isNaN(aiData.budgetInRupees)) {
+              emailBudgetPaise = Math.round(Number(aiData.budgetInRupees) * 100);
+            }
+            if (aiData.locationPreference) emailLocationPreference = aiData.locationPreference;
+            if (aiData.campaignDuration) emailCampaignDuration = aiData.campaignDuration;
+            if (aiData.summary) {
+              emailNotes = `[AI Lead Summary]\n${aiData.summary}`;
+            }
+          }
+        } catch (aiErr: any) {
+          console.warn('[Leads Intake] AI extraction failed, seamlessly using regex fallback:', aiErr?.message);
+        }
       }
 
-      // 4. Fallback: Search for Indian 10-digit mobile number regex across the whole email body
+      // 4. Extract Sender Name & Email from "From" header (Only if not already found)
+      const fromStr = String(payload.from || '').trim();
+      if (fromStr) {
+        const fromMatch = fromStr.match(/^([^<]+)<([^>]+)>$/);
+        if (fromMatch) {
+          if (!emailContactPerson) emailContactPerson = fromMatch[1].trim().replace(/^["']|["']$/g, '');
+          if (!emailAddress) emailAddress = fromMatch[2].trim().toLowerCase();
+        } else if (fromStr.includes('@')) {
+          if (!emailAddress) emailAddress = fromStr.toLowerCase();
+          if (!emailContactPerson) {
+            const localPart = fromStr.split('@')[0].replace(/[._-]/g, ' ');
+            emailContactPerson = localPart.charAt(0).toUpperCase() + localPart.slice(1);
+          }
+        }
+      }
+
+      // 5. Fallback: Search for Indian 10-digit mobile number regex across the whole email body
       if (!emailMobile) {
         const genericPhoneMatch = plainText.match(/(?:(?:\+|00)?91[\s.-]?)?[6-9]\d{4}[\s.-]?\d{5}|[6-9]\d{9}/);
         if (genericPhoneMatch) {
@@ -236,14 +269,28 @@ export class LeadsService {
         }
       }
 
-      // 5. Build rich notes with subject and full message
+      // 6. Build rich notes (Preserves AI summary, key highlights, and original message)
       const noteSections: string[] = [];
-      if (payload.subject) noteSections.push(`Subject: ${payload.subject}`);
-      if (payload.from) noteSections.push(`From: ${payload.from}`);
-      if (plainText) noteSections.push(`Message:\n${plainText.trim()}`);
-      if (noteSections.length > 0) {
-        emailNotes = `[Email Lead Details]\n${noteSections.join('\n')}`;
+      if (emailNotes) {
+        noteSections.push(emailNotes);
+        const highlights: string[] = [];
+        if (emailBudgetPaise) highlights.push(`• Budget: ₹${(emailBudgetPaise / 100).toLocaleString('en-IN')}`);
+        if (emailCampaignDuration) highlights.push(`• Duration: ${emailCampaignDuration}`);
+        if (emailCity) highlights.push(`• Location: ${emailCity}`);
+        if (highlights.length > 0) {
+          noteSections.push(`[Key Highlights]\n${highlights.join('\n')}`);
+        }
       }
+
+      const originalDetails: string[] = [];
+      if (payload.subject) originalDetails.push(`Subject: ${payload.subject}`);
+      if (payload.from) originalDetails.push(`From: ${payload.from}`);
+      if (plainText) originalDetails.push(`Message:\n${plainText.trim()}`);
+      if (originalDetails.length > 0) {
+        noteSections.push(`[Email Lead Details]\n${originalDetails.join('\n')}`);
+      }
+
+      emailNotes = noteSections.join('\n\n');
     }
 
     const rawMobile = String(payload.mobile || payload.phone || payload.contactNumber || emailMobile || '').trim();
@@ -256,7 +303,7 @@ export class LeadsService {
     ].filter(Boolean).join(' ').trim();
 
     const contactPerson = payload.contactPerson || payload.name || combinedName || emailContactPerson || 'Prospective Client';
-    const companyName = payload.company_name || payload.companyName || payload.company || contactPerson || 'Web Lead';
+    const companyName = payload.company_name || payload.companyName || payload.company || emailCompanyName || contactPerson || 'Web Lead';
     const email = payload.email ? String(payload.email).trim().toLowerCase() : (emailAddress || undefined);
     const city = payload.city || payload.area || emailCity || undefined;
 
@@ -293,6 +340,14 @@ export class LeadsService {
 
     const status: LeadStatus = existing ? 'Duplicate' : 'New';
 
+    // Build qualification block with notes, city, and optional AI-extracted fields
+    const qualificationData: any = {};
+    if (city) qualificationData.city = city;
+    if (notes) qualificationData.notes = notes;
+    if (emailBudgetPaise) qualificationData.budget = emailBudgetPaise;
+    if (emailLocationPreference) qualificationData.locationPreference = emailLocationPreference;
+    if (emailCampaignDuration) qualificationData.campaignDuration = emailCampaignDuration;
+
     const lead = await Lead.create({
       source: source as LeadSource,
       companyName,
@@ -300,7 +355,7 @@ export class LeadsService {
       mobile,
       email,
       city,
-      qualification: notes ? { notes, city } : (city ? { city } : undefined),
+      qualification: Object.keys(qualificationData).length > 0 ? qualificationData : undefined,
       rawPayload: payload,
       receivedAt: now,
       status,
