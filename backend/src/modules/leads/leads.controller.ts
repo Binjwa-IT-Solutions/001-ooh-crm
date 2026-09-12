@@ -44,7 +44,7 @@ export class LeadsController {
   }
 
   static async intake(req: Request, res: Response) {
-    const expectedSecret = process.env.WEBHOOK_SECRET || 'ooh_crm_secret_2026';
+    const expectedSecret = process.env.WEBHOOK_SECRET || '3KwFNlUUzpHUBXWR8VfaCPFQ6uAPVBq9';
     const providedSecret =
       (req.headers['x-webhook-secret'] as string) ||
       (req.headers['x-api-key'] as string) ||
