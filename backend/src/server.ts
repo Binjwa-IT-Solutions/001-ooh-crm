@@ -2,10 +2,12 @@ import { config } from './config/index.js';
 import app from './app.js';
 import { connectDatabase, disconnectDatabase } from './core/db/connect.js';
 import { startJobs, stopJobs } from './jobs/index.js';
+import { initializeHRDefaults } from './modules/HR/services/hr-init.service.js';
 
 async function startServer() {
   try {
     await connectDatabase();
+    await initializeHRDefaults();
     startJobs();
 
     const server = app.listen(config.port, () => {

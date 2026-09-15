@@ -66,6 +66,17 @@ export async function getMyRequests(req: Request, res: Response, next: NextFunct
   }
 }
 
+export async function getCalendarLeaves(req: Request, res: Response, next: NextFunction) {
+  try {
+    const year = req.query.year ? Number(req.query.year) : undefined;
+    const month = req.query.month !== undefined ? Number(req.query.month) : undefined;
+    const result = await service.getCalendarLeaves(year, month, req.ctx!);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getTeamRequests(req: Request, res: Response, next: NextFunction) {
   try {
     const result = await service.getTeamRequests(req.ctx!);

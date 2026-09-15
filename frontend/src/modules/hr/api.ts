@@ -88,6 +88,14 @@ export const leaveApi = {
     const res = await api.post<LeaveRequest>(`/api/leave-requests/${id}/reject`, { status: 'Rejected', rejectionReason });
     return res;
   },
+  getCalendarLeaves: async (year?: number, month?: number) => {
+    const params = new URLSearchParams();
+    if (year !== undefined) params.set('year', String(year));
+    if (month !== undefined) params.set('month', String(month));
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await api.get<LeaveRequest[]>(`/api/leave-requests/calendar${qs}`);
+    return res;
+  },
 };
 
 export const holidayApi = {
