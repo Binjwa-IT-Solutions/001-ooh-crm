@@ -6,7 +6,7 @@ import { useAuth } from '@/shared/auth/auth-context';
 import { useLeads } from '@/modules/leads/hooks/use-leads';
 import { leadsApi } from '@/modules/leads/api';
 import { LeadStatus, LeadSource, Lead, LogCallValues } from '@/modules/leads/types';
-import { Card, Button, Badge, Spinner, Field, SelectField, Alert } from '@/shared/ui';
+import { Card, Button, Badge, Spinner, Field, SelectField, Alert, Modal, TextAreaField } from '@/shared/ui';
 import LogCallModal from '@/modules/leads/component/log-call-modal';
 import { Timer } from 'lucide-react';
 
@@ -21,6 +21,7 @@ const STATUS_STYLES: Record<string, string> = {
   Lost: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300',
   Duplicate: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-300',
   duplicate: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-300',
+  Rejected: 'border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300',
 };
 
 function StatusBadge({ status }: { status: LeadStatus }) {
@@ -93,7 +94,7 @@ function SlaCountdown({ end }: { end?: string | null }) {
 export default function LeadsPage() {
   const { user } = useAuth();
   const isManagerOrAdmin = ['admin', 'manager'].includes(user?.role?.toLowerCase() || '');
-  const [activeTab, setActiveTab] = useState<'my-leads' | 'unclaimed' | 'all'>('my-leads');
+  const [activeTab, setActiveTab] = useState<'my-leads' | 'unclaimed' | 'all' | 'rejected'>('my-leads');
 
   // Filters
   const [search, setSearch] = useState('');
@@ -108,9 +109,16 @@ export default function LeadsPage() {
   const [logModalOpen, setLogModalOpen] = useState(false);
   const [logTargetId, setLogTargetId] = useState<string | null>(null);
 
+  // Reject Modal State
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState<string>('Spam / Bot / Fake Number');
+  const [rejectCustomNote, setRejectCustomNote] = useState<string>('');
+  const [isRejecting, setIsRejecting] = useState(false);
+
   const filters = {
     search,
-    status,
+    status: activeTab === 'rejected' ? ('Rejected' as LeadStatus) : status,
     city,
     source,
     page,
@@ -164,6 +172,41 @@ export default function LeadsPage() {
     }
   };
 
+  const openRejectModal = (leadId: string) => {
+    setRejectTargetId(leadId);
+    setRejectReason('Spam / Bot / Fake Number');
+    setRejectCustomNote('');
+    setRejectModalOpen(true);
+  };
+
+  const handleConfirmReject = async () => {
+    if (!rejectTargetId) return;
+    setIsRejecting(true);
+    try {
+      const finalReason = rejectReason === 'Other' && rejectCustomNote.trim()
+        ? `Other: ${rejectCustomNote.trim()}`
+        : rejectReason;
+      await leadsApi.changeStatus(rejectTargetId, { status: 'Rejected', lostReason: finalReason });
+      showToast('Lead marked as Rejected and moved to Rejected tab', 'success');
+      setRejectModalOpen(false);
+      await mutate();
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to reject lead', 'error');
+    } finally {
+      setIsRejecting(false);
+    }
+  };
+
+  const handleRestore = async (leadId: string) => {
+    try {
+      await leadsApi.changeStatus(leadId, { status: 'New' });
+      showToast('Lead restored to Unclaimed pool', 'success');
+      await mutate();
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to restore lead', 'error');
+    }
+  };
+
   const displayedLeads = (data?.data ?? []).filter((l) => !claimedIds.includes(l._id || l.id));
 
   return (
@@ -209,6 +252,16 @@ export default function LeadsPage() {
             All Leads (Team)
           </button>
         )}
+        <button
+          onClick={() => { setActiveTab('rejected'); setPage(1); }}
+          className={`h-11 px-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+            activeTab === 'rejected'
+              ? 'border-primary text-primary dark:border-rose-400 dark:text-rose-400 font-semibold'
+              : 'border-transparent text-text-secondary hover:text-text-primary'
+          }`}
+        >
+          Rejected Leads
+        </button>
       </div>
 
       <Card className="grid grid-cols-1 gap-8 p-6 md:grid-cols-2 xl:grid-cols-4">
@@ -275,7 +328,9 @@ export default function LeadsPage() {
                   <th className="px-4 py-3 font-medium">Company</th>
                   <th className="px-4 py-3 font-medium">Contact</th>
                   <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Next Action</th>
+                  <th className="px-4 py-3 font-medium">
+                    {activeTab === 'unclaimed' ? 'Received' : activeTab === 'rejected' ? 'Rejection Reason' : 'Next Action'}
+                  </th>
                   <th className="px-4 py-3 font-medium">Source</th>
                   <th className="px-4 py-3 font-medium">Agent</th>
                   <th className="px-4 py-3 font-medium">Action</th>
@@ -308,13 +363,23 @@ export default function LeadsPage() {
                         <div className="text-xs">{lead.mobile}</div>
                       </td>
                       <td className="px-4 py-3">
-                        <StatusBadge status={lead.status} />
-                        {((lead.status === 'New' || lead.status === 'Contacted') && !lead.firstResponseAt && !lead.firstCallAt) && (
-                          <SlaCountdown end={lead.slaTimerEnd || (lead.createdAt ? new Date(new Date(lead.createdAt).getTime() + 24 * 60 * 60 * 1000).toISOString() : null)} />
-                        )}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <StatusBadge status={lead.status} />
+                          {activeTab !== 'unclaimed' && activeTab !== 'rejected' && ((lead.status === 'New' || lead.status === 'Contacted') && !lead.firstResponseAt && !lead.firstCallAt) && (
+                            <SlaCountdown end={lead.slaTimerEnd || (lead.createdAt ? new Date(new Date(lead.createdAt).getTime() + 24 * 60 * 60 * 1000).toISOString() : null)} />
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
-                        {lead.nextActionDate ? (
+                        {activeTab === 'unclaimed' ? (
+                          <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                            {formatDateTime(lead.createdAt || (lead as any).receivedAt)}
+                          </span>
+                        ) : activeTab === 'rejected' ? (
+                          <span className="text-xs text-rose-600 dark:text-rose-400 font-medium italic">
+                            {(lead as any).qualification?.lostReason || (lead as any).statusHistory?.slice(-1)[0]?.reason || 'Junk / Irrelevant'}
+                          </span>
+                        ) : lead.nextActionDate ? (
                           <span
                             className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${
                               isOverdue
@@ -339,10 +404,28 @@ export default function LeadsPage() {
                             </Button>
                             <Button
                               variant="ghost"
-                              className="bg-[#F9DADA] text-primary hover:bg-[#F2CACA]"
-                              onClick={() => openLogModal(lead._id || lead.id)}
+                              className="bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900"
+                              onClick={() => openRejectModal(lead._id || lead.id)}
                             >
-                              Log Action
+                              Reject
+                            </Button>
+                          </div>
+                        ) : activeTab === 'rejected' ? (
+                          <div className="flex items-center gap-2">
+                            <Link href={`/leads/${lead._id || lead.id}`}>
+                              <Button
+                                variant="ghost"
+                                className="bg-blue-50 text-blue-700 border border-blue-200/60 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/50"
+                              >
+                                View
+                              </Button>
+                            </Link>
+                            <Button
+                              variant="secondary"
+                              className="text-xs"
+                              onClick={() => handleRestore(lead._id || lead.id)}
+                            >
+                              Restore
                             </Button>
                           </div>
                         ) : (
@@ -401,6 +484,56 @@ export default function LeadsPage() {
 
       {/* Log Action Modal */}
       <LogCallModal open={logModalOpen} onClose={() => setLogModalOpen(false)} onSubmit={submitLogFollowUp} />
+
+      {/* Reject Lead Modal */}
+      <Modal
+        open={rejectModalOpen}
+        onClose={() => setRejectModalOpen(false)}
+        title="Reject Lead / Mark as Junk"
+      >
+        <div className="space-y-4 pt-2">
+          <p className="text-xs text-slate-600 dark:text-slate-300">
+            This inquiry will be removed from the active Unclaimed pool and moved to the <strong>Rejected Leads</strong> tab.
+          </p>
+
+          <SelectField
+            label="Rejection Reason *"
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            options={[
+              { value: 'Spam / Bot / Fake Number', label: 'Spam / Bot / Fake Number' },
+              { value: 'Job / Career Inquiry', label: 'Job / Career Inquiry (Looking for job/resumé)' },
+              { value: 'Irrelevant Service (Not OOH / Billboard)', label: 'Irrelevant Service (e.g. Visiting card/pamphlet printing)' },
+              { value: 'Budget Too Low / Student Inquiry', label: 'Budget Too Low / Student Inquiry' },
+              { value: 'Duplicate / Accidental Submission', label: 'Duplicate / Accidental Submission' },
+              { value: 'Other', label: 'Other (Specify reason below)' },
+            ]}
+          />
+
+          {rejectReason === 'Other' && (
+            <TextAreaField
+              label="Specify Reason"
+              placeholder="Describe why this lead is being rejected..."
+              value={rejectCustomNote}
+              onChange={(e) => setRejectCustomNote(e.target.value)}
+              rows={2}
+            />
+          )}
+
+          <div className="flex justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+            <Button variant="secondary" onClick={() => setRejectModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              isLoading={isRejecting}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+              onClick={handleConfirmReject}
+            >
+              Confirm Reject
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Toasts */}
       <div className="fixed right-6 bottom-6 flex flex-col gap-2">

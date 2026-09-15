@@ -737,7 +737,7 @@ export default function LeadDetailPage() {
                       {item.type === 'status_change' ? (
                         <div>
                           <div className="flex items-center gap-1.5 flex-wrap text-sm font-semibold text-slate-900 dark:text-white">
-                            {item.from ? (
+                            {item.from && item.from !== item.to ? (
                               <>
                                 <span>Status changed from</span>
                                 <span className={STATUS_TEXT_COLORS[item.from] || 'text-slate-700 dark:text-slate-300'}>
@@ -748,6 +748,10 @@ export default function LeadDetailPage() {
                                   {item.to}
                                 </span>
                               </>
+                            ) : item.from && item.from === item.to ? (
+                              <>
+                                <span>{item.reason || 'Lead event recorded'}</span>
+                              </>
                             ) : (
                               <>
                                 <span>Lead created with status</span>
@@ -757,7 +761,7 @@ export default function LeadDetailPage() {
                               </>
                             )}
                           </div>
-                          {item.reason && (
+                          {item.reason && !(item.from && item.from === item.to) && (
                             <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 italic">
                               Reason: "{item.reason}"
                             </p>

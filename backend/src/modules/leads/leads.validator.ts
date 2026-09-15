@@ -9,7 +9,7 @@ import {
 export const objectIdSchema = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid object ID');
 
 export const STATUS_TRANSITIONS: Record<string, string[]> = {
-  New: ['Contacted', 'Lost'],
+  New: ['Contacted', 'Lost', 'Rejected'],
   Contacted: ['Interested', 'Lost'],
   Interested: ['Qualified', 'Lost'],
   Qualified: ['Proposal Sent', 'Negotiation', 'Lost'],
@@ -19,6 +19,7 @@ export const STATUS_TRANSITIONS: Record<string, string[]> = {
   Lost: [],
   Duplicate: [],
   duplicate: [],
+  Rejected: ['New'],
 };
 
 export const leadQualificationSchema = z.object({
