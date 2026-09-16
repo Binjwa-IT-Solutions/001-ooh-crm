@@ -57,6 +57,7 @@ export interface IFollowUpLog {
   user?: Types.ObjectId | null;
   campaignId?: Types.ObjectId | null;
   followUpType?: FollowUpType;
+  contactedPerson?: string;
   reason?: string;
   remarks?: string;
   note?: string;
@@ -135,6 +136,7 @@ const followUpLogSchema = new Schema<IFollowUpLog>(
     user: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     campaignId: { type: Schema.Types.ObjectId, ref: 'Campaign', default: null },
     followUpType: { type: String, enum: FOLLOW_UP_TYPES, default: 'Call' },
+    contactedPerson: { type: String, trim: true },
     reason: { type: String, trim: true },
     remarks: { type: String, trim: true },
     note: { type: String, trim: true },

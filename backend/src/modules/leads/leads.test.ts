@@ -504,3 +504,51 @@ test('createLead supports secondary concern person, designations, and company ad
   );
 });
 
+test('logFollowUpLead records contactedPerson and updates lead profile fields during call', async () => {
+  const fakeLead: any = {
+    _id: '6a87e4b4c93947ba317108bb',
+    status: 'Contacted',
+    contactPerson: 'Samyak Jain',
+    mobile: '9876543210',
+    callLogs: [],
+    qualification: {},
+    save: async () => fakeLead,
+    populate: async () => fakeLead,
+  };
+
+  const origGetLead = LeadsService.getLead;
+  LeadsService.getLead = async () => fakeLead;
+
+  try {
+    const res = await LeadsService.logFollowUpLead(
+      '6a87e4b4c93947ba317108bb',
+      {
+        followUpType: 'Call',
+        contactedPerson: 'Samyak Jain (Marketing Director)',
+        remarks: 'Client agreed to 3-month campaign on Ring Road',
+        budget: 45000000,
+        email: 'samyak@client.com',
+        companyAddress: 'Suite 402, Trade Tower',
+        companyLocation: 'BKC',
+        secondaryContactPerson: 'Amit Verma',
+        secondaryDesignation: 'Media Planner',
+        secondaryMobile: '9123456789',
+      },
+      FAKE_USER_CTX,
+    );
+
+    assert.equal(res.callLogs?.length, 1);
+    assert.equal(res.callLogs?.[0].contactedPerson, 'Samyak Jain (Marketing Director)');
+    assert.equal(res.qualification?.budget, 45000000);
+    assert.equal(res.email, 'samyak@client.com');
+    assert.equal(res.companyAddress, 'Suite 402, Trade Tower');
+    assert.equal(res.companyLocation, 'BKC');
+    assert.equal(res.secondaryContactPerson, 'Amit Verma');
+    assert.equal(res.secondaryDesignation, 'Media Planner');
+    assert.equal(res.secondaryMobile, '9123456789');
+  } finally {
+    LeadsService.getLead = origGetLead;
+  }
+});
+
+

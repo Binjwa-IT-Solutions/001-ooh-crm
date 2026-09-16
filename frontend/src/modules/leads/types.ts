@@ -73,6 +73,7 @@ export interface FollowUpLog {
   user?: any;
   campaignId?: string | null;
   followUpType?: FollowUpType;
+  contactedPerson?: string;
   reason?: string;
   remarks?: string;
   note?: string;
@@ -94,6 +95,7 @@ export interface ActivityItem {
   note?: string;
   remarks?: string;
   followUpType?: FollowUpType;
+  contactedPerson?: string;
   nextActionDate?: string | null;
   delayResponsibility?: string;
   approved?: boolean;
@@ -194,6 +196,7 @@ export type CallOutcome = 'Connected' | 'Busy' | 'Left Message' | 'No Answer';
 export interface LogCallValues {
   outcome?: CallOutcome;
   followUpType?: FollowUpType;
+  contactedPerson?: string;
   campaignId?: string;
   reason?: string;
   remarks?: string;
@@ -201,4 +204,11 @@ export interface LogCallValues {
   nextActionDate?: string;
   delayResponsibility?: string;
   durationSec?: number;
+  budget?: number;
+  secondaryContactPerson?: string;
+  secondaryDesignation?: string;
+  secondaryMobile?: string;
+  companyAddress?: string;
+  companyLocation?: string;
+  email?: string;
 }

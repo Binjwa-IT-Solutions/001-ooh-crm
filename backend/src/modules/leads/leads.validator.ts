@@ -41,6 +41,7 @@ export const leadQualificationSchema = z.object({
 
 export const logFollowUpSchema = z.object({
   followUpType: z.enum(FOLLOW_UP_TYPES).default('Call'),
+  contactedPerson: z.string().trim().optional(),
   campaignId: z.string().trim().optional(),
   reason: z.string().trim().optional(),
   remarks: z.string().trim().optional(),
@@ -48,6 +49,17 @@ export const logFollowUpSchema = z.object({
   nextActionDate: z.coerce.date().optional(),
   delayResponsibility: z.string().trim().optional(),
   durationSec: z.coerce.number().min(0).optional(),
+  budget: z.coerce
+    .number()
+    .min(0)
+    .optional()
+    .transform((val) => (val !== undefined && !Number.isNaN(val) ? Math.round(val * 100) : undefined)),
+  secondaryContactPerson: z.string().trim().optional(),
+  secondaryDesignation: z.string().trim().optional(),
+  secondaryMobile: z.string().trim().optional(),
+  companyAddress: z.string().trim().optional(),
+  companyLocation: z.string().trim().optional(),
+  email: z.string().trim().email('Invalid email').optional().or(z.literal('')),
 });
 
 export const managerApprovalSchema = z.object({

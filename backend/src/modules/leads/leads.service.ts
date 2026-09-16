@@ -476,6 +476,7 @@ export class LeadsService {
     id: string,
     payload: {
       followUpType?: FollowUpType;
+      contactedPerson?: string;
       campaignId?: string;
       reason?: string;
       remarks?: string;
@@ -483,6 +484,13 @@ export class LeadsService {
       nextActionDate?: Date;
       delayResponsibility?: string;
       durationSec?: number;
+      budget?: number;
+      secondaryContactPerson?: string;
+      secondaryDesignation?: string;
+      secondaryMobile?: string;
+      companyAddress?: string;
+      companyLocation?: string;
+      email?: string;
     },
     ctx: RequestContext,
   ): Promise<ILead> {
@@ -495,6 +503,7 @@ export class LeadsService {
       user: toObjectId(ctx.user.id),
       campaignId: payload.campaignId && Types.ObjectId.isValid(payload.campaignId) ? toObjectId(payload.campaignId) : undefined,
       followUpType: payload.followUpType || 'Call',
+      contactedPerson: payload.contactedPerson || undefined,
       reason: payload.reason ?? '',
       remarks: payload.remarks || payload.note || '',
       note: payload.note || payload.remarks || '',
@@ -506,6 +515,30 @@ export class LeadsService {
 
     lead.callLogs = lead.callLogs || [];
     lead.callLogs.push(followUpEntry);
+
+    // Optional quick profile updates during call
+    if (payload.budget !== undefined) {
+      lead.qualification = lead.qualification || {};
+      lead.qualification.budget = payload.budget;
+    }
+    if (payload.secondaryContactPerson) {
+      lead.secondaryContactPerson = payload.secondaryContactPerson;
+    }
+    if (payload.secondaryDesignation) {
+      lead.secondaryDesignation = payload.secondaryDesignation;
+    }
+    if (payload.secondaryMobile) {
+      lead.secondaryMobile = payload.secondaryMobile;
+    }
+    if (payload.companyAddress) {
+      lead.companyAddress = payload.companyAddress;
+    }
+    if (payload.companyLocation) {
+      lead.companyLocation = payload.companyLocation;
+    }
+    if (payload.email) {
+      lead.email = payload.email.toLowerCase().trim();
+    }
 
     if (payload.nextActionDate) {
       lead.nextActionDate = payload.nextActionDate;
@@ -812,6 +845,7 @@ export class LeadsService {
         activities.push({
           type: 'follow_up',
           followUpType: cl.followUpType || 'Call',
+          contactedPerson: cl.contactedPerson,
           campaignId: cId,
           campaignName: cId ? campaignMap.get(cId) : undefined,
           reason: cl.reason,

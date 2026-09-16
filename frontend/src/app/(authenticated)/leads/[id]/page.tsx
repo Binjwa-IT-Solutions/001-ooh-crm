@@ -193,14 +193,22 @@ export default function LeadDetailPage() {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
 
+  const refreshActivities = async () => {
+    if (!id) return;
+    setLoadingActivities(true);
+    try {
+      const res = await leadsApi.getActivity(id);
+      setActivities(res.activities || []);
+    } catch {
+      setActivities([]);
+    } finally {
+      setLoadingActivities(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'activity' && id) {
-      setLoadingActivities(true);
-      leadsApi
-        .getActivity(id)
-        .then((res) => setActivities(res.activities || []))
-        .catch(() => setActivities([]))
-        .finally(() => setLoadingActivities(false));
+      refreshActivities();
     }
   }, [activeTab, id, lead?.status]);
 
@@ -290,6 +298,7 @@ export default function LeadDetailPage() {
       await leadsApi.logFollowUp(lead._id || lead.id, payload);
       setLogModalOpen(false);
       await mutate();
+      await refreshActivities();
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Failed to save action record');
     }
@@ -1066,6 +1075,12 @@ export default function LeadDetailPage() {
                                 Campaign: {item.campaignName}
                               </span>
                             )}
+                            {item.contactedPerson && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-[#8B2424] border border-[#F2CACA] dark:bg-red-950/60 dark:text-red-300 dark:border-red-900">
+                                <User className="w-3 h-3 shrink-0" />
+                                With: {item.contactedPerson}
+                              </span>
+                            )}
                           </div>
                           {item.nextActionDate && (
                             <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 px-2 py-0.5 rounded">
@@ -1162,6 +1177,33 @@ export default function LeadDetailPage() {
         onClose={() => setLogModalOpen(false)}
         onSubmit={submitLogFollowUp}
         campaigns={campaigns.map((c) => ({ id: c._id, name: c.name, campaignCode: c.campaignCode }))}
+        contacts={[
+          {
+            name: lead.contactPerson,
+            role: 'Primary Contact',
+            designation: lead.designation,
+            phone: lead.mobile,
+          },
+          ...(lead.secondaryContactPerson
+            ? [
+                {
+                  name: lead.secondaryContactPerson,
+                  role: 'Secondary Contact',
+                  designation: lead.secondaryDesignation,
+                  phone: lead.secondaryMobile,
+                },
+              ]
+            : []),
+        ]}
+        leadDefaults={{
+          budget: lead.qualification?.budget,
+          companyAddress: lead.companyAddress,
+          companyLocation: lead.companyLocation,
+          email: lead.email,
+          secondaryContactPerson: lead.secondaryContactPerson,
+          secondaryDesignation: lead.secondaryDesignation,
+          secondaryMobile: lead.secondaryMobile,
+        }}
       />
 
       {/* Re-assign Agent Modal */}

@@ -487,7 +487,50 @@ export default function LeadsPage() {
       )}
 
       {/* Log Action Modal */}
-      <LogCallModal open={logModalOpen} onClose={() => setLogModalOpen(false)} onSubmit={submitLogFollowUp} />
+      <LogCallModal
+        open={logModalOpen}
+        onClose={() => setLogModalOpen(false)}
+        onSubmit={submitLogFollowUp}
+        contacts={
+          (() => {
+            const targetLead = data?.data?.find((l) => (l._id || l.id) === logTargetId);
+            if (!targetLead) return [];
+            return [
+              {
+                name: targetLead.contactPerson,
+                role: 'Primary Contact',
+                designation: targetLead.designation,
+                phone: targetLead.mobile,
+              },
+              ...(targetLead.secondaryContactPerson
+                ? [
+                    {
+                      name: targetLead.secondaryContactPerson,
+                      role: 'Secondary Contact',
+                      designation: targetLead.secondaryDesignation,
+                      phone: targetLead.secondaryMobile,
+                    },
+                  ]
+                : []),
+            ];
+          })()
+        }
+        leadDefaults={
+          (() => {
+            const targetLead = data?.data?.find((l) => (l._id || l.id) === logTargetId);
+            if (!targetLead) return undefined;
+            return {
+              budget: targetLead.qualification?.budget,
+              companyAddress: targetLead.companyAddress,
+              companyLocation: targetLead.companyLocation,
+              email: targetLead.email,
+              secondaryContactPerson: targetLead.secondaryContactPerson,
+              secondaryDesignation: targetLead.secondaryDesignation,
+              secondaryMobile: targetLead.secondaryMobile,
+            };
+          })()
+        }
+      />
 
       {/* Reject Lead Modal */}
       <Modal
