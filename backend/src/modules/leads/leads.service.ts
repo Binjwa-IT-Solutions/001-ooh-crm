@@ -61,6 +61,21 @@ export class LeadsService {
       return { leads, total };
     }
 
+    if (filters.status === 'Rejected') {
+      query.status = 'Rejected';
+      const skip = (filters.page - 1) * filters.limit;
+      const [leads, total] = await Promise.all([
+        scopedFind(Lead, query, ctx, { ownerField: 'rejectedBy' })
+          .sort({ updatedAt: -1, createdAt: -1 })
+          .skip(skip)
+          .limit(filters.limit)
+          .populate('assignedTo claimedBy rejectedBy', 'name email role')
+          .exec(),
+        scopedCount(Lead, query, ctx, { ownerField: 'rejectedBy' }),
+      ]);
+      return { leads, total };
+    }
+
     // Scoped retrieval for sales agents and managers
     const skip = (filters.page - 1) * filters.limit;
 
@@ -91,20 +106,21 @@ export class LeadsService {
     });
 
     if (!lead) {
-      // Fallback for creator or unassigned New leads
+      // Fallback for: creator, unassigned New leads, or leads the user personally rejected
       lead = await Lead.findOne({
         _id: toObjectId(id),
         deletedAt: null,
         $or: [
           { createdBy: toObjectId(ctx.user.id) },
           { assignedTo: null, status: 'New' },
+          { rejectedBy: toObjectId(ctx.user.id), status: 'Rejected' },
         ],
       }).exec();
     }
 
     if (!lead) throw new NotFoundError('Lead not found');
 
-    await lead.populate('assignedTo claimedBy', 'name email role');
+    await lead.populate('assignedTo claimedBy rejectedBy', 'name email role');
     return lead;
   }
 
@@ -600,10 +616,10 @@ export class LeadsService {
       return lead;
     }
 
-    // 1. Check state transitions map (Admins and Managers have override privileges; Reopening from Won/Lost is allowed for all roles)
+    // 1. Check state transitions map (Admins and Managers have override privileges; Reopening from Won/Lost/Rejected is allowed for all roles)
     const isManagerOrAdmin = ctx.user?.role === 'admin' || ctx.user?.role === 'manager';
-    const isTerminalStatus = fromStatus === 'Won' || fromStatus === 'Lost';
-    const isActiveStatus = !['Won', 'Lost', 'Duplicate', 'duplicate'].includes(toStatus);
+    const isTerminalStatus = fromStatus === 'Won' || fromStatus === 'Lost' || fromStatus === 'Rejected';
+    const isActiveStatus = !['Won', 'Lost', 'Duplicate', 'duplicate', 'Rejected'].includes(toStatus);
     const isReopening = isTerminalStatus && isActiveStatus;
 
     const allowed = STATUS_TRANSITIONS[fromStatus] || [];
@@ -642,11 +658,28 @@ export class LeadsService {
       }
     }
 
+    // 4b. Rejected Gate: moving to Rejected records reason and tracks who rejected
+    if (toStatus === 'Rejected') {
+      const reason = payload.lostReason || lead.qualification?.lostReason || 'Junk / Irrelevant inquiry';
+      if (lead.qualification) {
+        lead.qualification.lostReason = reason.trim();
+      }
+      lead.rejectedBy = toObjectId(ctx.user.id);
+    }
+
     // 5. Cycle Increment on Re-activation from Won / Lost to an active stage
     if (isReopening) {
-      lead.cycle = (lead.cycle || 1) + 1;
+      if (fromStatus !== 'Rejected') {
+        lead.cycle = (lead.cycle || 1) + 1;
+      }
       if (lead.qualification?.lostReason) {
         lead.qualification.lostReason = undefined;
+      }
+      // If restoring from Rejected to New, ensure it is back in the unclaimed pool
+      if (fromStatus === 'Rejected' && toStatus === 'New') {
+        lead.assignedTo = undefined;
+        lead.claimedBy = undefined;
+        lead.rejectedBy = null;
       }
     }
 
@@ -659,7 +692,7 @@ export class LeadsService {
       from: fromStatus,
       to: toStatus,
       changedBy: toObjectId(ctx.user.id),
-      reason: payload.lostReason || (isReopening ? 'Re-opened for new campaign inquiry' : undefined),
+      reason: payload.lostReason || (isReopening ? (fromStatus === 'Rejected' ? 'Restored to Unclaimed pool' : 'Re-opened for new campaign inquiry') : undefined),
       cycle: lead.cycle || 1,
       changedAt: now,
     });

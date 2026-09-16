@@ -24,6 +24,7 @@ export const LEAD_STATUSES = [
   'Lost',
   'Duplicate',
   'duplicate',
+  'Rejected',
 ] as const;
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
 
@@ -95,6 +96,7 @@ export interface ILead extends BaseDocument {
   assignedTo?: Types.ObjectId | null;
   claimedBy?: Types.ObjectId | null;
   claimedAt?: Date | null;
+  rejectedBy?: Types.ObjectId | null;
   notifiedAt?: Date | null;
   qualifiedAt?: Date | null;
   slaTimerEnd?: Date | null;
@@ -173,6 +175,7 @@ const leadSchema = new Schema<ILead>({
   assignedTo: { type: Schema.Types.ObjectId, ref: 'User', default: null },
   claimedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
   claimedAt: { type: Date, default: null },
+  rejectedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null, index: true },
   notifiedAt: { type: Date, default: null },
   qualifiedAt: { type: Date, default: null },
   slaTimerEnd: { type: Date, default: null },

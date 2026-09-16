@@ -378,5 +378,60 @@ test('intakeLead parses website payload with separate firstName, lastName and co
   );
 });
 
+test('changeStatus transitions New lead to Rejected and records reason', async () => {
+  const fakeLead: any = {
+    _id: '6a87e4b4c93947ba317108aa',
+    status: 'New',
+    statusHistory: [],
+    save: async () => fakeLead,
+    populate: async () => fakeLead,
+  };
 
+  const origGetLead = LeadsService.getLead;
+  LeadsService.getLead = async () => fakeLead;
 
+  try {
+    const res = await LeadsService.changeStatus(
+      '6a87e4b4c93947ba317108aa',
+      { status: 'Rejected', lostReason: 'Spam / Fake Number' },
+      { user: { id: '6a87e4b4c93947ba31710801', role: 'sales_agent' } } as any,
+    );
+
+    assert.equal(res.status, 'Rejected');
+    assert.equal(res.statusHistory[0].to, 'Rejected');
+    assert.equal(res.statusHistory[0].reason, 'Spam / Fake Number');
+  } finally {
+    LeadsService.getLead = origGetLead;
+  }
+});
+
+test('changeStatus allows restoring Rejected lead back to New and clears assignedTo', async () => {
+  const fakeLead: any = {
+    _id: '6a87e4b4c93947ba317108aa',
+    status: 'Rejected',
+    assignedTo: '6a87e4b4c93947ba31710802',
+    claimedBy: '6a87e4b4c93947ba31710802',
+    statusHistory: [],
+    save: async () => fakeLead,
+    populate: async () => fakeLead,
+  };
+
+  const origGetLead = LeadsService.getLead;
+  LeadsService.getLead = async () => fakeLead;
+
+  try {
+    const res = await LeadsService.changeStatus(
+      '6a87e4b4c93947ba317108aa',
+      { status: 'New' },
+      { user: { id: '6a87e4b4c93947ba31710801', role: 'sales_agent' } } as any,
+    );
+
+    assert.equal(res.status, 'New');
+    assert.equal(res.assignedTo, undefined);
+    assert.equal(res.claimedBy, undefined);
+    assert.equal(res.statusHistory[0].to, 'New');
+    assert.equal(res.statusHistory[0].reason, 'Restored to Unclaimed pool');
+  } finally {
+    LeadsService.getLead = origGetLead;
+  }
+});
