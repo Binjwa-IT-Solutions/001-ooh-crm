@@ -41,6 +41,7 @@ export const leadQualificationSchema = z.object({
 
 export const logFollowUpSchema = z.object({
   followUpType: z.enum(FOLLOW_UP_TYPES).default('Call'),
+  campaignId: z.string().trim().optional(),
   reason: z.string().trim().optional(),
   remarks: z.string().trim().optional(),
   note: z.string().trim().optional(),

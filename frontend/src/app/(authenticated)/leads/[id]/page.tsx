@@ -17,6 +17,8 @@ import { Card, Badge, Spinner, Button, Field, Alert, Modal, TextAreaField } from
 import { LeadsSelect } from '@/modules/leads/components/leads-select';
 import LogCallModal from '@/modules/leads/component/log-call-modal';
 import { useAuth } from '@/shared/auth/auth-context';
+import { getCampaigns } from '@/modules/campaigns/api';
+import type { Campaign } from '@/modules/campaigns/types';
 import {
   Timer,
   Clock,
@@ -33,6 +35,8 @@ import {
   Plus,
   ArrowRight,
   RotateCw,
+  Layers,
+  Briefcase,
 } from 'lucide-react';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -113,7 +117,7 @@ export default function LeadDetailPage() {
   const isManagerOrAdmin = ['admin', 'manager'].includes(user?.role?.toLowerCase() || '');
   const { lead, isLoading, error, mutate } = useLead(id);
 
-  const [activeTab, setActiveTab] = useState<'info' | 'qualification' | 'activity' | 'documents'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'qualification' | 'campaigns' | 'activity' | 'documents'>('info');
 
   const [isQualifying, setIsQualifying] = useState(false);
   const [qualifyError, setQualifyError] = useState('');
@@ -167,6 +171,21 @@ export default function LeadDetailPage() {
       setIsReassigning(false);
     }
   };
+
+  // Linked Campaigns state
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
+  const [selectedTimelineCampaign, setSelectedTimelineCampaign] = useState<string>('all');
+
+  useEffect(() => {
+    const leadId = (lead?._id || lead?.id || id) as string;
+    if (!leadId) return;
+    setLoadingCampaigns(true);
+    getCampaigns({ leadId })
+      .then((res) => setCampaigns(res.data || []))
+      .catch(() => setCampaigns([]))
+      .finally(() => setLoadingCampaigns(false));
+  }, [id, lead?._id, lead?.id]);
 
   // Activity timeline state
   const [activities, setActivities] = useState<ActivityItem[]>([]);
@@ -413,12 +432,13 @@ export default function LeadDetailPage() {
         {[
           { id: 'info', label: 'Information' },
           { id: 'qualification', label: 'Requirements' },
+          { id: 'campaigns', label: `Campaigns (${campaigns.length})` },
           { id: 'activity', label: 'Activity Timeline (ATR)' },
           { id: 'documents', label: 'Documents' },
         ].map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as 'info' | 'qualification' | 'activity' | 'documents')}
+            onClick={() => setActiveTab(tab.id as 'info' | 'qualification' | 'campaigns' | 'activity' | 'documents')}
             className={`h-11 px-4 text-sm font-medium border-b-2 transition-colors ${
               activeTab === tab.id
                 ? 'border-red-600 text-red-600 dark:border-red-400 dark:text-red-400'
@@ -693,19 +713,160 @@ export default function LeadDetailPage() {
         </Card>
       )}
 
+      {/* Tab: Linked Campaigns */}
+      {activeTab === 'campaigns' && (
+        <Card className="p-6">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-6 flex-wrap gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                <Briefcase className="w-4 h-4 text-[#8B2424] shrink-0" />
+                <span>Linked Campaigns ({campaigns.length})</span>
+              </h3>
+              <p className="text-xs text-slate-500">
+                Independent parallel outdoor campaigns running or planned for this client.
+              </p>
+            </div>
+            <Link href={`/campaigns?leadId=${lead._id || lead.id}&create=true`}>
+              <Button variant="primary" className="!h-9 !px-3 inline-flex items-center gap-1.5 bg-[#8B2424] text-white hover:bg-[#6E1D1D] shadow-2xs !text-xs font-semibold">
+                <Plus className="w-3.5 h-3.5 shrink-0" />
+                <span>Launch New Campaign</span>
+              </Button>
+            </Link>
+          </div>
+
+          {loadingCampaigns ? (
+            <div className="py-8 flex justify-center">
+              <Spinner label="Loading campaigns..." />
+            </div>
+          ) : campaigns.length === 0 ? (
+            <div className="py-10 text-center space-y-3">
+              <div className="w-12 h-12 mx-auto rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                <Briefcase className="w-6 h-6" />
+              </div>
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                No campaigns launched for this lead yet.
+              </p>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                Once a client inquiry matures, you can launch multiple parallel campaigns (e.g. City-specific launches, DOOH, or Highways).
+              </p>
+              <Link href={`/campaigns?leadId=${lead._id || lead.id}&create=true`}>
+                <Button variant="secondary" className="!text-xs mt-2">
+                  <Plus className="w-3.5 h-3.5 mr-1" />
+                  Create First Campaign
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-slate-200 dark:border-slate-800 text-xs font-semibold uppercase text-slate-500">
+                  <tr>
+                    <th className="pb-3 px-3">Campaign Code</th>
+                    <th className="pb-3 px-3">Campaign Name</th>
+                    <th className="pb-3 px-3">City</th>
+                    <th className="pb-3 px-3">Dates</th>
+                    <th className="pb-3 px-3">Contract Value</th>
+                    <th className="pb-3 px-3">Status</th>
+                    <th className="pb-3 px-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                  {campaigns.map((c) => {
+                    const statusColors: Record<string, string> = {
+                      Draft: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300',
+                      Approved: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300',
+                      InProgress: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300',
+                      Completed: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300',
+                      Cancelled: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300',
+                    };
+
+                    return (
+                      <tr key={c._id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        <td className="py-3 px-3 font-mono text-xs font-semibold text-slate-900 dark:text-white">
+                          {c.campaignCode}
+                        </td>
+                        <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">
+                          {c.name}
+                        </td>
+                        <td className="py-3 px-3 text-slate-600 dark:text-slate-400">
+                          {c.city}
+                        </td>
+                        <td className="py-3 px-3 text-xs text-slate-500">
+                          {formatDateTime(c.startDate)} → {formatDateTime(c.endDate)}
+                        </td>
+                        <td className="py-3 px-3 font-semibold text-slate-900 dark:text-white">
+                          ₹{((c.contractedValue || 0) / 100).toLocaleString('en-IN')}
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold border ${statusColors[c.status] || 'bg-slate-100 text-slate-700'}`}>
+                            {c.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <Link href={`/campaigns/${c._id}`}>
+                            <Button variant="ghost" className="!h-8 !px-2.5 !text-xs text-blue-600 hover:text-blue-800">
+                              View
+                            </Button>
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Tab: Activity Timeline (ATR) */}
       {activeTab === 'activity' && (
         <Card className="p-6">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-6">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-6 flex-wrap gap-3">
             <div>
               <h3 className="text-base font-semibold text-slate-900 dark:text-white">Action Taken History (ATR)</h3>
-              <p className="text-xs text-slate-500">Chained follow-up logs, status transitions, and manager approvals.</p>
+              <p className="text-xs text-slate-500">Chained follow-up logs, quotations, campaigns, and manager approvals.</p>
             </div>
             <Button variant="secondary" onClick={() => setLogModalOpen(true)} className="!h-9 !px-3 inline-flex items-center gap-1.5 !text-xs font-medium">
               <Plus className="w-3.5 h-3.5 shrink-0" />
               <span>Log Action</span>
             </Button>
           </div>
+
+          {/* Timeline Filter Pills */}
+          {campaigns.length > 0 && (
+            <div className="mb-6 flex items-center gap-2 flex-wrap text-xs">
+              <span className="text-slate-400 font-medium mr-1">Filter by Campaign:</span>
+              <button
+                type="button"
+                onClick={() => setSelectedTimelineCampaign('all')}
+                className={`px-2.5 py-1 rounded-full font-medium transition-colors ${
+                  selectedTimelineCampaign === 'all'
+                    ? 'bg-[#8B2424] text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                }`}
+              >
+                All Activities ({activities.length})
+              </button>
+              {campaigns.map((c) => {
+                const count = activities.filter((a) => a.campaignId === c._id).length;
+                return (
+                  <button
+                    key={c._id}
+                    type="button"
+                    onClick={() => setSelectedTimelineCampaign(c._id)}
+                    className={`px-2.5 py-1 rounded-full font-medium transition-colors ${
+                      selectedTimelineCampaign === c._id
+                        ? 'bg-[#8B2424] text-white shadow-2xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                    }`}
+                  >
+                    {c.name} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {loadingActivities ? (
             <div className="py-8 flex justify-center">
@@ -717,7 +878,12 @@ export default function LeadDetailPage() {
             </div>
           ) : (
             <div className="relative border-l-2 border-slate-200 dark:border-slate-800 ml-4 space-y-6 py-2">
-              {activities.map((item, idx) => {
+              {activities
+                .filter((item) => {
+                  if (selectedTimelineCampaign === 'all') return true;
+                  return item.campaignId === selectedTimelineCampaign;
+                })
+                .map((item, idx) => {
                 const isCycleRestart = Boolean(item.type === 'status_change' && item.from && ['Won', 'Lost'].includes(item.from));
 
                 return (
@@ -730,6 +896,10 @@ export default function LeadDetailPage() {
                             ? (item.to ? STATUS_DOT_COLORS[item.to] || 'bg-blue-500' : 'bg-blue-500')
                             : item.type === 'manager_review'
                             ? 'bg-amber-500'
+                            : item.type === 'quotation'
+                            ? 'bg-indigo-500'
+                            : item.type === 'campaign_event'
+                            ? 'bg-emerald-500'
                             : 'bg-blue-500'
                         }`}
                       />
@@ -770,6 +940,48 @@ export default function LeadDetailPage() {
                             {formatDateTime(item.timestamp)}
                           </div>
                         </div>
+                      ) : item.type === 'quotation' ? (
+                        <div className="rounded-lg bg-indigo-50/70 dark:bg-indigo-950/40 p-4 border border-indigo-200/80 dark:border-indigo-900">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <span className="flex items-center justify-center w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
+                                <FileText className="w-3.5 h-3.5 shrink-0" />
+                              </span>
+                              <span className="text-sm font-bold text-indigo-950 dark:text-indigo-200">
+                                {item.reason || `Quotation #${item.referenceCode}`}
+                              </span>
+                            </div>
+                            {typeof item.amount === 'number' && (
+                              <span className="text-xs font-bold text-indigo-800 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900 px-2 py-0.5 rounded">
+                                Value: ₹{((item.amount || 0) / 100).toLocaleString('en-IN')}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-indigo-600 dark:text-indigo-400 mt-2">
+                            {formatDateTime(item.timestamp)}
+                          </div>
+                        </div>
+                      ) : item.type === 'campaign_event' ? (
+                        <div className="rounded-lg bg-emerald-50/70 dark:bg-emerald-950/40 p-4 border border-emerald-200/80 dark:border-emerald-900">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <span className="flex items-center justify-center w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300">
+                                <Briefcase className="w-3.5 h-3.5 shrink-0" />
+                              </span>
+                              <span className="text-sm font-bold text-emerald-950 dark:text-emerald-200">
+                                {item.reason || `Campaign: ${item.campaignName}`}
+                              </span>
+                            </div>
+                            {typeof item.amount === 'number' && item.amount > 0 && (
+                              <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900 px-2 py-0.5 rounded">
+                                Contract: ₹{((item.amount || 0) / 100).toLocaleString('en-IN')}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-emerald-600 dark:text-emerald-400 mt-2">
+                            {formatDateTime(item.timestamp)}
+                          </div>
+                        </div>
                       ) : item.type === 'manager_review' ? (
                       <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 p-3 border border-amber-200 dark:border-amber-900">
                         <div className="flex items-center gap-1.5 text-sm font-semibold text-amber-900 dark:text-amber-300">
@@ -788,13 +1000,18 @@ export default function LeadDetailPage() {
                     ) : (
                       <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 p-4 border border-slate-200 dark:border-slate-700">
                         <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="flex items-center justify-center w-7 h-7 rounded-full bg-slate-200/60 dark:bg-slate-700/60">
                               {renderFollowUpIcon(item.followUpType)}
                             </span>
                             <span className="text-sm font-bold text-slate-900 dark:text-white">
                               {item.followUpType || 'Action'} — {item.reason || 'Follow-up'}
                             </span>
+                            {item.campaignName && (
+                              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
+                                Campaign: {item.campaignName}
+                              </span>
+                            )}
                           </div>
                           {item.nextActionDate && (
                             <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 px-2 py-0.5 rounded">
@@ -890,6 +1107,7 @@ export default function LeadDetailPage() {
         open={logModalOpen}
         onClose={() => setLogModalOpen(false)}
         onSubmit={submitLogFollowUp}
+        campaigns={campaigns.map((c) => ({ id: c._id, name: c.name, campaignCode: c.campaignCode }))}
       />
 
       {/* Re-assign Agent Modal */}

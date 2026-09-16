@@ -55,6 +55,7 @@ export interface ILeadStatusHistory {
 
 export interface IFollowUpLog {
   user?: Types.ObjectId | null;
+  campaignId?: Types.ObjectId | null;
   followUpType?: FollowUpType;
   reason?: string;
   remarks?: string;
@@ -126,6 +127,7 @@ const statusHistorySchema = new Schema<ILeadStatusHistory>(
 const followUpLogSchema = new Schema<IFollowUpLog>(
   {
     user: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    campaignId: { type: Schema.Types.ObjectId, ref: 'Campaign', default: null },
     followUpType: { type: String, enum: FOLLOW_UP_TYPES, default: 'Call' },
     reason: { type: String, trim: true },
     remarks: { type: String, trim: true },

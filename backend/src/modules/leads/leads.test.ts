@@ -435,3 +435,33 @@ test('changeStatus allows restoring Rejected lead back to New and clears assigne
     LeadsService.getLead = origGetLead;
   }
 });
+
+test('getActivity returns combined chronological activities with follow-up logs', async () => {
+  const fakeLead: any = {
+    _id: '6a87e4b4c93947ba317108aa',
+    status: 'Contacted',
+    statusHistory: [
+      { from: 'New', to: 'Contacted', changedAt: new Date('2026-09-10T10:00:00Z'), reason: 'First Call' },
+    ],
+    callLogs: [
+      { followUpType: 'Call', remarks: 'Client requested proposal', createdAt: new Date('2026-09-11T10:00:00Z') },
+    ],
+  };
+
+  const origGetLead = LeadsService.getLead;
+  LeadsService.getLead = async () => fakeLead;
+
+  try {
+    const res = await LeadsService.getActivity(
+      '6a87e4b4c93947ba317108aa',
+      { user: { id: '6a87e4b4c93947ba31710801', role: 'admin' } } as any,
+    );
+
+    assert(Array.isArray(res.activities));
+    assert(res.activities.length >= 2);
+    assert.equal(res.activities[0].type, 'follow_up');
+    assert.equal(res.activities[0].remarks, 'Client requested proposal');
+  } finally {
+    LeadsService.getLead = origGetLead;
+  }
+});

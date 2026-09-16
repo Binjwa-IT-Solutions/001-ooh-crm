@@ -14,6 +14,8 @@ import { toObjectId } from '../../core/db/basePlugin.js';
 import { AuthUser } from '../../core/auth/auth-model.js';
 import { notifyMany } from '../../core/notifications/index.js';
 import { extractLeadWithGemini } from './leads.ai.js';
+import { Quotation } from '../quotations/quotations.model.js';
+import { Campaign } from '../campaigns/campaign.model.js';
 
 export class LeadsService {
   /**
@@ -468,6 +470,7 @@ export class LeadsService {
     id: string,
     payload: {
       followUpType?: FollowUpType;
+      campaignId?: string;
       reason?: string;
       remarks?: string;
       note?: string;
@@ -484,6 +487,7 @@ export class LeadsService {
 
     const followUpEntry = {
       user: toObjectId(ctx.user.id),
+      campaignId: payload.campaignId && Types.ObjectId.isValid(payload.campaignId) ? toObjectId(payload.campaignId) : undefined,
       followUpType: payload.followUpType || 'Call',
       reason: payload.reason ?? '',
       remarks: payload.remarks || payload.note || '',
@@ -754,10 +758,29 @@ export class LeadsService {
   }
 
   /**
-   * Activity timeline combining status changes and follow-ups chronologically.
+   * Activity timeline combining status changes, follow-ups, quotations, and campaigns chronologically.
    */
   static async getActivity(id: string, ctx: RequestContext): Promise<{ activities: any[] }> {
     const lead = await LeadsService.getLead(id, ctx);
+    const leadObjId = toObjectId(id);
+
+    // Fetch linked quotations and campaigns in parallel (with safe fallback for disconnected test environments)
+    let quotations: any[] = [];
+    let campaigns: any[] = [];
+    try {
+      [quotations, campaigns] = await Promise.all([
+        Quotation.find({ leadId: leadObjId, deletedAt: null }).sort({ createdAt: -1 }).lean().exec(),
+        Campaign.find({ leadId: leadObjId, deletedAt: null }).sort({ createdAt: -1 }).lean().exec(),
+      ]);
+    } catch {
+      quotations = [];
+      campaigns = [];
+    }
+
+    const campaignMap = new Map<string, string>();
+    for (const c of campaigns) {
+      campaignMap.set(c._id.toString(), c.name);
+    }
 
     const activities: any[] = [];
 
@@ -776,12 +799,15 @@ export class LeadsService {
       }
     }
 
-    // Push follow-up logs
+    // Push follow-up logs (with campaign tagging)
     if (lead.callLogs) {
       for (const cl of lead.callLogs) {
+        const cId = cl.campaignId ? cl.campaignId.toString() : undefined;
         activities.push({
           type: 'follow_up',
           followUpType: cl.followUpType || 'Call',
+          campaignId: cId,
+          campaignName: cId ? campaignMap.get(cId) : undefined,
           reason: cl.reason,
           remarks: cl.remarks || cl.note,
           note: cl.note || cl.remarks,
@@ -802,6 +828,48 @@ export class LeadsService {
         remarks: lead.managerApproval.remarks,
         user: lead.managerApproval.approvedBy,
         timestamp: lead.managerApproval.approvedAt,
+      });
+    }
+
+    // Push quotation milestones
+    for (const q of quotations) {
+      activities.push({
+        type: 'quotation',
+        referenceCode: q.quoteNumber,
+        amount: q.total,
+        reason: `Quotation #${q.quoteNumber} created (${q.status})`,
+        timestamp: q.createdAt,
+      });
+      if (q.sentAt) {
+        activities.push({
+          type: 'quotation',
+          referenceCode: q.quoteNumber,
+          amount: q.total,
+          reason: `Quotation #${q.quoteNumber} sent to client`,
+          timestamp: q.sentAt,
+        });
+      }
+      if (q.acceptedAt) {
+        activities.push({
+          type: 'quotation',
+          referenceCode: q.quoteNumber,
+          amount: q.total,
+          reason: `Quotation #${q.quoteNumber} accepted by client`,
+          timestamp: q.acceptedAt,
+        });
+      }
+    }
+
+    // Push campaign execution milestones
+    for (const c of campaigns) {
+      activities.push({
+        type: 'campaign_event',
+        campaignId: c._id.toString(),
+        campaignName: c.name,
+        referenceCode: c.campaignCode,
+        amount: c.contractedValue,
+        reason: `Campaign "${c.name}" initiated (${c.status})`,
+        timestamp: c.createdAt,
       });
     }
 

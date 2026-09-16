@@ -71,6 +71,7 @@ export interface ManagerApproval {
 
 export interface FollowUpLog {
   user?: any;
+  campaignId?: string | null;
   followUpType?: FollowUpType;
   reason?: string;
   remarks?: string;
@@ -82,12 +83,14 @@ export interface FollowUpLog {
 }
 
 export interface ActivityItem {
-  type: 'status_change' | 'call_log' | 'follow_up' | 'manager_review';
+  type: 'status_change' | 'call_log' | 'follow_up' | 'manager_review' | 'quotation' | 'booking' | 'campaign_event';
   from?: string;
   to?: string;
   reason?: string;
   changedBy?: any;
   user?: any;
+  campaignId?: string;
+  campaignName?: string;
   note?: string;
   remarks?: string;
   followUpType?: FollowUpType;
@@ -96,6 +99,8 @@ export interface ActivityItem {
   approved?: boolean;
   durationSec?: number;
   cycle?: number;
+  amount?: number;
+  referenceCode?: string;
   timestamp: string;
 }
 
@@ -177,6 +182,7 @@ export type CallOutcome = 'Connected' | 'Busy' | 'Left Message' | 'No Answer';
 export interface LogCallValues {
   outcome?: CallOutcome;
   followUpType?: FollowUpType;
+  campaignId?: string;
   reason?: string;
   remarks?: string;
   note?: string;

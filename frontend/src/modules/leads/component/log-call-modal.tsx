@@ -6,6 +6,7 @@ import { FOLLOW_UP_TYPES, FOLLOW_UP_REASONS, type FollowUpType, type FollowUpRea
 
 export interface LogFollowUpPayload {
   followUpType?: FollowUpType;
+  campaignId?: string;
   reason?: string;
   remarks?: string;
   note?: string;
@@ -14,16 +15,25 @@ export interface LogFollowUpPayload {
   durationSec?: number;
 }
 
+export interface CampaignOption {
+  id: string;
+  name: string;
+  campaignCode?: string;
+}
+
 export default function LogCallModal({
   open,
   onClose,
   onSubmit,
+  campaigns = [],
 }: {
   open: boolean;
   onClose: () => void;
   onSubmit: (payload: LogFollowUpPayload) => Promise<void> | void;
+  campaigns?: CampaignOption[];
 }) {
   const [followUpType, setFollowUpType] = useState<FollowUpType>('Call');
+  const [campaignId, setCampaignId] = useState<string>('');
   const [reason, setReason] = useState<string>('General Follow-up');
   const [remarks, setRemarks] = useState('');
   const [nextActionDate, setNextActionDate] = useState('');
@@ -74,10 +84,27 @@ export default function LogCallModal({
             rows={3}
           />
 
+          {campaigns.length > 0 && (
+            <SelectField
+              label="Tag to Campaign (Optional)"
+              value={campaignId}
+              onChange={(e) => setCampaignId(e.target.value)}
+              placeholder="-- General / No specific campaign --"
+              options={[
+                { value: '', label: '-- General / No specific campaign --' },
+                ...campaigns.map((c) => ({
+                  value: c.id,
+                  label: c.campaignCode ? `${c.name} (${c.campaignCode})` : c.name,
+                })),
+              ]}
+            />
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field
               label="Next Action Date"
               type="datetime-local"
+              min={new Date().toISOString().slice(0, 16)}
               value={nextActionDate}
               onChange={(e) => setNextActionDate(e.target.value)}
             />
@@ -119,6 +146,7 @@ export default function LogCallModal({
               try {
                 await onSubmit({
                   followUpType,
+                  campaignId: campaignId || undefined,
                   reason,
                   remarks: remarks.trim(),
                   note: remarks.trim(),

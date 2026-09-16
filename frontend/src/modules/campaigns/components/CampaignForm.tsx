@@ -26,6 +26,7 @@ interface CampaignFormData {
 
 interface Props {
   campaign?: Campaign | null;
+  defaultLeadId?: string;
   onClose: () => void;
   onSuccess: (
     data: CreateCampaignPayload,
@@ -34,11 +35,12 @@ interface Props {
 
 function toFormData(
   campaign?: Campaign | null,
+  defaultLeadId?: string,
 ): CampaignFormData {
   if (!campaign) {
     return {
       name: "",
-      leadId: "",
+      leadId: defaultLeadId || "",
       quotationId: "",
       city: "",
       startDate: "",
@@ -96,12 +98,13 @@ function toFormData(
 
 export default function CampaignForm({
   campaign,
+  defaultLeadId,
   onClose,
   onSuccess,
 }: Props) {
   const [form, setForm] =
     useState<CampaignFormData>(
-      toFormData(campaign),
+      toFormData(campaign, defaultLeadId),
     );
 
   const [error, setError] = useState("");

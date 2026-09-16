@@ -69,7 +69,7 @@ export async function listCampaignsController(
       await listCampaigns(
         {
           search: query.search,
-
+          leadId: query.leadId,
           status: query.status
             ? (query.status as CampaignStatus)
             : undefined,
