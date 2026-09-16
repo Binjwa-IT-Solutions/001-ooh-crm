@@ -8,7 +8,7 @@ import { leadsApi } from '@/modules/leads/api';
 import { LeadStatus, LeadSource, Lead, LogCallValues } from '@/modules/leads/types';
 import { Card, Button, Badge, Spinner, Field, SelectField, Alert, Modal, TextAreaField } from '@/shared/ui';
 import LogCallModal from '@/modules/leads/component/log-call-modal';
-import { Timer } from 'lucide-react';
+import { Timer, CheckCircle2, AlertCircle, Building2, Phone, Mail, MapPin, Info, Clock } from 'lucide-react';
 
 const STATUS_STYLES: Record<string, string> = {
   New: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300',
@@ -115,6 +115,10 @@ export default function LeadsPage() {
   const [rejectReason, setRejectReason] = useState<string>('Spam / Bot / Fake Number');
   const [rejectCustomNote, setRejectCustomNote] = useState<string>('');
   const [isRejecting, setIsRejecting] = useState(false);
+
+  // Claim Review Modal State
+  const [claimReviewLead, setClaimReviewLead] = useState<Lead | null>(null);
+  const [isClaiming, setIsClaiming] = useState(false);
 
   const filters = {
     search,
@@ -399,7 +403,7 @@ export default function LeadsPage() {
                       <td className="px-4 py-3">
                         {activeTab === 'unclaimed' ? (
                           <div className="flex items-center gap-2">
-                            <Button variant="secondary" onClick={() => handleClaim(lead._id || lead.id)}>
+                            <Button variant="secondary" onClick={() => setClaimReviewLead(lead)}>
                               Claim
                             </Button>
                             <Button
@@ -533,6 +537,134 @@ export default function LeadsPage() {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Review & Confirm Claim Lead Modal */}
+      <Modal
+        open={Boolean(claimReviewLead)}
+        onClose={() => setClaimReviewLead(null)}
+        title="Review Lead Before Claiming"
+      >
+        {claimReviewLead && (
+          <div className="space-y-4 pt-2">
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 p-3 border border-amber-200 dark:border-amber-900 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+              <Clock className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+              <span>
+                <strong>SLA Notice:</strong> Claiming this lead assigns ownership to you and activates your <strong>24-Hour First Response SLA</strong> timer.
+              </span>
+            </div>
+
+            {/* Profile Overview */}
+            <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-3 bg-slate-50/50 dark:bg-slate-900/40">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-base font-bold text-slate-900 dark:text-white">
+                    {claimReviewLead.companyName}
+                  </h4>
+                  <p className="text-xs text-slate-500">Contact: {claimReviewLead.contactPerson}</p>
+                </div>
+                <span className="inline-flex items-center rounded-full border border-slate-300 px-2.5 py-0.5 text-xs font-medium text-slate-700 dark:border-slate-700 dark:text-slate-300">
+                  {claimReviewLead.source}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                  <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <span className="font-semibold">{claimReviewLead.mobile || 'No Mobile'}</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                  <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <span>{claimReviewLead.email || <span className="text-amber-600 italic">Email not provided</span>}</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                  <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <span>{claimReviewLead.city || <span className="text-amber-600 italic">City not specified</span>}</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                  <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <span>Budget: {claimReviewLead.qualification?.budget ? `₹${(claimReviewLead.qualification.budget / 100).toLocaleString('en-IN')}` : <span className="text-slate-400 italic">Unspecified</span>}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Inbound Query Message */}
+            {Boolean(claimReviewLead.qualification?.notes || (claimReviewLead.rawPayload as any)?.comments || (claimReviewLead.rawPayload as any)?.text || (claimReviewLead.rawPayload as any)?.message) && (
+              <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3 bg-white dark:bg-slate-900 text-xs">
+                <span className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Inbound Query / Message:</span>
+                <p className="text-slate-600 dark:text-slate-400 italic whitespace-pre-line">
+                  "{claimReviewLead.qualification?.notes || (claimReviewLead.rawPayload as any)?.comments || (claimReviewLead.rawPayload as any)?.text || (claimReviewLead.rawPayload as any)?.message}"
+                </p>
+              </div>
+            )}
+
+            {/* Information Checklist */}
+            <div className="text-xs space-y-1.5 bg-slate-100 dark:bg-slate-800/60 p-3 rounded-lg">
+              <span className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Information Checklist:</span>
+              <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                <span>Mobile number available ({claimReviewLead.mobile})</span>
+              </div>
+              {claimReviewLead.city ? (
+                <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>City identified: {claimReviewLead.city}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>City not mentioned in initial inquiry</span>
+                </div>
+              )}
+              {claimReviewLead.email ? (
+                <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>Email provided: {claimReviewLead.email}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-slate-500">
+                  <Info className="w-3.5 h-3.5 shrink-0" />
+                  <span>Email not provided (collect during first call)</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800 flex-wrap gap-2">
+              <Button
+                variant="ghost"
+                className="text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs"
+                onClick={() => {
+                  const targetId = claimReviewLead._id || claimReviewLead.id;
+                  setClaimReviewLead(null);
+                  openRejectModal(targetId);
+                }}
+              >
+                Reject as Junk / Spam
+              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" onClick={() => setClaimReviewLead(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  isLoading={isClaiming}
+                  className="bg-[#8B2424] hover:bg-[#6E1D1D] text-white text-xs font-semibold"
+                  onClick={async () => {
+                    const targetId = claimReviewLead._id || claimReviewLead.id;
+                    setIsClaiming(true);
+                    try {
+                      await handleClaim(targetId);
+                      setClaimReviewLead(null);
+                    } finally {
+                      setIsClaiming(false);
+                    }
+                  }}
+                >
+                  Confirm & Claim Lead
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* Toasts */}
