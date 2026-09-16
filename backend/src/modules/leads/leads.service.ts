@@ -1,4 +1,4 @@
-import { Types } from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 import { RequestContext } from '../../core/context.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../core/errors/index.js';
 import { scopedFind, scopedFindOne, scopedCount } from '../../core/scoping/index.js';
@@ -12,6 +12,8 @@ import {
 import { STATUS_TRANSITIONS } from './leads.validator.js';
 import { toObjectId } from '../../core/db/basePlugin.js';
 import { AuthUser } from '../../core/auth/auth-model.js';
+import { notifyMany } from '../../core/notifications/index.js';
+import { extractLeadWithGemini } from './leads.ai.js';
 
 export class LeadsService {
   /**
@@ -59,6 +61,21 @@ export class LeadsService {
       return { leads, total };
     }
 
+    if (filters.status === 'Rejected') {
+      query.status = 'Rejected';
+      const skip = (filters.page - 1) * filters.limit;
+      const [leads, total] = await Promise.all([
+        scopedFind(Lead, query, ctx, { ownerField: 'rejectedBy' })
+          .sort({ updatedAt: -1, createdAt: -1 })
+          .skip(skip)
+          .limit(filters.limit)
+          .populate('assignedTo claimedBy rejectedBy', 'name email role')
+          .exec(),
+        scopedCount(Lead, query, ctx, { ownerField: 'rejectedBy' }),
+      ]);
+      return { leads, total };
+    }
+
     // Scoped retrieval for sales agents and managers
     const skip = (filters.page - 1) * filters.limit;
 
@@ -89,20 +106,21 @@ export class LeadsService {
     });
 
     if (!lead) {
-      // Fallback for creator or unassigned New leads
+      // Fallback for: creator, unassigned New leads, or leads the user personally rejected
       lead = await Lead.findOne({
         _id: toObjectId(id),
         deletedAt: null,
         $or: [
           { createdBy: toObjectId(ctx.user.id) },
           { assignedTo: null, status: 'New' },
+          { rejectedBy: toObjectId(ctx.user.id), status: 'Rejected' },
         ],
       }).exec();
     }
 
     if (!lead) throw new NotFoundError('Lead not found');
 
-    await lead.populate('assignedTo claimedBy', 'name email role');
+    await lead.populate('assignedTo claimedBy rejectedBy', 'name email role');
     return lead;
   }
 
@@ -120,7 +138,7 @@ export class LeadsService {
       deletedAt: null,
     }).exec();
 
-    let status: LeadStatus = existing ? 'Duplicate' : 'New';
+    const status: LeadStatus = existing ? 'Duplicate' : 'New';
 
     const leadData: any = {
       ...data,
@@ -189,20 +207,162 @@ export class LeadsService {
     const now = new Date();
     const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    const mobile = payload.mobile || payload.phone || payload.contactNumber;
-    const companyName = payload.companyName || payload.company || payload.name || 'Web Lead';
-    const contactPerson = payload.contactPerson || payload.name || 'Prospective Client';
-    const email = payload.email || undefined;
-    const city = payload.city || undefined;
+    // Inbound Email Parsing & Extraction
+    let emailContactPerson: string | undefined;
+    let emailAddress: string | undefined;
+    let emailMobile: string | undefined;
+    let emailCity: string | undefined;
+    let emailNotes: string | undefined;
+    let emailCompanyName: string | undefined;
+    let emailBudgetPaise: number | undefined;
+    let emailLocationPreference: any | undefined;
+    let emailCampaignDuration: string | undefined;
 
-    const existing = await Lead.findOne({
-      mobile,
+    if (source === 'Email' || payload.from || payload.subject || payload.text || payload.body) {
+      // 1. Combine text and body, strip HTML tags
+      const rawText = String(payload.text || payload.body || payload.message || payload.html || '').trim();
+      const plainText = rawText.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ');
+
+      // 2. Check for explicit structured form fields first (e.g. Website Form forwarded via email: Name: ..., Phone: ...)
+      const nameMatch = plainText.match(/(?:Name|Contact Person|Full Name)\s*[:=-]\s*([^\n\r,;]+)/i);
+      if (nameMatch) emailContactPerson = nameMatch[1].trim();
+
+      const cityMatch = plainText.match(/(?:City|Location|Area)\s*[:=-]\s*([^\n\r,;]+)/i);
+      if (cityMatch) emailCity = cityMatch[1].trim();
+
+      const phoneMatch = plainText.match(/(?:Phone|Mobile|Contact|Cell|Tel|WhatsApp)\s*[:=-]\s*([^\n\r,;]+)/i);
+      if (phoneMatch) emailMobile = phoneMatch[1].trim();
+
+      // 3. Optional Gemini AI Extraction (Runs when GEMINI_API_KEY is configured and not in unit test mock)
+      if (process.env.GEMINI_API_KEY && process.env.NODE_ENV !== 'test') {
+        try {
+          const aiData = await extractLeadWithGemini({
+            from: payload.from,
+            subject: payload.subject,
+            text: payload.text || payload.body || payload.message,
+          });
+          if (aiData) {
+            if (!emailContactPerson && aiData.contactPerson) emailContactPerson = aiData.contactPerson;
+            if (aiData.companyName) emailCompanyName = aiData.companyName;
+            if (!emailAddress && aiData.email) emailAddress = aiData.email;
+            if (!emailMobile && aiData.mobile) emailMobile = aiData.mobile;
+            if (!emailCity && aiData.city) emailCity = aiData.city;
+            if (aiData.budgetInRupees && !isNaN(aiData.budgetInRupees)) {
+              emailBudgetPaise = Math.round(Number(aiData.budgetInRupees) * 100);
+            }
+            if (aiData.locationPreference) emailLocationPreference = aiData.locationPreference;
+            if (aiData.campaignDuration) emailCampaignDuration = aiData.campaignDuration;
+            if (aiData.summary) {
+              emailNotes = `[AI Lead Summary]\n${aiData.summary}`;
+            }
+          }
+        } catch (aiErr: any) {
+          console.warn('[Leads Intake] AI extraction failed, seamlessly using regex fallback:', aiErr?.message);
+        }
+      }
+
+      // 4. Extract Sender Name & Email from "From" header (Only if not already found)
+      const fromStr = String(payload.from || '').trim();
+      if (fromStr) {
+        const fromMatch = fromStr.match(/^([^<]+)<([^>]+)>$/);
+        if (fromMatch) {
+          if (!emailContactPerson) emailContactPerson = fromMatch[1].trim().replace(/^["']|["']$/g, '');
+          if (!emailAddress) emailAddress = fromMatch[2].trim().toLowerCase();
+        } else if (fromStr.includes('@')) {
+          if (!emailAddress) emailAddress = fromStr.toLowerCase();
+          if (!emailContactPerson) {
+            const localPart = fromStr.split('@')[0].replace(/[._-]/g, ' ');
+            emailContactPerson = localPart.charAt(0).toUpperCase() + localPart.slice(1);
+          }
+        }
+      }
+
+      // 5. Fallback: Search for Indian 10-digit mobile number regex across the whole email body
+      if (!emailMobile) {
+        const genericPhoneMatch = plainText.match(/(?:(?:\+|00)?91[\s.-]?)?[6-9]\d{4}[\s.-]?\d{5}|[6-9]\d{9}/);
+        if (genericPhoneMatch) {
+          emailMobile = genericPhoneMatch[0].trim();
+        }
+      }
+
+      // 6. Build rich notes (Preserves AI summary, key highlights, and original message)
+      const noteSections: string[] = [];
+      if (emailNotes) {
+        noteSections.push(emailNotes);
+        const highlights: string[] = [];
+        if (emailBudgetPaise) highlights.push(`• Budget: ₹${(emailBudgetPaise / 100).toLocaleString('en-IN')}`);
+        if (emailCampaignDuration) highlights.push(`• Duration: ${emailCampaignDuration}`);
+        if (emailCity) highlights.push(`• Location: ${emailCity}`);
+        if (highlights.length > 0) {
+          noteSections.push(`[Key Highlights]\n${highlights.join('\n')}`);
+        }
+      }
+
+      const originalDetails: string[] = [];
+      if (payload.subject) originalDetails.push(`Subject: ${payload.subject}`);
+      if (payload.from) originalDetails.push(`From: ${payload.from}`);
+      if (plainText) originalDetails.push(`Message:\n${plainText.trim()}`);
+      if (originalDetails.length > 0) {
+        noteSections.push(`[Email Lead Details]\n${originalDetails.join('\n')}`);
+      }
+
+      emailNotes = noteSections.join('\n\n');
+    }
+
+    const rawMobile = String(payload.mobile || payload.phone || payload.contactNumber || emailMobile || '').trim();
+    const digitsOnly = rawMobile.replace(/\D/g, '');
+    const mobile = digitsOnly.length >= 10 ? digitsOnly.slice(-10) : (digitsOnly || rawMobile || 'Not Provided');
+
+    const combinedName = [
+      payload.firstName || payload.first_name || payload['First Name'],
+      payload.lastName || payload.last_name || payload['Last Name'],
+    ].filter(Boolean).join(' ').trim();
+
+    const contactPerson = payload.contactPerson || payload.name || combinedName || emailContactPerson || 'Prospective Client';
+    const companyName = payload.company_name || payload.companyName || payload.company || emailCompanyName || contactPerson || 'Web Lead';
+    const email = payload.email ? String(payload.email).trim().toLowerCase() : (emailAddress || undefined);
+    const city = payload.city || payload.area || emailCity || undefined;
+
+    // Rich contextual note for Justdial / third-party / website leads
+    let notes: string | undefined = emailNotes;
+    if (source === 'JustDial' || payload.leadid || payload.category) {
+      const noteParts: string[] = [];
+      if (payload.leadid) noteParts.push(`JD Lead ID: ${payload.leadid}`);
+      if (payload.category) noteParts.push(`Category: ${payload.category}`);
+      if (payload.area) noteParts.push(`Area: ${payload.area}`);
+      if (payload.pincode) noteParts.push(`Pincode: ${payload.pincode}`);
+      if (payload.lead_type) noteParts.push(`Type: ${payload.lead_type}`);
+      if (noteParts.length > 0) {
+        notes = `[JustDial Lead Details]\n${noteParts.join(' | ')}`;
+      }
+    } else if (!notes && (payload.comments || payload.comment || payload.message || payload.questions || payload['Comments / Questions'])) {
+      notes = String(payload.comments || payload.comment || payload.message || payload.questions || payload['Comments / Questions']).trim();
+    }
+
+    const duplicateFilter: Record<string, any> = {
       source: source as LeadSource,
       createdAt: { $gte: windowStart },
       deletedAt: null,
-    }).exec();
+    };
+    if (mobile !== 'Not Provided') {
+      duplicateFilter.mobile = mobile;
+    } else if (email) {
+      duplicateFilter.email = email;
+    } else {
+      duplicateFilter._id = null;
+    }
+
+    const existing = await Lead.findOne(duplicateFilter).exec();
 
     const status: LeadStatus = existing ? 'Duplicate' : 'New';
+
+    // Build qualification block with notes, city, and optional AI-extracted fields
+    const qualificationData: any = {};
+    if (city) qualificationData.city = city;
+    if (notes) qualificationData.notes = notes;
+    if (emailBudgetPaise) qualificationData.budget = emailBudgetPaise;
+    if (emailLocationPreference) qualificationData.locationPreference = emailLocationPreference;
+    if (emailCampaignDuration) qualificationData.campaignDuration = emailCampaignDuration;
 
     const lead = await Lead.create({
       source: source as LeadSource,
@@ -211,10 +371,12 @@ export class LeadsService {
       mobile,
       email,
       city,
+      qualification: Object.keys(qualificationData).length > 0 ? qualificationData : undefined,
       rawPayload: payload,
       receivedAt: now,
       status,
       notifiedAt: now,
+      slaTimerEnd: status === 'New' ? new Date(now.getTime() + 24 * 60 * 60 * 1000) : undefined,
       statusHistory: [
         {
           to: status,
@@ -223,6 +385,29 @@ export class LeadsService {
         },
       ],
     });
+
+    // Notify Admin, Manager, and Sales agents on new external lead intake
+    if (status === 'New' && mongoose.connection.readyState === 1) {
+      try {
+        const recipients = await AuthUser.find({
+          role: { $in: ['admin', 'manager', 'sales_agent'] },
+          deletedAt: null,
+        }).select('_id');
+
+        const recipientIds = recipients.map((r: any) => r._id);
+        if (recipientIds.length > 0) {
+          await notifyMany(recipientIds, {
+            type: 'leads.new_intake',
+            title: `New Lead from ${source}!`,
+            body: `${companyName || contactPerson} (${mobile}) just arrived from ${source}.`,
+            link: `/leads/${lead._id}`,
+          });
+        }
+      } catch (err) {
+        // Best-effort: notification failure must never block lead creation
+        console.error('[intakeLead] Notification failed:', err);
+      }
+    }
 
     return lead;
   }
@@ -431,10 +616,10 @@ export class LeadsService {
       return lead;
     }
 
-    // 1. Check state transitions map (Admins and Managers have override privileges; Reopening from Won/Lost is allowed for all roles)
+    // 1. Check state transitions map (Admins and Managers have override privileges; Reopening from Won/Lost/Rejected is allowed for all roles)
     const isManagerOrAdmin = ctx.user?.role === 'admin' || ctx.user?.role === 'manager';
-    const isTerminalStatus = fromStatus === 'Won' || fromStatus === 'Lost';
-    const isActiveStatus = !['Won', 'Lost', 'Duplicate', 'duplicate'].includes(toStatus);
+    const isTerminalStatus = fromStatus === 'Won' || fromStatus === 'Lost' || fromStatus === 'Rejected';
+    const isActiveStatus = !['Won', 'Lost', 'Duplicate', 'duplicate', 'Rejected'].includes(toStatus);
     const isReopening = isTerminalStatus && isActiveStatus;
 
     const allowed = STATUS_TRANSITIONS[fromStatus] || [];
@@ -473,11 +658,28 @@ export class LeadsService {
       }
     }
 
+    // 4b. Rejected Gate: moving to Rejected records reason and tracks who rejected
+    if (toStatus === 'Rejected') {
+      const reason = payload.lostReason || lead.qualification?.lostReason || 'Junk / Irrelevant inquiry';
+      if (lead.qualification) {
+        lead.qualification.lostReason = reason.trim();
+      }
+      lead.rejectedBy = toObjectId(ctx.user.id);
+    }
+
     // 5. Cycle Increment on Re-activation from Won / Lost to an active stage
     if (isReopening) {
-      lead.cycle = (lead.cycle || 1) + 1;
+      if (fromStatus !== 'Rejected') {
+        lead.cycle = (lead.cycle || 1) + 1;
+      }
       if (lead.qualification?.lostReason) {
         lead.qualification.lostReason = undefined;
+      }
+      // If restoring from Rejected to New, ensure it is back in the unclaimed pool
+      if (fromStatus === 'Rejected' && toStatus === 'New') {
+        lead.assignedTo = undefined;
+        lead.claimedBy = undefined;
+        lead.rejectedBy = null;
       }
     }
 
@@ -490,7 +692,7 @@ export class LeadsService {
       from: fromStatus,
       to: toStatus,
       changedBy: toObjectId(ctx.user.id),
-      reason: payload.lostReason || (isReopening ? 'Re-opened for new campaign inquiry' : undefined),
+      reason: payload.lostReason || (isReopening ? (fromStatus === 'Rejected' ? 'Restored to Unclaimed pool' : 'Re-opened for new campaign inquiry') : undefined),
       cycle: lead.cycle || 1,
       changedAt: now,
     });

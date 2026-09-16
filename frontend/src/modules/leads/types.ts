@@ -18,10 +18,11 @@ export type LeadStatus =
   | 'Won'
   | 'Lost'
   | 'Duplicate'
-  | 'duplicate';
+  | 'duplicate'
+  | 'Rejected';
 
 export const STATUS_TRANSITIONS: Record<string, LeadStatus[]> = {
-  New: ['Contacted', 'Lost'],
+  New: ['Contacted', 'Lost', 'Rejected'],
   Contacted: ['Interested', 'Lost'],
   Interested: ['Qualified', 'Lost'],
   Qualified: ['Proposal Sent', 'Negotiation', 'Lost'],
@@ -31,6 +32,7 @@ export const STATUS_TRANSITIONS: Record<string, LeadStatus[]> = {
   Lost: [],
   Duplicate: [],
   duplicate: [],
+  Rejected: ['New'],
 };
 
 export type LocationPreference = 'Airport' | 'Highway' | 'Mall' | 'Metro' | 'Other';

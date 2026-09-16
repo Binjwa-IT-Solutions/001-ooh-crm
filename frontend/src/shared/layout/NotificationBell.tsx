@@ -9,8 +9,7 @@ import {
   CheckCheck,
   ExternalLink,
   ArrowUpRight,
-  AlertTriangle,
-  Clock,
+  X,
 } from "lucide-react";
 import { api } from "@/shared/api/client";
 
@@ -30,18 +29,45 @@ interface NotificationsResponse {
   unreadCount: number;
 }
 
+function formatTimeAgo(isoString: string): string {
+  const diff = Date.now() - new Date(isoString).getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [toastNotification, setToastNotification] = useState<AppNotification | null>(null);
+  const knownNotificationIds = useRef<Set<string>>(new Set());
+  const isInitialFetch = useRef(true);
   const popoverRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   async function fetchNotifications() {
     try {
       const res = await api.get<NotificationsResponse>("/api/notifications?limit=15");
-      if (res) {
+      if (res && res.notifications) {
+        // Detect brand-new incoming notifications after initial page load
+        if (!isInitialFetch.current) {
+          const brandNew = res.notifications.find(
+            (n) => !n.readAt && !knownNotificationIds.current.has(n._id),
+          );
+          if (brandNew) {
+            setToastNotification(brandNew);
+          }
+        }
+
+        res.notifications.forEach((n) => knownNotificationIds.current.add(n._id));
+        isInitialFetch.current = false;
+
         setNotifications(res.notifications || []);
         setUnreadCount(res.unreadCount || 0);
       }
@@ -53,10 +79,19 @@ export default function NotificationBell() {
   useEffect(() => {
     fetchNotifications();
 
-    // Auto-poll every 30 seconds for live notification updates
-    const interval = setInterval(fetchNotifications, 30000);
+    // Auto-poll every 15 seconds for live notification updates
+    const interval = setInterval(fetchNotifications, 15000);
     return () => clearInterval(interval);
   }, []);
+
+  // Auto-dismiss floating toast after 6 seconds
+  useEffect(() => {
+    if (!toastNotification) return;
+    const timer = setTimeout(() => {
+      setToastNotification(null);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [toastNotification]);
 
   // Close popover when clicking outside
   useEffect(() => {
@@ -111,24 +146,13 @@ export default function NotificationBell() {
     }
   }
 
-  function formatTimeAgo(isoString: string): string {
-    const diff = Date.now() - new Date(isoString).getTime();
-    const minutes = Math.floor(diff / 60000);
-    if (minutes < 1) return "Just now";
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
-  }
-
   return (
     <div ref={popoverRef} className="relative">
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         aria-label="View notifications"
-        className="relative -m-2.5 p-2.5 text-[#687280] hover:text-[#1F2937] rounded-full border border-[#E6E8EC] shadow-sm ml-2 h-10 w-10 flex items-center justify-center transition-colors cursor-pointer hover:bg-slate-50 focus:outline-none"
+        className="relative -m-2.5 p-2.5 text-text-secondary hover:text-text-primary rounded-full border border-border-subtle shadow-sm ml-2 h-10 w-10 flex items-center justify-center transition-colors cursor-pointer hover:bg-slate-50 focus:outline-none"
       >
         <Bell className="h-5 w-5 text-gray-700" />
 
@@ -168,7 +192,7 @@ export default function NotificationBell() {
           </div>
 
           {/* List */}
-          <div className="max-h-[380px] overflow-y-auto divide-y divide-gray-100">
+          <div className="max-h-95 overflow-y-auto divide-y divide-gray-100">
             {notifications.length === 0 ? (
               <div className="p-8 text-center">
                 <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-400 mb-2">
@@ -178,7 +202,7 @@ export default function NotificationBell() {
                   No notifications
                 </p>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  You're all caught up!
+                  You&apos;re all caught up!
                 </p>
               </div>
             ) : (
@@ -199,7 +223,7 @@ export default function NotificationBell() {
                     <div
                       className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
                         isEscalation
-                          ? "bg-gradient-to-br from-[#8B2424] to-[#A8333B] text-white shadow-xs"
+                          ? "bg-linear-to-br from-[#8B2424] to-[#A8333B] text-white shadow-xs"
                           : "bg-blue-100 text-blue-700"
                       }`}
                     >
@@ -250,6 +274,47 @@ export default function NotificationBell() {
               View all in Escalations
               <ExternalLink className="h-3 w-3" />
             </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Live Toast Popup for New Incoming Leads / Alerts */}
+      {toastNotification && (
+        <div className="fixed top-16 right-6 z-50 flex items-start gap-3 bg-white border border-rose-100 shadow-2xl rounded-2xl p-4 max-w-sm transition-all duration-300">
+          <div className="w-9 h-9 rounded-xl bg-[#8B2424]/10 flex items-center justify-center shrink-0 mt-0.5">
+            <Bell className="w-5 h-5 text-[#8B2424]" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-bold text-gray-900 truncate">
+                {toastNotification.title}
+              </p>
+              <button
+                onClick={() => setToastNotification(null)}
+                className="text-gray-400 hover:text-gray-600 p-0.5 rounded"
+                aria-label="Close notification"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {toastNotification.body && (
+              <p className="text-xs text-gray-600 mt-1 line-clamp-2 leading-relaxed">
+                {toastNotification.body}
+              </p>
+            )}
+            {toastNotification.link && (
+              <button
+                onClick={() => {
+                  const targetLink = toastNotification.link!;
+                  setToastNotification(null);
+                  handleMarkRead(toastNotification._id, targetLink);
+                }}
+                className="mt-2.5 inline-flex items-center gap-1 text-xs font-semibold text-[#8B2424] hover:underline"
+              >
+                View Details
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
       )}

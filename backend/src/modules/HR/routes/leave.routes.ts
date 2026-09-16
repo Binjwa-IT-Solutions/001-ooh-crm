@@ -16,6 +16,7 @@ leaveRoutes.get('/balance', requirePermission('leave.self'), asyncHandler(contro
 
 leaveRoutes.post('/', requirePermission('leave.self'), uploadSingle('attachment'), asyncHandler(controller.applyLeave));
 leaveRoutes.get('/me', requirePermission('leave.self'), asyncHandler(controller.getMyRequests));
+leaveRoutes.get('/calendar', requirePermission('leave.self'), asyncHandler(controller.getCalendarLeaves));
 
 leaveRoutes.get('/team', requirePermission('leave.manage'), asyncHandler(controller.getTeamRequests));
 leaveRoutes.get('/pending', requirePermission('leave.manage'), asyncHandler(controller.getTeamRequests));

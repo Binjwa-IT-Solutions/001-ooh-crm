@@ -10,6 +10,7 @@ import {
   useTeamLeaveRequests,
   useHolidays,
   useLeaveTypes,
+  useCalendarLeaves,
 } from '@/modules/hr/hooks/use-leave';
 import { leaveApi, holidayApi } from '@/modules/hr/api';
 import { useAuth } from '@/shared/auth/auth-context';
@@ -636,11 +637,19 @@ function HolidayCalendarTab() {
   const { hasPermission } = useAuth();
   const canManageHolidays = hasPermission('holiday.manage');
 
-  const { data: holidays, isLoading, error: fetchError, mutate } = useHolidays();
+  const { data: holidays, isLoading: isHolidaysLoading, error: fetchError, mutate: mutateHolidays } = useHolidays();
 
   const now = new Date();
-  const [currentYear, setCurrentYear] = useState(2026);
-  const [currentMonth, setCurrentMonth] = useState(now.getUTCMonth());
+  const [currentYear, setCurrentYear] = useState(() => now.getUTCFullYear());
+  const [currentMonth, setCurrentMonth] = useState(() => now.getUTCMonth());
+
+  const { data: calendarLeaves, isLoading: isLeavesLoading, mutate: mutateLeaves } = useCalendarLeaves(currentYear, currentMonth);
+
+  const isLoading = isHolidaysLoading || isLeavesLoading;
+
+  const mutate = async () => {
+    await Promise.all([mutateHolidays(), mutateLeaves()]);
+  };
 
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -711,18 +720,28 @@ function HolidayCalendarTab() {
     return found || null;
   };
 
+  const getLeavesForDay = (dayNum: number) => {
+    if (!calendarLeaves || calendarLeaves.length === 0) return [];
+    const dayStart = new Date(Date.UTC(currentYear, currentMonth, dayNum, 0, 0, 0, 0)).getTime();
+    const dayEnd = new Date(Date.UTC(currentYear, currentMonth, dayNum, 23, 59, 59, 999)).getTime();
+    return calendarLeaves.filter((req) => {
+      const from = new Date(req.fromDate).getTime();
+      const to = new Date(req.toDate).getTime();
+      return from <= dayEnd && to >= dayStart;
+    });
+  };
+
   const handleSelectDay = (dayNum: number) => {
     setSelectedDay(dayNum);
     const existingHoliday = getHolidayForDay(dayNum);
     if (existingHoliday) {
       setFormName(existingHoliday.name);
       setFormDescription(existingHoliday.description || '');
-      setIsEditing(false);
     } else {
       setFormName('');
       setFormDescription('');
-      setIsEditing(true);
     }
+    setIsEditing(false);
     setFormError(null);
   };
 
@@ -879,12 +898,13 @@ function HolidayCalendarTab() {
             <div className="grid grid-cols-7 gap-2">
               {calendarCells.map((dayNum, idx) => {
                 if (dayNum === null) {
-                  return <div key={`empty-${idx}`} className="h-16 bg-slate-50/50 rounded-lg"></div>;
+                  return <div key={`empty-${idx}`} className="min-h-[4.5rem] bg-slate-50/50 rounded-lg"></div>;
                 }
 
                 const dayOfWeek = idx % 7;
                 const isSunday = dayOfWeek === 0;
                 const holiday = getHolidayForDay(dayNum);
+                const dayLeaves = getLeavesForDay(dayNum);
                 const isSelected = selectedDay === dayNum;
 
                 let cellBg = 'bg-white hover:bg-slate-50';
@@ -900,6 +920,9 @@ function HolidayCalendarTab() {
                   cellBg = 'bg-emerald-50 hover:bg-emerald-100';
                   textStyle = 'text-emerald-700 font-bold';
                   borderStyle = 'border-2 border-emerald-300';
+                } else if (dayLeaves.length > 0) {
+                  cellBg = 'bg-blue-50/40 hover:bg-blue-100/40';
+                  borderStyle = 'border border-blue-200';
                 }
 
                 if (isSelected) {
@@ -911,15 +934,27 @@ function HolidayCalendarTab() {
                     key={`day-${dayNum}`}
                     type="button"
                     onClick={() => handleSelectDay(dayNum)}
-                    className={`h-16 p-2 rounded-lg flex flex-col justify-between items-start transition-all relative text-left ${cellBg} ${borderStyle}`}
+                    className={`min-h-[4.5rem] p-1.5 rounded-lg flex flex-col justify-between items-start transition-all relative text-left ${cellBg} ${borderStyle}`}
                   >
                     <span className={`text-xs ${textStyle}`}>{dayNum}</span>
-                    {holiday && (
-                      <span className="block w-full text-[10px] truncate text-emerald-800" title={holiday.name}>
-                        {holiday.name}
-                      </span>
-                    )}
-                    {isSunday && !holiday && <span className="block text-[8px] text-red-400 font-normal">Weekly</span>}
+                    <div className="w-full space-y-0.5 mt-0.5">
+                      {holiday && (
+                        <span className="block w-full text-[10px] truncate text-emerald-800 font-medium" title={holiday.name}>
+                          {holiday.name}
+                        </span>
+                      )}
+                      {dayLeaves.length > 0 && (
+                        <span
+                          className="inline-flex items-center px-1 py-0.5 text-[9px] font-medium bg-blue-100 text-blue-800 rounded truncate max-w-full"
+                          title={dayLeaves.map((l) => `${l.employeeName || 'Staff'} (${l.leaveTypeName || 'Leave'})`).join(', ')}
+                        >
+                          {dayLeaves.length === 1
+                            ? (dayLeaves[0].employeeName?.split(' ')[0] || '1 on leave')
+                            : `${dayLeaves.length} on leave`}
+                        </span>
+                      )}
+                      {isSunday && !holiday && <span className="block text-[8px] text-red-400 font-normal">Weekly</span>}
+                    </div>
                   </button>
                 );
               })}
@@ -933,7 +968,7 @@ function HolidayCalendarTab() {
               <div className="text-slate-400 text-3xl mb-2">📅</div>
               <p className="font-semibold text-slate-700">No date selected</p>
               <p className="text-xs text-slate-400 mt-1 max-w-[200px]">
-                Click on any calendar day to view details or add new holidays.
+                Click on any calendar day to view holiday details, approved leaves, or add new holidays.
               </p>
             </div>
           ) : (
@@ -951,53 +986,16 @@ function HolidayCalendarTab() {
 
               {(() => {
                 const holiday = getHolidayForDay(selectedDay);
+                const dayLeaves = getLeavesForDay(selectedDay);
                 const dayDate = new Date(Date.UTC(currentYear, currentMonth, selectedDay));
                 const isSunday = dayDate.getUTCDay() === 0;
-
-                if (!isEditing && holiday) {
-                  return (
-                    <div className="space-y-4">
-                      <div>
-                        <span className="text-xs text-slate-400 uppercase tracking-wider">Holiday Name</span>
-                        <p className="font-semibold text-slate-800 text-lg">{holiday.name}</p>
-                      </div>
-
-                      {holiday.description && (
-                        <div>
-                          <span className="text-xs text-slate-400 uppercase tracking-wider">Description</span>
-                          <p className="text-sm text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100 mt-1">
-                            {holiday.description}
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="pt-2 flex flex-col gap-2">
-                        {isSunday && <Badge>Sunday Weekly Holiday</Badge>}
-                        {!isSunday && <Badge>Company Public Holiday</Badge>}
-                      </div>
-
-                      {canManageHolidays && (
-                        <div className="flex gap-2 pt-4 border-t">
-                          <Button variant="secondary" className="flex-1" onClick={() => setIsEditing(true)}>
-                            Edit
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            className="text-red-600 hover:bg-red-50"
-                            onClick={handleDeleteHoliday}
-                            disabled={isSubmitting}
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
 
                 if (isEditing && canManageHolidays) {
                   return (
                     <form onSubmit={handleSaveHoliday} className="space-y-4">
+                      <h4 className="text-sm font-semibold text-slate-700">
+                        {holiday ? 'Edit Holiday' : 'Add Holiday'}
+                      </h4>
                       <Field
                         label="Holiday Name"
                         placeholder="e.g. Independence Day"
@@ -1027,10 +1025,8 @@ function HolidayCalendarTab() {
                             if (holiday) {
                               setFormName(holiday.name);
                               setFormDescription(holiday.description || '');
-                              setIsEditing(false);
-                            } else {
-                              setSelectedDay(null);
                             }
+                            setIsEditing(false);
                           }}
                           disabled={isSubmitting}
                         >
@@ -1042,13 +1038,103 @@ function HolidayCalendarTab() {
                 }
 
                 return (
-                  <div className="space-y-2 py-6 text-center text-slate-500">
-                    <p className="font-semibold text-slate-700">{isSunday ? 'Weekly Holiday' : 'Regular Workday'}</p>
-                    <p className="text-xs">
-                      {isSunday
-                        ? 'Sundays are automatically treated as weekly non-working days.'
-                        : 'No official holiday is scheduled for this date.'}
-                    </p>
+                  <div className="space-y-4">
+                    {/* Holiday Section */}
+                    {holiday ? (
+                      <div className="space-y-3">
+                        <div>
+                          <span className="text-xs text-slate-400 uppercase tracking-wider">Holiday Name</span>
+                          <p className="font-semibold text-slate-800 text-lg">{holiday.name}</p>
+                        </div>
+
+                        {holiday.description && (
+                          <div>
+                            <span className="text-xs text-slate-400 uppercase tracking-wider">Description</span>
+                            <p className="text-sm text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100 mt-1">
+                              {holiday.description}
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="pt-1 flex flex-wrap gap-2">
+                          {isSunday && <Badge>Sunday Weekly Holiday</Badge>}
+                          {!isSunday && <Badge>Company Public Holiday</Badge>}
+                        </div>
+
+                        {canManageHolidays && (
+                          <div className="flex gap-2 pt-3 border-t">
+                            <Button variant="secondary" className="flex-1" onClick={() => setIsEditing(true)}>
+                              Edit
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              className="text-red-600 hover:bg-red-50"
+                              onClick={handleDeleteHoliday}
+                              disabled={isSubmitting}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div>
+                          <p className="font-semibold text-slate-700">{isSunday ? 'Sunday Weekly Holiday' : 'Regular Workday'}</p>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            {isSunday
+                              ? 'Sundays are automatically treated as weekly non-working days.'
+                              : 'No official holiday is scheduled for this date.'}
+                          </p>
+                        </div>
+                        {canManageHolidays && (
+                          <Button
+                            variant="secondary"
+                            className="h-9 px-3 text-xs"
+                            onClick={() => {
+                              setFormName('');
+                              setFormDescription('');
+                              setIsEditing(true);
+                            }}
+                          >
+                            + Add Holiday
+                          </Button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Approved Leaves Section */}
+                    <div className="pt-4 border-t border-slate-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                          On Leave ({dayLeaves.length})
+                        </span>
+                      </div>
+                      {dayLeaves.length > 0 ? (
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                          {dayLeaves.map((l) => (
+                            <div key={l.id} className="p-2.5 rounded-lg bg-blue-50/70 border border-blue-100 text-xs">
+                              <div className="flex items-center justify-between">
+                                <p className="font-semibold text-blue-900">{l.employeeName || 'Employee'}</p>
+                                <span className="text-[10px] px-1.5 py-0.5 bg-blue-200/70 text-blue-800 rounded font-medium">
+                                  {l.leaveTypeName || 'Leave'}
+                                </span>
+                              </div>
+                              <p className="text-slate-500 text-[11px] mt-1">
+                                {new Date(l.fromDate).toLocaleDateString()} &ndash; {new Date(l.toDate).toLocaleDateString()} ({l.days} day{l.days > 1 ? 's' : ''})
+                              </p>
+                              {l.reason && (
+                                <p className="text-slate-600 text-[11px] italic mt-1 line-clamp-2">
+                                  &ldquo;{l.reason}&rdquo;
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400">No employees on approved leave.</p>
+                      )}
+                    </div>
                   </div>
                 );
               })()}
