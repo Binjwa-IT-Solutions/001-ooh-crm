@@ -37,6 +37,8 @@ import {
   RotateCw,
   Layers,
   Briefcase,
+  User,
+  Building2,
 } from 'lucide-react';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -358,7 +360,13 @@ export default function LeadDetailPage() {
             )}
           </div>
           <p className="text-sm text-slate-500 mt-1">
-            {lead.contactPerson} • {lead.mobile} {lead.email ? `• ${lead.email}` : ''}
+            <span className="font-semibold text-slate-700 dark:text-slate-200">
+              {lead.contactPerson}
+              {lead.designation ? ` (${lead.designation})` : ''}
+            </span>
+            {' • '}
+            <span>{lead.mobile}</span>
+            {lead.email ? ` • ${lead.email}` : ''}
           </p>
         </div>
 
@@ -455,12 +463,58 @@ export default function LeadDetailPage() {
         <div className="space-y-6">
           <Card className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-6 p-6">
             <div>
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Source</h3>
-              <p className="text-base text-slate-800 dark:text-slate-200">{lead.source}</p>
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Primary Concern Person</h3>
+              <p className="text-base font-semibold text-slate-800 dark:text-slate-100">
+                {lead.contactPerson}
+                {lead.designation && (
+                  <span className="text-xs font-normal text-slate-500 dark:text-slate-400 ml-1.5">
+                    ({lead.designation})
+                  </span>
+                )}
+              </p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {lead.mobile} {lead.email ? `• ${lead.email}` : ''}
+              </p>
             </div>
+
+            {lead.secondaryContactPerson ? (
+              <div>
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Secondary Concern Person</h3>
+                <p className="text-base font-semibold text-slate-800 dark:text-slate-100">
+                  {lead.secondaryContactPerson}
+                  {lead.secondaryDesignation && (
+                    <span className="text-xs font-normal text-slate-500 dark:text-slate-400 ml-1.5">
+                      ({lead.secondaryDesignation})
+                    </span>
+                  )}
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {lead.secondaryMobile || 'No Alternate Phone'}
+                </p>
+              </div>
+            ) : (
+              <div>
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Source</h3>
+                <p className="text-base text-slate-800 dark:text-slate-200">{lead.source}</p>
+              </div>
+            )}
+
+            {lead.secondaryContactPerson && (
+              <div>
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Source</h3>
+                <p className="text-base text-slate-800 dark:text-slate-200">{lead.source}</p>
+              </div>
+            )}
+
             <div>
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">City</h3>
-              <p className="text-base text-slate-800 dark:text-slate-200">{lead.city || '-'}</p>
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">City & Location</h3>
+              <p className="text-base text-slate-800 dark:text-slate-200">
+                {lead.city || '-'}
+                {lead.companyLocation ? ` • ${lead.companyLocation}` : ''}
+              </p>
+              {lead.companyAddress && (
+                <p className="text-xs text-slate-500 mt-0.5">{lead.companyAddress}</p>
+              )}
             </div>
             <div>
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Assigned Agent</h3>

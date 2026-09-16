@@ -109,7 +109,13 @@ export interface Lead {
   _id?: string;
   companyName: string;
   contactPerson: string;
+  designation?: string;
   mobile: string;
+  secondaryContactPerson?: string;
+  secondaryDesignation?: string;
+  secondaryMobile?: string;
+  companyAddress?: string;
+  companyLocation?: string;
   email?: string;
   city?: string;
   source: LeadSource;
@@ -172,7 +178,13 @@ export type LeadFilters = LeadListQuery;
 export interface LeadFormValues {
   companyName: string;
   contactPerson: string;
+  designation?: string;
   mobile: string;
+  secondaryContactPerson?: string;
+  secondaryDesignation?: string;
+  secondaryMobile?: string;
+  companyAddress?: string;
+  companyLocation?: string;
   email: string;
   city: string;
 }

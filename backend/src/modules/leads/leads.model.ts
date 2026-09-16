@@ -88,7 +88,13 @@ export interface ILeadQualification {
 export interface ILead extends BaseDocument {
   companyName: string;
   contactPerson: string;
+  designation?: string;
   mobile: string;
+  secondaryContactPerson?: string;
+  secondaryDesignation?: string;
+  secondaryMobile?: string;
+  companyAddress?: string;
+  companyLocation?: string;
   email?: string;
   city?: string;
   source: LeadSource;
@@ -168,7 +174,13 @@ const qualificationSchema = new Schema<ILeadQualification>(
 const leadSchema = new Schema<ILead>({
   companyName: { type: String, required: true, trim: true },
   contactPerson: { type: String, required: true, trim: true },
+  designation: { type: String, trim: true },
   mobile: { type: String, required: true, trim: true, index: true },
+  secondaryContactPerson: { type: String, trim: true },
+  secondaryDesignation: { type: String, trim: true },
+  secondaryMobile: { type: String, trim: true },
+  companyAddress: { type: String, trim: true },
+  companyLocation: { type: String, trim: true },
   email: { type: String, trim: true, lowercase: true },
   city: { type: String, trim: true },
   source: { type: String, enum: LEAD_SOURCES, required: true },

@@ -30,10 +30,27 @@ function toPayload(values: LeadFormValues): Record<string, unknown> {
     mobile: values.mobile.trim(),
   };
 
+  if (values.designation && values.designation.trim() !== '') {
+    payload.designation = values.designation.trim();
+  }
+  if (values.secondaryContactPerson && values.secondaryContactPerson.trim() !== '') {
+    payload.secondaryContactPerson = values.secondaryContactPerson.trim();
+  }
+  if (values.secondaryDesignation && values.secondaryDesignation.trim() !== '') {
+    payload.secondaryDesignation = values.secondaryDesignation.trim();
+  }
+  if (values.secondaryMobile && values.secondaryMobile.trim() !== '') {
+    payload.secondaryMobile = values.secondaryMobile.trim();
+  }
+  if (values.companyAddress && values.companyAddress.trim() !== '') {
+    payload.companyAddress = values.companyAddress.trim();
+  }
+  if (values.companyLocation && values.companyLocation.trim() !== '') {
+    payload.companyLocation = values.companyLocation.trim();
+  }
   if (values.email && values.email.trim() !== '') {
     payload.email = values.email.trim();
   }
-
   if (values.city && values.city.trim() !== '') {
     payload.city = values.city.trim();
   }

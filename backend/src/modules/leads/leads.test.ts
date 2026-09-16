@@ -465,3 +465,42 @@ test('getActivity returns combined chronological activities with follow-up logs'
     LeadsService.getLead = origGetLead;
   }
 });
+
+test('createLead supports secondary concern person, designations, and company address/location', async () => {
+  await withPatchedModel(
+    {
+      findOne: () => ({ exec: async () => null }),
+      create: async (payload: any) => payload,
+    },
+    async () => {
+      const data = {
+        source: 'Manual' as const,
+        companyName: 'Acme Corp Pvt Ltd',
+        companyAddress: 'Tower B, 7th Floor, Cyber City',
+        companyLocation: 'DLF Phase 2',
+        city: 'Gurugram',
+        contactPerson: 'Vikram Malhotra',
+        designation: 'VP Marketing',
+        mobile: '9811122233',
+        secondaryContactPerson: 'Ritu Sharma',
+        secondaryDesignation: 'Media Planner',
+        secondaryMobile: '9811144455',
+      };
+
+      const created: any = await LeadsService.createLead(data, FAKE_USER_CTX);
+
+      assert.equal(created.companyName, 'Acme Corp Pvt Ltd');
+      assert.equal(created.companyAddress, 'Tower B, 7th Floor, Cyber City');
+      assert.equal(created.companyLocation, 'DLF Phase 2');
+      assert.equal(created.city, 'Gurugram');
+      assert.equal(created.contactPerson, 'Vikram Malhotra');
+      assert.equal(created.designation, 'VP Marketing');
+      assert.equal(created.mobile, '9811122233');
+      assert.equal(created.secondaryContactPerson, 'Ritu Sharma');
+      assert.equal(created.secondaryDesignation, 'Media Planner');
+      assert.equal(created.secondaryMobile, '9811144455');
+      assert.equal(created.status, 'New');
+    },
+  );
+});
+
