@@ -31,6 +31,11 @@ export class LeadsController {
     res.status(200).json({ agents });
   }
 
+  static async getCities(req: Request, res: Response) {
+    const cities = await LeadsService.getDistinctCities(req.ctx!);
+    res.status(200).json({ data: cities });
+  }
+
   static async list(req: Request, res: Response) {
     const filters = listLeadsSchema.parse(req.query);
     const { leads, total } = await LeadsService.listLeads(filters, req.ctx!);

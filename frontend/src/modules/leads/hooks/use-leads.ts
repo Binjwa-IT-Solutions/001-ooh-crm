@@ -7,15 +7,16 @@ export function useLeads(filters?: LeadFilters, pollIntervalMs?: number) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const filtersRef = useRef(filters);
+  const serializedFilters = JSON.stringify(filters);
 
-  // Keep filtersRef up to date without triggering effect rerenders on object reference change
+  // Keep filtersRef up to date
   useEffect(() => {
     filtersRef.current = filters;
   }, [filters]);
 
   const fetchLeads = useCallback(async () => {
     try {
-      if (!data) setIsLoading(true);
+      setIsLoading(true);
       const res = await leadsApi.getLeads(filtersRef.current);
       setData(res);
       setError(null);
@@ -26,17 +27,18 @@ export function useLeads(filters?: LeadFilters, pollIntervalMs?: number) {
     } finally {
       setIsLoading(false);
     }
-  }, [data]); // Removed filters from dependencies to avoid object reference issues
+  }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchLeads();
+  }, [fetchLeads, serializedFilters]);
 
-    if (pollIntervalMs) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      const intervalId = setInterval(() => { void fetchLeads(); }, pollIntervalMs);
-      return () => clearInterval(intervalId);
-    }
+  useEffect(() => {
+    if (!pollIntervalMs) return;
+    const intervalId = setInterval(() => {
+      void fetchLeads();
+    }, pollIntervalMs);
+    return () => clearInterval(intervalId);
   }, [fetchLeads, pollIntervalMs]);
 
   return {

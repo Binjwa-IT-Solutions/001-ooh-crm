@@ -19,6 +19,10 @@ import { extractLeadWithGemini } from './leads.ai.js';
 import { Quotation } from '../quotations/quotations.model.js';
 import { Campaign } from '../campaigns/campaign.model.js';
 
+function escapeRegex(text: string): string {
+  return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+}
+
 export class LeadsService {
   /**
    * List leads with filtering, pagination, and scoping rules applied.
@@ -35,7 +39,7 @@ export class LeadsService {
     }
 
     if (filters.status) query.status = filters.status;
-    if (filters.city) query.city = filters.city;
+    if (filters.city) query.city = new RegExp(escapeRegex(filters.city.trim()), 'i');
     if (filters.source) query.source = filters.source;
 
     if (filters.fromDate || filters.toDate) {
@@ -145,7 +149,7 @@ export class LeadsService {
     }
 
     if (filters.city) {
-      query.city = new RegExp(`^${filters.city}$`, 'i');
+      query.city = new RegExp(escapeRegex(filters.city.trim()), 'i');
     }
 
     if (filters.source) {
@@ -1143,6 +1147,17 @@ export class LeadsService {
       await lead.populate('assignedTo claimedBy rejectedBy documents.uploadedBy', 'name email role');
     }
     return lead;
+  }
+
+  static async getDistinctCities(ctx: RequestContext): Promise<string[]> {
+    const rawCities = await Lead.distinct('city', { deletedAt: null });
+    const cleanSet = new Set<string>();
+    for (const c of rawCities) {
+      if (!c || typeof c !== 'string') continue;
+      const clean = c.replace(/^.*?\]/, '').trim();
+      if (clean) cleanSet.add(clean);
+    }
+    return Array.from(cleanSet).sort((a, b) => a.localeCompare(b));
   }
 }
 

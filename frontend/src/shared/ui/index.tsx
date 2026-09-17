@@ -383,18 +383,20 @@ export function Modal({
   open,
   onClose,
   title,
+  className,
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title?: string;
+  className?: string;
   children: ReactNode;
 }) {
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+      <div className={cx('w-full max-w-lg rounded-xl bg-white p-6 shadow-xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800', className)}>
         {title && (
           <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-4">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h3>

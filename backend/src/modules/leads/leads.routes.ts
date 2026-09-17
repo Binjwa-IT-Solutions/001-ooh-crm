@@ -41,6 +41,12 @@ leadRoutes.get(
 );
 
 leadRoutes.get(
+  '/cities',
+  requirePermission('leads.view'),
+  asyncHandler(LeadsController.getCities),
+);
+
+leadRoutes.get(
   '/:id',
   requirePermission('leads.view'),
   asyncHandler(LeadsController.get),

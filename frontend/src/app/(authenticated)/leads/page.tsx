@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/shared/auth/auth-context';
 import { useLeads } from '@/modules/leads/hooks/use-leads';
@@ -9,7 +9,8 @@ import { api } from '@/shared/api/client';
 import { LeadStatus, LeadSource, Lead, LogCallValues } from '@/modules/leads/types';
 import { Card, Button, Badge, Spinner, Field, SelectField, Alert, Modal, TextAreaField } from '@/shared/ui';
 import LogCallModal from '@/modules/leads/component/log-call-modal';
-import { Timer, CheckCircle2, AlertCircle, Building2, Phone, Mail, MapPin, Info, Clock, ArrowUpDown, Download } from 'lucide-react';
+import QuickLogActionModal from '@/modules/leads/component/quick-log-action-modal';
+import { Timer, CheckCircle2, AlertCircle, Building2, Phone, Mail, MapPin, Info, Clock, ArrowUpDown, Download, Plus, ChevronDown, X, Check } from 'lucide-react';
 
 const STATUS_STYLES: Record<string, string> = {
   New: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300',
@@ -108,6 +109,167 @@ function SlaCountdown({ end }: { end?: string | null }) {
   );
 }
 
+function SearchableCitySelect({
+  label,
+  value,
+  options,
+  placeholder = 'All Cities',
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  placeholder?: string;
+  onChange: (value: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState(value);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setSearchTerm(value);
+  }, [value]);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (!containerRef.current?.contains(e.target as Node)) {
+        setIsOpen(false);
+        setSearchTerm(value);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [value]);
+
+  const filtered = useMemo(() => {
+    if (!searchTerm.trim()) return options;
+    const term = searchTerm.toLowerCase().trim();
+    return options.filter((o) => o.toLowerCase().includes(term));
+  }, [options, searchTerm]);
+
+  const handleSelect = (city: string) => {
+    onChange(city);
+    setSearchTerm(city);
+    setIsOpen(false);
+  };
+
+  const handleClear = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange('');
+    setSearchTerm('');
+    setIsOpen(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (filtered.length > 0) {
+        handleSelect(filtered[0]);
+      } else if (searchTerm.trim()) {
+        handleSelect(searchTerm.trim());
+      }
+    } else if (e.key === 'Escape') {
+      setIsOpen(false);
+      setSearchTerm(value);
+    }
+  };
+
+  return (
+    <div ref={containerRef} className="space-y-1.5 relative">
+      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          type="text"
+          value={isOpen ? searchTerm : value || ''}
+          placeholder={value ? value : placeholder}
+          onFocus={() => {
+            setSearchTerm(value);
+            setIsOpen(true);
+          }}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            if (!isOpen) setIsOpen(true);
+          }}
+          onKeyDown={handleKeyDown}
+          className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 pr-14 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-primary dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-slate-300"
+        />
+        <div className="absolute right-2.5 top-3 flex items-center gap-1.5">
+          {value ? (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              title="Clear city"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => {
+              if (isOpen) {
+                setIsOpen(false);
+                setSearchTerm(value);
+              } else {
+                setIsOpen(true);
+              }
+            }}
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5"
+          >
+            <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
+      </div>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-800 dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800/60">
+          <button
+            type="button"
+            onClick={() => handleSelect('')}
+            className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors ${
+              !value ? 'font-semibold text-primary dark:text-red-400 bg-slate-50/80 dark:bg-slate-800/40' : 'text-slate-600 dark:text-slate-300'
+            }`}
+          >
+            <span>All Cities</span>
+            {!value && <Check className="w-3.5 h-3.5 text-primary" />}
+          </button>
+
+          <div className="py-0.5">
+            {filtered.map((cityOption) => {
+              const isSelected = value.toLowerCase() === cityOption.toLowerCase();
+              return (
+                <button
+                  key={cityOption}
+                  type="button"
+                  onClick={() => handleSelect(cityOption)}
+                  className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors ${
+                    isSelected ? 'font-semibold text-primary dark:text-red-400 bg-slate-50/80 dark:bg-slate-800/40' : 'text-slate-700 dark:text-slate-200'
+                  }`}
+                >
+                  <span>{cityOption}</span>
+                  {isSelected && <Check className="w-3.5 h-3.5 text-primary" />}
+                </button>
+              );
+            })}
+          </div>
+
+          {filtered.length === 0 && searchTerm.trim() && (
+            <button
+              type="button"
+              onClick={() => handleSelect(searchTerm.trim())}
+              className="w-full text-left px-3 py-2 text-xs text-primary hover:bg-slate-50 dark:hover:bg-slate-800/60 font-semibold transition-colors"
+            >
+              Filter by &ldquo;{searchTerm.trim()}&rdquo;
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function LeadsPage() {
   const { user } = useAuth();
   const isManagerOrAdmin = ['admin', 'manager'].includes(user?.role?.toLowerCase() || '');
@@ -158,6 +320,19 @@ export default function LeadsPage() {
   const { data, isLoading, error, mutate } = useLeads(filters, pollInterval);
 
   const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const [availableCities, setAvailableCities] = useState<string[]>(['Indore', 'Mumbai', 'Bhopal', 'New Delhi']);
+
+  useEffect(() => {
+    leadsApi.getCities()
+      .then((res) => {
+        if (res.data && res.data.length > 0) {
+          setAvailableCities(res.data);
+        }
+      })
+      .catch(() => {
+        // Fallback default cities preserved
+      });
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 30000);
@@ -241,6 +416,7 @@ export default function LeadsPage() {
   };
 
   const [isExporting, setIsExporting] = useState(false);
+  const [quickLogModalOpen, setQuickLogModalOpen] = useState(false);
 
   const handleExportCsv = async () => {
     try {
@@ -292,8 +468,16 @@ export default function LeadsPage() {
               <span>{isExporting ? 'Exporting...' : 'Export CSV'}</span>
             </Button>
           )}
+          <Button
+            variant="ghost"
+            onClick={() => setQuickLogModalOpen(true)}
+            className="!h-9 !px-3.5 inline-flex items-center gap-1.5 text-xs font-semibold bg-primary-100 text-primary border border-primary/25 hover:bg-[#F2CACA] dark:bg-primary-100/20 dark:text-red-300 dark:border-red-800 shadow-2xs transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5 shrink-0 text-primary dark:text-red-300" />
+            <span>Log Action</span>
+          </Button>
           <Link href="/leads/new">
-            <Button>Add Lead</Button>
+            <Button className="!h-9 text-xs">Add Lead</Button>
           </Link>
         </div>
       </div>
@@ -383,11 +567,12 @@ export default function LeadsPage() {
           onChange={(e) => { setSource(e.target.value as LeadSource); setPage(1); }}
           placeholder="All Sources"
         />
-        <Field
+        <SearchableCitySelect
           label="City"
-          placeholder="Any City"
+          options={availableCities}
           value={city}
-          onChange={(e) => { setCity(e.target.value); setPage(1); }}
+          onChange={(newCity) => { setCity(newCity); setPage(1); }}
+          placeholder="All Cities"
         />
       </Card>
 
@@ -625,7 +810,7 @@ export default function LeadsPage() {
                             </Link>
                             <Button
                               variant="ghost"
-                              className="bg-[#F9DADA] text-primary hover:bg-[#F2CACA]"
+                              className="bg-primary-100 text-primary hover:bg-[#F2CACA] border border-primary/20 font-medium shadow-2xs"
                               onClick={() => openLogModal(lead._id || lead.id)}
                             >
                               Log Action
@@ -711,6 +896,16 @@ export default function LeadsPage() {
             };
           })()
         }
+      />
+
+      {/* Quick Log Action Modal */}
+      <QuickLogActionModal
+        open={quickLogModalOpen}
+        onClose={() => setQuickLogModalOpen(false)}
+        onSuccess={async () => {
+          showToast('Action record saved successfully!', 'success');
+          await mutate();
+        }}
       />
 
       {/* Reject Lead Modal */}
