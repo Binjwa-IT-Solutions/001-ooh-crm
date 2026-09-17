@@ -35,8 +35,19 @@ router.get(
 
     const buffer = await fileService.read(key);
 
-    if (key.endsWith('.pdf')) {
+    const lowerKey = key.toLowerCase();
+    if (lowerKey.endsWith('.pdf')) {
       res.setHeader('Content-Type', 'application/pdf');
+    } else if (lowerKey.endsWith('.png')) {
+      res.setHeader('Content-Type', 'image/png');
+    } else if (lowerKey.endsWith('.jpg') || lowerKey.endsWith('.jpeg')) {
+      res.setHeader('Content-Type', 'image/jpeg');
+    } else if (lowerKey.endsWith('.webp')) {
+      res.setHeader('Content-Type', 'image/webp');
+    } else if (lowerKey.endsWith('.svg')) {
+      res.setHeader('Content-Type', 'image/svg+xml');
+    } else if (lowerKey.endsWith('.csv')) {
+      res.setHeader('Content-Type', 'text/csv');
     }
     res.setHeader('Cache-Control', 'private, max-age=3600');
     res.send(buffer);

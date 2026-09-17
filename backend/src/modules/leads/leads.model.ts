@@ -211,6 +211,7 @@ const leadDocumentSchema = new Schema<ILeadDocument>(
     title: { type: String, required: true, trim: true },
     originalName: { type: String, required: true, trim: true },
     fileKey: { type: String, required: true, trim: true },
+    fileUrl: { type: String, trim: true },
     fileSize: { type: Number },
     mimeType: { type: String },
     uploadedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },

@@ -20,6 +20,8 @@ import { Card, Badge, Spinner, Button, Field, Alert, Modal, TextAreaField } from
 import { LeadsSelect } from '@/modules/leads/components/leads-select';
 import LogCallModal from '@/modules/leads/component/log-call-modal';
 import { useAuth } from '@/shared/auth/auth-context';
+import { sessionStore } from '@/shared/auth/session-store';
+import { appConfig } from '@/shared/config';
 import { getCampaigns } from '@/modules/campaigns/api';
 import type { Campaign } from '@/modules/campaigns/types';
 import {
@@ -45,6 +47,7 @@ import {
   Upload,
   Trash2,
   Download,
+  ExternalLink,
 } from 'lucide-react';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -139,8 +142,13 @@ function formatDateTime(dateStr?: string | Date | null) {
 export default function LeadDetailPage() {
   const params = useParams();
   const id = params.id as string;
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const isManagerOrAdmin = ['admin', 'manager'].includes(user?.role?.toLowerCase() || '');
+  const canManageCampaigns = Boolean(
+    hasPermission?.('campaigns.manage') ||
+      isManagerOrAdmin ||
+      user?.role?.toLowerCase() === 'ops'
+  );
   const { lead, isLoading, error, mutate } = useLead(id);
 
   const [activeTab, setActiveTab] = useState<'info' | 'qualification' | 'campaigns' | 'activity' | 'documents'>('info');
@@ -882,12 +890,14 @@ export default function LeadDetailPage() {
                 Independent parallel outdoor campaigns running or planned for this client.
               </p>
             </div>
-            <Link href={`/campaigns?leadId=${lead._id || lead.id}&create=true`}>
-              <Button variant="primary" className="!h-9 !px-3 inline-flex items-center gap-1.5 bg-[#8B2424] text-white hover:bg-[#6E1D1D] shadow-2xs !text-xs font-semibold">
-                <Plus className="w-3.5 h-3.5 shrink-0" />
-                <span>Launch New Campaign</span>
-              </Button>
-            </Link>
+            {canManageCampaigns && (
+              <Link href={`/campaigns?leadId=${lead._id || lead.id}&create=true`}>
+                <Button variant="primary" className="!h-9 !px-3 inline-flex items-center gap-1.5 bg-[#8B2424] text-white hover:bg-[#6E1D1D] shadow-2xs !text-xs font-semibold">
+                  <Plus className="w-3.5 h-3.5 shrink-0" />
+                  <span>Launch New Campaign</span>
+                </Button>
+              </Link>
+            )}
           </div>
 
           {loadingCampaigns ? (
@@ -905,12 +915,14 @@ export default function LeadDetailPage() {
               <p className="text-xs text-slate-400 max-w-sm mx-auto">
                 Once a client inquiry matures, you can launch multiple parallel campaigns (e.g. City-specific launches, DOOH, or Highways).
               </p>
-              <Link href={`/campaigns?leadId=${lead._id || lead.id}&create=true`}>
-                <Button variant="secondary" className="!text-xs mt-2">
-                  <Plus className="w-3.5 h-3.5 mr-1" />
-                  Create First Campaign
-                </Button>
-              </Link>
+              {canManageCampaigns && (
+                <Link href={`/campaigns?leadId=${lead._id || lead.id}&create=true`}>
+                  <Button variant="secondary" className="!text-xs mt-2">
+                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    Create First Campaign
+                  </Button>
+                </Link>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -959,7 +971,7 @@ export default function LeadDetailPage() {
                           </span>
                         </td>
                         <td className="py-3 px-3 text-right">
-                          <Link href={`/campaigns/${c._id}`}>
+                          <Link href={`/campaigns?search=${encodeURIComponent(c.campaignCode || c.name)}`}>
                             <Button variant="ghost" className="!h-8 !px-2.5 !text-xs text-blue-600 hover:text-blue-800">
                               View
                             </Button>
@@ -1274,6 +1286,12 @@ export default function LeadDetailPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {lead.documents.map((doc: LeadDocument) => {
                 const docId = doc._id || doc.id || '';
+                const token = sessionStore.getAccessToken();
+                const baseFileUrl = doc.fileUrl || (doc.fileKey ? `${appConfig.apiUrl}/api/files/${encodeURIComponent(doc.fileKey)}` : '');
+                const viewUrl = baseFileUrl
+                  ? `${baseFileUrl}${baseFileUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(token || '')}`
+                  : '';
+
                 return (
                   <Card key={docId} className="p-4 flex flex-col justify-between space-y-3 hover:shadow-md transition-shadow">
                     <div className="space-y-2">
@@ -1290,16 +1308,17 @@ export default function LeadDetailPage() {
                             {doc.title}
                           </h4>
                         </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          {doc.fileUrl && (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {viewUrl && (
                             <a
-                              href={doc.fileUrl}
+                              href={viewUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="p-1.5 rounded text-slate-500 hover:text-[#8B2424] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                              title="Download / View document"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold text-[#8B2424] bg-red-50 hover:bg-[#8B2424] hover:text-white dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-[#8B2424] dark:hover:text-white transition-all shadow-2xs"
+                              title="Open & View document in new tab"
                             >
-                              <Download className="w-4 h-4" />
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              <span>View</span>
                             </a>
                           )}
                           <button

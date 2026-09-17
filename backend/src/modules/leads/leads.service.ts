@@ -146,6 +146,8 @@ export class LeadsService {
       }).exec();
     }
 
+    if (!lead) throw new NotFoundError('Lead not found');
+
     if (lead.populate) {
       await lead.populate('assignedTo claimedBy rejectedBy documents.uploadedBy', 'name email role');
     }
