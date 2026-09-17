@@ -10,6 +10,7 @@ import {
   changeStatusSchema,
   logFollowUpSchema,
   managerApprovalSchema,
+  uploadLeadDocumentSchema,
 } from './leads.validator.js';
 
 export class LeadsController {
@@ -106,4 +107,25 @@ export class LeadsController {
     const activity = await LeadsService.getActivity(req.params.id as string, req.ctx!);
     res.status(200).json(activity);
   }
+
+  static async uploadDocument(req: Request, res: Response) {
+    const data = uploadLeadDocumentSchema.parse(req.body);
+    const lead = await LeadsService.uploadDocument(
+      req.params.id as string,
+      req.file,
+      data,
+      req.ctx!,
+    );
+    res.status(201).json(lead);
+  }
+
+  static async deleteDocument(req: Request, res: Response) {
+    const lead = await LeadsService.deleteDocument(
+      req.params.id as string,
+      req.params.docId as string,
+      req.ctx!,
+    );
+    res.status(200).json(lead);
+  }
 }
+

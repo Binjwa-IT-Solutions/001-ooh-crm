@@ -8,9 +8,11 @@ import {
   type LeadStatus,
   type LeadSource,
   type FollowUpType,
+  type LeadDocumentType,
 } from './leads.model.js';
 import { STATUS_TRANSITIONS } from './leads.validator.js';
 import { toObjectId } from '../../core/db/basePlugin.js';
+import { fileService } from '../../core/files/index.js';
 import { AuthUser } from '../../core/auth/auth-model.js';
 import { notifyMany } from '../../core/notifications/index.js';
 import { extractLeadWithGemini } from './leads.ai.js';
@@ -144,9 +146,20 @@ export class LeadsService {
       }).exec();
     }
 
-    if (!lead) throw new NotFoundError('Lead not found');
-
-    await lead.populate('assignedTo claimedBy rejectedBy', 'name email role');
+    if (lead.populate) {
+      await lead.populate('assignedTo claimedBy rejectedBy documents.uploadedBy', 'name email role');
+    }
+    if (lead.documents && lead.documents.length > 0) {
+      for (const doc of lead.documents) {
+        if (doc.fileKey && !doc.fileUrl) {
+          try {
+            doc.fileUrl = await fileService.url(doc.fileKey);
+          } catch {
+            // ignore
+          }
+        }
+      }
+    }
     return lead;
   }
 
@@ -944,4 +957,74 @@ export class LeadsService {
 
     return { activities };
   }
+
+  /**
+   * Upload and attach a document to a lead.
+   */
+  static async uploadDocument(
+    id: string,
+    file: Express.Multer.File | undefined,
+    data: { documentType: LeadDocumentType; title: string; notes?: string },
+    ctx: RequestContext,
+  ): Promise<ILead> {
+    if (!file) throw new ValidationError('No file was uploaded');
+    const lead = await LeadsService.getLead(id, ctx);
+
+    const stored = await fileService.save(file, { folder: 'leads', ctx });
+
+    const newDoc = {
+      documentType: data.documentType,
+      title: data.title.trim(),
+      originalName: stored.originalName,
+      fileKey: stored.key,
+      fileUrl: stored.url,
+      fileSize: stored.size,
+      mimeType: stored.contentType,
+      uploadedBy: toObjectId(ctx.user.id),
+      uploadedAt: new Date(),
+      notes: data.notes?.trim() || '',
+    };
+
+    lead.documents = lead.documents || [];
+    lead.documents.push(newDoc as any);
+    await lead.save();
+
+    if (lead.populate) {
+      await lead.populate('assignedTo claimedBy rejectedBy documents.uploadedBy', 'name email role');
+    }
+    return lead;
+  }
+
+  /**
+   * Delete an attached document from a lead.
+   */
+  static async deleteDocument(
+    id: string,
+    docId: string,
+    ctx: RequestContext,
+  ): Promise<ILead> {
+    const lead = await LeadsService.getLead(id, ctx);
+    const docIndex = (lead.documents || []).findIndex(
+      (d: any) => String(d._id) === docId || String(d.id) === docId,
+    );
+    if (docIndex === -1) throw new NotFoundError('Document not found');
+
+    const doc = lead.documents![docIndex];
+    if (doc.fileKey) {
+      try {
+        await fileService.remove(doc.fileKey);
+      } catch {
+        // Continue even if file already absent from storage
+      }
+    }
+
+    lead.documents!.splice(docIndex, 1);
+    await lead.save();
+
+    if (lead.populate) {
+      await lead.populate('assignedTo claimedBy rejectedBy documents.uploadedBy', 'name email role');
+    }
+    return lead;
+  }
 }
+

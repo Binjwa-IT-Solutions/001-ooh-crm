@@ -86,6 +86,32 @@ export interface ILeadQualification {
   lostReason?: string;
 }
 
+export const LEAD_DOCUMENT_TYPES = [
+  'GST Certificate',
+  'PAN Card',
+  'Purchase Order (PO)',
+  'Client Agreement',
+  'Creative Artwork',
+  'Brand Guidelines',
+  'Payment Proof',
+  'Other',
+] as const;
+export type LeadDocumentType = (typeof LEAD_DOCUMENT_TYPES)[number];
+
+export interface ILeadDocument {
+  _id?: Types.ObjectId;
+  documentType: LeadDocumentType;
+  title: string;
+  originalName: string;
+  fileKey: string;
+  fileUrl?: string;
+  fileSize?: number;
+  mimeType?: string;
+  uploadedBy?: Types.ObjectId | null;
+  uploadedAt: Date;
+  notes?: string;
+}
+
 export interface ILead extends BaseDocument {
   companyName: string;
   contactPerson: string;
@@ -116,6 +142,7 @@ export interface ILead extends BaseDocument {
   qualification?: ILeadQualification;
   managerApproval?: IManagerApproval;
   statusHistory?: ILeadStatusHistory[];
+  documents?: ILeadDocument[];
   cycle?: number;
 }
 
@@ -173,6 +200,26 @@ const qualificationSchema = new Schema<ILeadQualification>(
   { _id: false },
 );
 
+const leadDocumentSchema = new Schema<ILeadDocument>(
+  {
+    documentType: {
+      type: String,
+      enum: LEAD_DOCUMENT_TYPES,
+      default: 'Other',
+      required: true,
+    },
+    title: { type: String, required: true, trim: true },
+    originalName: { type: String, required: true, trim: true },
+    fileKey: { type: String, required: true, trim: true },
+    fileSize: { type: Number },
+    mimeType: { type: String },
+    uploadedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    uploadedAt: { type: Date, default: Date.now },
+    notes: { type: String, trim: true },
+  },
+  { _id: true },
+);
+
 const leadSchema = new Schema<ILead>({
   companyName: { type: String, required: true, trim: true },
   contactPerson: { type: String, required: true, trim: true },
@@ -203,6 +250,7 @@ const leadSchema = new Schema<ILead>({
   firstResponseAt: { type: Date, default: null },
   statusHistory: { type: [statusHistorySchema], default: [] },
   callLogs: { type: [followUpLogSchema], default: [] },
+  documents: { type: [leadDocumentSchema], default: [] },
   cycle: { type: Number, default: 1, min: 1 },
 });
 

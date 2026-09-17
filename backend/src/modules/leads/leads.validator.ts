@@ -4,6 +4,7 @@ import {
   LEAD_STATUSES,
   LOCATION_PREFERENCES,
   FOLLOW_UP_TYPES,
+  LEAD_DOCUMENT_TYPES,
 } from './leads.model.js';
 
 export const objectIdSchema = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid object ID');
@@ -173,3 +174,10 @@ export const listLeadsSchema = z.object({
   fromDate: z.coerce.date().optional(),
   toDate: z.coerce.date().optional(),
 });
+
+export const uploadLeadDocumentSchema = z.object({
+  documentType: z.enum(LEAD_DOCUMENT_TYPES).default('Other'),
+  title: z.string().trim().min(1, 'Document title is required'),
+  notes: z.string().trim().optional(),
+});
+

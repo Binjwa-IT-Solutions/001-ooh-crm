@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { Lead } from './leads.model.js';
 import { LeadsService } from './leads.service.js';
-import { leadQualificationSchema, listLeadsSchema } from './leads.validator.js';
+import { leadQualificationSchema, listLeadsSchema, uploadLeadDocumentSchema } from './leads.validator.js';
 
 const FAKE_USER_CTX = { user: { id: '64b7f9a1c2d3e4f5a6b7c8d9', role: 'sales' } } as any;
 
@@ -561,6 +561,32 @@ test('listLeadsSchema validates overdueOnly, sortBy, and sortDir', () => {
   assert.equal(parsed.sortBy, 'nextActionDate');
   assert.equal(parsed.sortDir, 'asc');
 });
+
+test('uploadLeadDocumentSchema validates documentType, title, and notes', () => {
+  const parsed = uploadLeadDocumentSchema.parse({
+    documentType: 'Purchase Order (PO)',
+    title: 'PO #1042 - Ring Road Hoardings',
+    notes: 'Signed and stamped by client',
+  });
+  assert.equal(parsed.documentType, 'Purchase Order (PO)');
+  assert.equal(parsed.title, 'PO #1042 - Ring Road Hoardings');
+  assert.equal(parsed.notes, 'Signed and stamped by client');
+
+  assert.throws(() => {
+    uploadLeadDocumentSchema.parse({
+      documentType: 'InvalidType' as any,
+      title: 'Doc',
+    });
+  });
+
+  assert.throws(() => {
+    uploadLeadDocumentSchema.parse({
+      documentType: 'PAN Card',
+      title: '   ',
+    });
+  });
+});
+
 
 
 

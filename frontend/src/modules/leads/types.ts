@@ -106,6 +106,33 @@ export interface ActivityItem {
   timestamp: string;
 }
 
+export const LEAD_DOCUMENT_TYPES = [
+  'GST Certificate',
+  'PAN Card',
+  'Purchase Order (PO)',
+  'Client Agreement',
+  'Creative Artwork',
+  'Brand Guidelines',
+  'Payment Proof',
+  'Other',
+] as const;
+export type LeadDocumentType = (typeof LEAD_DOCUMENT_TYPES)[number];
+
+export interface LeadDocument {
+  _id: string;
+  id?: string;
+  documentType: LeadDocumentType;
+  title: string;
+  originalName: string;
+  fileKey: string;
+  fileUrl?: string;
+  fileSize?: number;
+  mimeType?: string;
+  uploadedBy?: { _id: string; name: string; email: string };
+  uploadedAt: string;
+  notes?: string;
+}
+
 export interface Lead {
   id: string;
   _id?: string;
@@ -137,6 +164,7 @@ export interface Lead {
   statusHistory?: Array<{ from?: string; to: string; changedBy?: any; reason?: string; cycle?: number; changedAt: string }>;
   callLogs?: FollowUpLog[];
   qualification?: LeadQualification;
+  documents?: LeadDocument[];
   cycle?: number;
   createdAt: string;
   updatedAt: string;

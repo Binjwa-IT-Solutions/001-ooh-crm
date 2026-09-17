@@ -12,6 +12,9 @@ import {
   STATUS_TRANSITIONS,
   ActivityItem,
   LogCallValues,
+  LEAD_DOCUMENT_TYPES,
+  type LeadDocument,
+  type LeadDocumentType,
 } from '@/modules/leads/types';
 import { Card, Badge, Spinner, Button, Field, Alert, Modal, TextAreaField } from '@/shared/ui';
 import { LeadsSelect } from '@/modules/leads/components/leads-select';
@@ -39,6 +42,9 @@ import {
   Briefcase,
   User,
   Building2,
+  Upload,
+  Trash2,
+  Download,
 } from 'lucide-react';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -79,6 +85,24 @@ const STATUS_TEXT_COLORS: Record<string, string> = {
   Duplicate: 'text-red-600 dark:text-red-400',
   duplicate: 'text-red-600 dark:text-red-400',
 };
+
+const DOC_TYPE_BADGES: Record<string, string> = {
+  'GST Certificate': 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300',
+  'PAN Card': 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300',
+  'Purchase Order (PO)': 'border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-800 dark:bg-purple-950/50 dark:text-purple-300',
+  'Client Agreement': 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300',
+  'Creative Artwork': 'border-pink-200 bg-pink-50 text-pink-700 dark:border-pink-800 dark:bg-pink-950/50 dark:text-pink-300',
+  'Brand Guidelines': 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300',
+  'Payment Proof': 'border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-800 dark:bg-teal-950/50 dark:text-teal-300',
+  Other: 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-950/50 dark:text-slate-300',
+};
+
+function formatFileSize(bytes?: number): string {
+  if (!bytes || bytes <= 0) return '-';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 function renderFollowUpIcon(type?: string) {
   switch (type) {
@@ -171,6 +195,75 @@ export default function LeadDetailPage() {
       alert(err.message || 'Failed to re-assign lead');
     } finally {
       setIsReassigning(false);
+    }
+  };
+
+  // Document upload & management state
+  const [docModalOpen, setDocModalOpen] = useState(false);
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [docType, setDocType] = useState<LeadDocumentType>('GST Certificate');
+  const [docTitle, setDocTitle] = useState('');
+  const [docNotes, setDocNotes] = useState('');
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const [docError, setDocError] = useState('');
+  const [docSuccess, setDocSuccess] = useState('');
+
+  const handleOpenDocModal = () => {
+    setDocFile(null);
+    setDocType('GST Certificate');
+    setDocTitle('');
+    setDocNotes('');
+    setDocError('');
+    setDocModalOpen(true);
+  };
+
+  const handleUploadDocument = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!lead) return;
+    if (!docFile) {
+      setDocError('Please select a file to upload');
+      return;
+    }
+    if (!docTitle.trim()) {
+      setDocError('Please provide a document title or label');
+      return;
+    }
+
+    setIsUploadingDoc(true);
+    setDocError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', docFile);
+      formData.append('documentType', docType);
+      formData.append('title', docTitle.trim());
+      if (docNotes.trim()) {
+        formData.append('notes', docNotes.trim());
+      }
+
+      await leadsApi.uploadDocument(lead._id || lead.id, formData);
+      setDocSuccess('Document uploaded successfully!');
+      setDocModalOpen(false);
+      await mutate();
+      setTimeout(() => setDocSuccess(''), 4000);
+    } catch (err: any) {
+      setDocError(err.message || 'Failed to upload document');
+    } finally {
+      setIsUploadingDoc(false);
+    }
+  };
+
+  const handleDeleteDocument = async (docId: string, title: string) => {
+    if (!lead) return;
+    if (!confirm(`Are you sure you want to delete "${title}"?`)) return;
+    setDeletingDocId(docId);
+    try {
+      await leadsApi.deleteDocument(lead._id || lead.id, docId);
+      await mutate();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete document');
+    } finally {
+      setDeletingDocId(null);
     }
   };
 
@@ -451,7 +544,7 @@ export default function LeadDetailPage() {
           { id: 'qualification', label: 'Requirements' },
           { id: 'campaigns', label: `Campaigns (${campaigns.length})` },
           { id: 'activity', label: 'Activity Timeline (ATR)' },
-          { id: 'documents', label: 'Documents' },
+          { id: 'documents', label: `Documents (${lead.documents?.length || 0})` },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -1133,11 +1226,118 @@ export default function LeadDetailPage() {
 
       {/* Tab: Documents */}
       {activeTab === 'documents' && (
-        <Card className="p-6">
-          <div className="text-sm text-slate-500">
-            Proposal documents generated from this lead appear in the Quotations & Proposals track.
+        <div className="space-y-4">
+          {docSuccess && (
+            <Alert tone="success" title="Success">
+              {docSuccess}
+            </Alert>
+          )}
+
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+                Attached Lead Documents ({lead.documents?.length || 0})
+              </h2>
+              <p className="text-xs text-slate-500">
+                Official documents, GST/PAN certificates, client POs, agreements, and creative assets.
+              </p>
+            </div>
+            <Button
+              variant="primary"
+              onClick={handleOpenDocModal}
+              className="!h-9 !px-3 inline-flex items-center gap-1.5 bg-[#8B2424] text-white hover:bg-[#6E1D1D] shadow-2xs !text-xs font-semibold"
+            >
+              <Upload className="w-3.5 h-3.5 shrink-0" />
+              <span>Upload Document</span>
+            </Button>
           </div>
-        </Card>
+
+          {(!lead.documents || lead.documents.length === 0) ? (
+            <Card className="p-8 text-center">
+              <div className="mx-auto w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-3">
+                <FileText className="w-6 h-6" />
+              </div>
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">No documents attached yet</h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                Upload GST, PAN cards, purchase orders, client agreements, or creative artwork relevant to this lead.
+              </p>
+              <Button
+                variant="secondary"
+                onClick={handleOpenDocModal}
+                className="mt-4 !h-8 !text-xs inline-flex items-center gap-1.5"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Upload First Document</span>
+              </Button>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {lead.documents.map((doc: LeadDocument) => {
+                const docId = doc._id || doc.id || '';
+                return (
+                  <Card key={docId} className="p-4 flex flex-col justify-between space-y-3 hover:shadow-md transition-shadow">
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium mb-1.5 ${
+                              DOC_TYPE_BADGES[doc.documentType] || DOC_TYPE_BADGES.Other
+                            }`}
+                          >
+                            {doc.documentType}
+                          </span>
+                          <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate" title={doc.title}>
+                            {doc.title}
+                          </h4>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {doc.fileUrl && (
+                            <a
+                              href={doc.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 rounded text-slate-500 hover:text-[#8B2424] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                              title="Download / View document"
+                            >
+                              <Download className="w-4 h-4" />
+                            </a>
+                          )}
+                          <button
+                            type="button"
+                            disabled={deletingDocId === docId}
+                            onClick={() => handleDeleteDocument(docId, doc.title)}
+                            className="p-1.5 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors disabled:opacity-50"
+                            title="Delete document"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="text-xs text-slate-500 space-y-1">
+                        <p className="truncate" title={doc.originalName}>
+                          <span className="font-medium text-slate-700 dark:text-slate-300">File:</span> {doc.originalName} ({formatFileSize(doc.fileSize)})
+                        </p>
+                        {doc.notes && (
+                          <p className="text-slate-600 dark:text-slate-300 italic bg-slate-50 dark:bg-slate-800/60 p-2 rounded text-[11px]">
+                            "{doc.notes}"
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                      <span>
+                        Uploaded by {doc.uploadedBy?.name || 'User'}
+                      </span>
+                      <span>{formatDateTime(doc.uploadedAt)}</span>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Lost Reason Modal */}
@@ -1266,6 +1466,95 @@ export default function LeadDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Upload Document Modal */}
+      <Modal
+        open={docModalOpen}
+        onClose={() => {
+          if (!isUploadingDoc) setDocModalOpen(false);
+        }}
+        title="Upload Lead Document"
+      >
+        <form onSubmit={handleUploadDocument} className="space-y-4 pt-2">
+          {docError && (
+            <Alert tone="error" title="Upload Failed">
+              {docError}
+            </Alert>
+          )}
+
+          <div>
+            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Select File <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="file"
+              required
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null;
+                setDocFile(file);
+                if (file && !docTitle) {
+                  const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
+                  setDocTitle(nameWithoutExt);
+                }
+              }}
+              className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 dark:file:bg-slate-800 dark:file:text-slate-200 cursor-pointer border border-slate-300 dark:border-slate-700 rounded-md p-1.5"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Document Type <span className="text-rose-500">*</span>
+            </label>
+            <select
+              value={docType}
+              onChange={(e) => setDocType(e.target.value as LeadDocumentType)}
+              className="w-full rounded-md border border-slate-300 bg-white p-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+            >
+              {LEAD_DOCUMENT_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <Field
+            label="Document Title / Label *"
+            placeholder="e.g. GST Registration Certificate, Signed PO #402"
+            value={docTitle}
+            onChange={(e) => setDocTitle(e.target.value)}
+            required
+          />
+
+          <TextAreaField
+            label="Notes / Comments (Optional)"
+            placeholder="e.g. Valid until Dec 2026, approved by legal team..."
+            value={docNotes}
+            onChange={(e) => setDocNotes(e.target.value)}
+            rows={2}
+          />
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={isUploadingDoc}
+              onClick={() => setDocModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              isLoading={isUploadingDoc}
+              className="bg-[#8B2424] text-white hover:bg-[#6E1D1D]"
+            >
+              <Upload className="w-3.5 h-3.5 mr-1.5" />
+              Upload Document
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

@@ -109,4 +109,10 @@ export const leadsApi = {
 
   listAgents: () =>
     api.get<{ agents: { _id: string; name: string; email: string; role: string }[] }>('/api/leads/agents'),
+
+  uploadDocument: (id: string, formData: FormData) =>
+    api.post<Lead>(`/api/leads/${id}/documents`, formData),
+
+  deleteDocument: (id: string, docId: string) =>
+    api.delete<Lead>(`/api/leads/${id}/documents/${docId}`),
 };

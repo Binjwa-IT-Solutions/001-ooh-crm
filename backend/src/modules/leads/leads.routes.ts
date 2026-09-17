@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { asyncHandler } from '../../core/http/asyncHandler.js';
 import { requirePermission } from '../../core/rbac/index.js';
 import { requireAuth } from '../../core/auth/auth-middleware.js';
+import { uploadSingle } from '../../core/files/index.js';
 import { LeadsController } from './leads.controller.js';
 
 export const leadRoutes = Router();
@@ -86,3 +87,17 @@ leadRoutes.get(
   requirePermission('leads.view'),
   asyncHandler(LeadsController.getActivity),
 );
+
+leadRoutes.post(
+  '/:id/documents',
+  requirePermission('leads.update'),
+  uploadSingle('file'),
+  asyncHandler(LeadsController.uploadDocument),
+);
+
+leadRoutes.delete(
+  '/:id/documents/:docId',
+  requirePermission('leads.update'),
+  asyncHandler(LeadsController.deleteDocument),
+);
+
