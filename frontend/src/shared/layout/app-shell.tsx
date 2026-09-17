@@ -121,7 +121,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex h-16 shrink-0 items-center px-6">
           <Link href="/dashboard" className="flex items-center gap-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="Media Octus" className="w-[200px] h-[100px] object-contain" />
+            <img src="/logo.png?v=3" alt="Media Octus" className="h-11 w-auto max-w-[180px] object-contain" />
           </Link>
           <button
             onClick={() => setSidebarOpen(false)}

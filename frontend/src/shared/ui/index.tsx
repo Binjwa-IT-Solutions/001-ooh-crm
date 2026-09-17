@@ -205,14 +205,14 @@ export function Card({ children, className }: { children: ReactNode; className?:
 
 // --------------------------------------------------------------- Spinner
 
-export function Spinner({ label }: { label?: string }) {
+export function Spinner({ label, className }: { label?: string; className?: string }) {
   return (
-    <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400">
+    <div className="inline-flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400">
       <span
         aria-hidden
-        className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-primary dark:border-slate-700 dark:border-t-primary-100"
+        className={`h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-primary dark:border-slate-700 dark:border-t-primary-100 ${className ?? ''}`}
       />
-      <span>{label ?? 'Loading…'}</span>
+      {label !== undefined ? (label ? <span>{label}</span> : null) : (className ? null : <span>Loading…</span>)}
     </div>
   );
 }
