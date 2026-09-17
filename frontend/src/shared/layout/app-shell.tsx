@@ -118,14 +118,14 @@ export function AppShell({ children }: { children: ReactNode }) {
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         )}
       >
-        <div className="flex h-16 shrink-0 items-center px-6">
-          <Link href="/dashboard" className="flex items-center gap-2">
+        <div className="relative flex h-16 shrink-0 items-center justify-center px-4">
+          <Link href="/dashboard" className="flex items-center justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png?v=3" alt="Media Octus" className="h-11 w-auto max-w-[180px] object-contain" />
+            <img src="/logo.png?v=4" alt="Media Octus" className="h-[52px] w-auto max-w-[190px] object-contain" />
           </Link>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="ml-auto p-1 text-slate-500 hover:text-slate-900 lg:hidden"
+            className="absolute right-3 p-1 text-slate-500 hover:text-slate-900 lg:hidden"
           >
             <X className="h-6 w-6" />
           </button>

@@ -174,7 +174,7 @@ function LoginForm() {
     >
       <div className="w-full max-w-md bg-white rounded-3xl p-8 sm:p-10 shadow-2xl relative">
         <div className="text-center mb-8">
-          <img src="/logo.png?v=3" alt="Media Octus" className="h-20 mx-auto object-contain" />
+          <img src="/logo.png?v=4" alt="Media Octus" className="h-24 mx-auto object-contain" />
         </div>
 
         {displayedNotice && (
