@@ -8,7 +8,7 @@ import { leadsApi } from '@/modules/leads/api';
 import { LeadStatus, LeadSource, Lead, LogCallValues } from '@/modules/leads/types';
 import { Card, Button, Badge, Spinner, Field, SelectField, Alert, Modal, TextAreaField } from '@/shared/ui';
 import LogCallModal from '@/modules/leads/component/log-call-modal';
-import { Timer, CheckCircle2, AlertCircle, Building2, Phone, Mail, MapPin, Info, Clock } from 'lucide-react';
+import { Timer, CheckCircle2, AlertCircle, Building2, Phone, Mail, MapPin, Info, Clock, ArrowUpDown } from 'lucide-react';
 
 const STATUS_STYLES: Record<string, string> = {
   New: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300',
@@ -50,8 +50,24 @@ function formatDateTime(dateStr?: string | Date | null) {
   });
 }
 
+let toastIdCounter = 0;
+
+function getOverdueDetails(dateStr?: string | Date | null, now?: number) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  const currentMs = now ?? Date.now();
+  const diffMs = currentMs - d.getTime();
+  if (diffMs <= 0) return null;
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const days = Math.floor(hours / 24);
+  if (days > 0) return `${days}d overdue`;
+  if (hours > 0) return `${hours}h overdue`;
+  const mins = Math.max(1, Math.floor(diffMs / (1000 * 60)));
+  return `${mins}m overdue`;
+}
+
 function SlaCountdown({ end }: { end?: string | null }) {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (!end) return;
@@ -101,6 +117,9 @@ export default function LeadsPage() {
   const [status, setStatus] = useState<LeadStatus | ''>('');
   const [city, setCity] = useState('');
   const [source, setSource] = useState<LeadSource | ''>('');
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<'nextActionDate' | 'createdAt' | ''>('');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
 
   const [claimedIds, setClaimedIds] = useState<string[]>([]);
@@ -129,14 +148,23 @@ export default function LeadsPage() {
     limit: 25,
     ...(activeTab === 'unclaimed' ? { unassigned: true } : {}),
     ...(activeTab === 'my-leads' ? { assignedToMe: true } : {}),
+    ...(overdueOnly && activeTab !== 'unclaimed' && activeTab !== 'rejected' ? { overdueOnly: true } : {}),
+    ...(sortBy ? { sortBy, sortDir } : {}),
   };
 
   const pollInterval = activeTab === 'unclaimed' ? 15000 : undefined;
 
   const { data, isLoading, error, mutate } = useLeads(filters, pollInterval);
 
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+
   function showToast(message: string, type: 'success' | 'error' = 'success') {
-    const id = Date.now() + Math.floor(Math.random() * 1000);
+    const id = ++toastIdCounter;
     setToastList((t) => [...t, { id, message, type }]);
     setTimeout(() => setToastList((t) => t.filter((x) => x.id !== id)), 4500);
   }
@@ -315,6 +343,71 @@ export default function LeadsPage() {
         />
       </Card>
 
+      {activeTab !== 'unclaimed' && activeTab !== 'rejected' && (
+        <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                const nextVal = !overdueOnly;
+                setOverdueOnly(nextVal);
+                if (nextVal) {
+                  setSortBy('nextActionDate');
+                  setSortDir('asc');
+                } else {
+                  setSortBy('');
+                }
+                setPage(1);
+              }}
+              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition border shadow-xs ${
+                overdueOnly
+                  ? 'bg-rose-50 border-rose-300 text-rose-700 dark:bg-rose-950/60 dark:border-rose-800 dark:text-rose-300 ring-2 ring-rose-500/20 font-bold'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800'
+              }`}
+            >
+              <AlertCircle className={`w-3.5 h-3.5 ${overdueOnly ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400'}`} />
+              <span>Missed Actions / Overdue Follow-ups</span>
+              {overdueOnly && (
+                <span className="text-[10px] bg-rose-200 text-rose-800 dark:bg-rose-900 dark:text-rose-200 rounded px-1.5 py-0.5 font-extrabold uppercase tracking-wide">
+                  Active
+                </span>
+              )}
+            </button>
+
+            {sortBy === 'nextActionDate' && (
+              <button
+                type="button"
+                onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+                title="Click to toggle sort direction"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 shadow-xs transition"
+              >
+                <ArrowUpDown className="w-3.5 h-3.5 text-[#8B2424] dark:text-red-400" />
+                <span>Sort: {sortDir === 'asc' ? 'Closest / Overdue First (Urgent)' : 'Furthest Next Action First'}</span>
+              </button>
+            )}
+          </div>
+
+          {(overdueOnly || sortBy || search || status || city || source) && (
+            <button
+              type="button"
+              onClick={() => {
+                setOverdueOnly(false);
+                setSortBy('');
+                setSortDir('asc');
+                setSearch('');
+                setStatus('');
+                setCity('');
+                setSource('');
+                setPage(1);
+              }}
+              className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 underline font-medium"
+            >
+              Reset All Filters
+            </button>
+          )}
+        </div>
+      )}
+
       {error ? (
         <Alert tone="error" title="Error Loading Leads">
           {error.message}
@@ -332,8 +425,36 @@ export default function LeadsPage() {
                   <th className="px-4 py-3 font-medium">Company</th>
                   <th className="px-4 py-3 font-medium">Contact</th>
                   <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">
-                    {activeTab === 'unclaimed' ? 'Received' : activeTab === 'rejected' ? 'Rejection Reason' : 'Next Action'}
+                  <th
+                    className={`px-4 py-3 font-medium ${
+                      activeTab !== 'unclaimed' && activeTab !== 'rejected'
+                        ? 'cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-200'
+                        : ''
+                    }`}
+                    onClick={() => {
+                      if (activeTab === 'unclaimed' || activeTab === 'rejected') return;
+                      if (sortBy === 'nextActionDate') {
+                        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+                      } else {
+                        setSortBy('nextActionDate');
+                        setSortDir('asc');
+                      }
+                      setPage(1);
+                    }}
+                    title={activeTab !== 'unclaimed' && activeTab !== 'rejected' ? 'Click to sort by Next Action Date' : undefined}
+                  >
+                    <div className="inline-flex items-center gap-1.5">
+                      <span>{activeTab === 'unclaimed' ? 'Received' : activeTab === 'rejected' ? 'Rejection Reason' : 'Next Action'}</span>
+                      {activeTab !== 'unclaimed' && activeTab !== 'rejected' && (
+                        <ArrowUpDown
+                          className={`w-3.5 h-3.5 ${
+                            sortBy === 'nextActionDate'
+                              ? 'text-[#8B2424] dark:text-red-400 font-bold'
+                              : 'text-slate-400 opacity-60'
+                          }`}
+                        />
+                      )}
+                    </div>
                   </th>
                   <th className="px-4 py-3 font-medium">Source</th>
                   <th className="px-4 py-3 font-medium">Agent</th>
@@ -342,7 +463,7 @@ export default function LeadsPage() {
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                 {displayedLeads.map((lead: Lead) => {
-                  const isOverdue = lead.nextActionDate && new Date(lead.nextActionDate).getTime() < Date.now();
+                  const isOverdue = Boolean(lead.nextActionDate && new Date(lead.nextActionDate).getTime() < currentTime);
 
                   return (
                     <tr key={lead._id || lead.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
@@ -377,23 +498,35 @@ export default function LeadsPage() {
                       <td className="px-4 py-3">
                         {activeTab === 'unclaimed' ? (
                           <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                            {formatDateTime(lead.createdAt || (lead as any).receivedAt)}
+                            {formatDateTime(lead.createdAt || lead.receivedAt)}
                           </span>
                         ) : activeTab === 'rejected' ? (
                           <span className="text-xs text-rose-600 dark:text-rose-400 font-medium italic">
-                            {(lead as any).qualification?.lostReason || (lead as any).statusHistory?.slice(-1)[0]?.reason || 'Junk / Irrelevant'}
+                            {lead.qualification?.lostReason || (lead.statusHistory && lead.statusHistory.length > 0 ? lead.statusHistory[lead.statusHistory.length - 1]?.reason : undefined) || 'Junk / Irrelevant'}
                           </span>
                         ) : lead.nextActionDate ? (
-                          <span
-                            className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${
-                              isOverdue
-                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                                : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                            }`}
-                          >
-                            {formatDateTime(lead.nextActionDate)}
-                            {isOverdue && ''}
-                          </span>
+                          (() => {
+                            const overdueText = isOverdue ? getOverdueDetails(lead.nextActionDate, currentTime) : null;
+                            return (
+                              <div className="flex flex-col gap-0.5 items-start">
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ${
+                                    isOverdue
+                                      ? 'bg-rose-100 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900 font-semibold'
+                                      : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                                  }`}
+                                >
+                                  {isOverdue && <AlertCircle className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />}
+                                  {formatDateTime(lead.nextActionDate)}
+                                </span>
+                                {overdueText && (
+                                  <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 ml-0.5">
+                                    {overdueText}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()
                         ) : (
                           <span className="text-xs text-slate-400">-</span>
                         )}
@@ -632,11 +765,11 @@ export default function LeadsPage() {
             </div>
 
             {/* Inbound Query Message */}
-            {Boolean(claimReviewLead.qualification?.notes || (claimReviewLead.rawPayload as any)?.comments || (claimReviewLead.rawPayload as any)?.text || (claimReviewLead.rawPayload as any)?.message) && (
+            {Boolean(claimReviewLead.qualification?.notes || (claimReviewLead.rawPayload as Record<string, string> | undefined)?.comments || (claimReviewLead.rawPayload as Record<string, string> | undefined)?.text || (claimReviewLead.rawPayload as Record<string, string> | undefined)?.message) && (
               <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3 bg-white dark:bg-slate-900 text-xs">
                 <span className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Inbound Query / Message:</span>
                 <p className="text-slate-600 dark:text-slate-400 italic whitespace-pre-line">
-                  "{claimReviewLead.qualification?.notes || (claimReviewLead.rawPayload as any)?.comments || (claimReviewLead.rawPayload as any)?.text || (claimReviewLead.rawPayload as any)?.message}"
+                  &ldquo;{String(claimReviewLead.qualification?.notes || (claimReviewLead.rawPayload as Record<string, string> | undefined)?.comments || (claimReviewLead.rawPayload as Record<string, string> | undefined)?.text || (claimReviewLead.rawPayload as Record<string, string> | undefined)?.message || '')}&rdquo;
                 </p>
               </div>
             )}

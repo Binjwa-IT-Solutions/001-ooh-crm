@@ -167,6 +167,9 @@ export const listLeadsSchema = z.object({
   assignedTo: objectIdSchema.optional(),
   assignedToMe: z.coerce.boolean().optional(),
   unassigned: z.coerce.boolean().optional(),
+  overdueOnly: z.coerce.boolean().optional(),
+  sortBy: z.enum(['receivedAt', 'createdAt', 'companyName', 'source', 'nextActionDate']).optional(),
+  sortDir: z.enum(['asc', 'desc']).optional(),
   fromDate: z.coerce.date().optional(),
   toDate: z.coerce.date().optional(),
 });

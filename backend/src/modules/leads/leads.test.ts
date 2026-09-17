@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { Lead } from './leads.model.js';
 import { LeadsService } from './leads.service.js';
-import { leadQualificationSchema } from './leads.validator.js';
+import { leadQualificationSchema, listLeadsSchema } from './leads.validator.js';
 
 const FAKE_USER_CTX = { user: { id: '64b7f9a1c2d3e4f5a6b7c8d9', role: 'sales' } } as any;
 
@@ -550,5 +550,17 @@ test('logFollowUpLead records contactedPerson and updates lead profile fields du
     LeadsService.getLead = origGetLead;
   }
 });
+
+test('listLeadsSchema validates overdueOnly, sortBy, and sortDir', () => {
+  const parsed = listLeadsSchema.parse({
+    overdueOnly: 'true',
+    sortBy: 'nextActionDate',
+    sortDir: 'asc',
+  });
+  assert.equal(parsed.overdueOnly, true);
+  assert.equal(parsed.sortBy, 'nextActionDate');
+  assert.equal(parsed.sortDir, 'asc');
+});
+
 
 

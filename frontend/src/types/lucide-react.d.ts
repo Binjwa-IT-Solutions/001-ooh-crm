@@ -26,6 +26,7 @@ declare module 'lucide-react' {
   export const ArrowRight: LucideIcon;
   export const ArrowUpFromLine: LucideIcon;
   export const ArrowUpRight: LucideIcon;
+  export const ArrowUpDown: LucideIcon;
   export const BarChart3: LucideIcon;
   export const Bell: LucideIcon;
   export const Briefcase: LucideIcon;

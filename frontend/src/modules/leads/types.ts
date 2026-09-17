@@ -169,9 +169,10 @@ export interface LeadListQuery {
   assignedTo?: string;
   assignedToMe?: boolean;
   unassigned?: boolean;
+  overdueOnly?: boolean;
   fromDate?: string;
   toDate?: string;
-  sortBy?: 'receivedAt' | 'companyName' | 'source';
+  sortBy?: 'receivedAt' | 'createdAt' | 'companyName' | 'source' | 'nextActionDate';
   sortDir?: 'asc' | 'desc';
 }
 

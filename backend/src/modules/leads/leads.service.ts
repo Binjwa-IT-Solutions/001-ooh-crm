@@ -42,8 +42,32 @@ export class LeadsService {
       if (filters.toDate) query.createdAt.$lte = filters.toDate;
     }
 
+    if (filters.overdueOnly) {
+      query.nextActionDate = { $ne: null, $lt: new Date() };
+      if (!filters.status) {
+        query.status = { $nin: ['Won', 'Lost', 'Rejected'] };
+      }
+    }
+
     // Always exclude soft-deleted
     query.deletedAt = null;
+
+    let sortObj: Record<string, any> = { createdAt: -1 };
+    if (filters.sortBy === 'nextActionDate') {
+      const dir = filters.sortDir === 'desc' ? -1 : 1;
+      sortObj = { nextActionDate: dir, createdAt: -1 };
+    } else if (filters.sortBy === 'companyName') {
+      const dir = filters.sortDir === 'desc' ? -1 : 1;
+      sortObj = { companyName: dir, createdAt: -1 };
+    } else if (filters.sortBy === 'source') {
+      const dir = filters.sortDir === 'desc' ? -1 : 1;
+      sortObj = { source: dir, createdAt: -1 };
+    } else if (filters.sortBy === 'receivedAt' || filters.sortBy === 'createdAt') {
+      const dir = filters.sortDir === 'asc' ? 1 : -1;
+      sortObj = { createdAt: dir };
+    } else if (filters.overdueOnly) {
+      sortObj = { nextActionDate: 1, createdAt: -1 };
+    }
 
     if (filters.unassigned) {
       query.status = 'New';
@@ -53,7 +77,7 @@ export class LeadsService {
       const skip = (filters.page - 1) * filters.limit;
       const [leads, total] = await Promise.all([
         Lead.find(query)
-          .sort({ createdAt: -1 })
+          .sort(sortObj)
           .skip(skip)
           .limit(filters.limit)
           .populate('assignedTo claimedBy', 'name email role')
@@ -89,7 +113,7 @@ export class LeadsService {
 
     const [leads, total] = await Promise.all([
       scopedFind(Lead, query, ctx, { ownerField: 'assignedTo' })
-        .sort({ createdAt: -1 })
+        .sort(sortObj)
         .skip(skip)
         .limit(filters.limit)
         .populate('assignedTo claimedBy', 'name email role')
