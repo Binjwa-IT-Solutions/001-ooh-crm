@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { useAuth } from '@/shared/auth/auth-context';
 import { useLeads } from '@/modules/leads/hooks/use-leads';
 import { leadsApi } from '@/modules/leads/api';
+import { api } from '@/shared/api/client';
 import { LeadStatus, LeadSource, Lead, LogCallValues } from '@/modules/leads/types';
 import { Card, Button, Badge, Spinner, Field, SelectField, Alert, Modal, TextAreaField } from '@/shared/ui';
 import LogCallModal from '@/modules/leads/component/log-call-modal';
-import { Timer, CheckCircle2, AlertCircle, Building2, Phone, Mail, MapPin, Info, Clock, ArrowUpDown } from 'lucide-react';
+import { Timer, CheckCircle2, AlertCircle, Building2, Phone, Mail, MapPin, Info, Clock, ArrowUpDown, Download } from 'lucide-react';
 
 const STATUS_STYLES: Record<string, string> = {
   New: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300',
@@ -239,15 +240,62 @@ export default function LeadsPage() {
     }
   };
 
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportCsv = async () => {
+    try {
+      setIsExporting(true);
+      const queryParams = new URLSearchParams();
+      if (activeTab === 'unclaimed') queryParams.set('unassigned', 'true');
+      if (activeTab === 'my-leads') queryParams.set('assignedToMe', 'true');
+      if (activeTab === 'rejected') queryParams.set('status', 'Rejected');
+      else if (status) queryParams.set('status', status);
+      if (city) queryParams.set('city', city);
+      if (source) queryParams.set('source', source);
+      if (search) queryParams.set('search', search);
+
+      const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+      const blob = await api.getBlob(`/api/leads/export${queryString}`);
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const timestamp = new Date().toISOString().slice(0, 10);
+      a.download = `leads_export_${timestamp}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      showToast('Leads exported successfully!', 'success');
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to export leads', 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const displayedLeads = (data?.data ?? []).filter((l) => !claimedIds.includes(l._id || l.id));
 
   return (
     <div className="space-y-6 pb-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Leads</h1>
-        <Link href="/leads/new">
-          <Button>Add Lead</Button>
-        </Link>
+        <div className="flex items-center gap-3">
+          {user?.role?.toLowerCase() === 'admin' && (
+            <Button
+              variant="secondary"
+              onClick={handleExportCsv}
+              disabled={isExporting}
+              className="!h-9 !px-3.5 inline-flex items-center gap-1.5 text-xs font-medium border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+            >
+              {isExporting ? <Spinner className="w-3.5 h-3.5" /> : <Download className="w-3.5 h-3.5" />}
+              <span>{isExporting ? 'Exporting...' : 'Export CSV'}</span>
+            </Button>
+          )}
+          <Link href="/leads/new">
+            <Button>Add Lead</Button>
+          </Link>
+        </div>
       </div>
 
       <div className="flex gap-4 border-b border-border-subtle">
@@ -768,9 +816,11 @@ export default function LeadsPage() {
             {Boolean(claimReviewLead.qualification?.notes || (claimReviewLead.rawPayload as Record<string, string> | undefined)?.comments || (claimReviewLead.rawPayload as Record<string, string> | undefined)?.text || (claimReviewLead.rawPayload as Record<string, string> | undefined)?.message) && (
               <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3 bg-white dark:bg-slate-900 text-xs">
                 <span className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Inbound Query / Message:</span>
-                <p className="text-slate-600 dark:text-slate-400 italic whitespace-pre-line">
-                  &ldquo;{String(claimReviewLead.qualification?.notes || (claimReviewLead.rawPayload as Record<string, string> | undefined)?.comments || (claimReviewLead.rawPayload as Record<string, string> | undefined)?.text || (claimReviewLead.rawPayload as Record<string, string> | undefined)?.message || '')}&rdquo;
-                </p>
+                <div className="max-h-32 overflow-y-auto pr-1.5 text-slate-600 dark:text-slate-400">
+                  <p className="italic whitespace-pre-line text-[11px] leading-relaxed">
+                    &ldquo;{String(claimReviewLead.qualification?.notes || (claimReviewLead.rawPayload as Record<string, string> | undefined)?.comments || (claimReviewLead.rawPayload as Record<string, string> | undefined)?.text || (claimReviewLead.rawPayload as Record<string, string> | undefined)?.message || '')}&rdquo;
+                  </p>
+                </div>
               </div>
             )}
 

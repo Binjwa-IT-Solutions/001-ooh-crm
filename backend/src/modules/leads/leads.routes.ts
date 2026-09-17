@@ -35,6 +35,12 @@ leadRoutes.get(
 );
 
 leadRoutes.get(
+  '/export',
+  requirePermission('leads.view'),
+  asyncHandler(LeadsController.exportCsv),
+);
+
+leadRoutes.get(
   '/:id',
   requirePermission('leads.view'),
   asyncHandler(LeadsController.get),

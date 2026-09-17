@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { UnauthorizedError } from '../../core/errors/index.js';
+import { UnauthorizedError, ForbiddenError } from '../../core/errors/index.js';
 import { LeadsService } from './leads.service.js';
 import {
   createLeadSchema,
@@ -14,6 +14,18 @@ import {
 } from './leads.validator.js';
 
 export class LeadsController {
+  static async exportCsv(req: Request, res: Response) {
+    if (req.ctx?.user.role !== 'admin') {
+      throw new ForbiddenError('Only Admin can export leads data');
+    }
+    const filters = listLeadsSchema.partial().parse(req.query);
+    const csvData = await LeadsService.exportLeads(filters, req.ctx!);
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="leads_export_${Date.now()}.csv"`);
+    res.status(200).send(csvData);
+  }
+
   static async listAgents(_req: Request, res: Response) {
     const agents = await LeadsService.listAgents();
     res.status(200).json({ agents });

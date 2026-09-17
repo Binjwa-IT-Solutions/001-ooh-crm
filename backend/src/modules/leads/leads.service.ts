@@ -126,6 +126,122 @@ export class LeadsService {
     return { leads, total };
   }
 
+  static async exportLeads(filters: any, ctx: RequestContext): Promise<string> {
+    const query: Record<string, any> = { deletedAt: null };
+
+    if (filters.search) {
+      const searchRegex = new RegExp(filters.search, 'i');
+      query.$or = [
+        { companyName: searchRegex },
+        { contactPerson: searchRegex },
+        { mobile: searchRegex },
+        { email: searchRegex },
+        { city: searchRegex },
+      ];
+    }
+
+    if (filters.status) {
+      query.status = filters.status;
+    }
+
+    if (filters.city) {
+      query.city = new RegExp(`^${filters.city}$`, 'i');
+    }
+
+    if (filters.source) {
+      query.source = filters.source;
+    }
+
+    if (filters.unassigned) {
+      query.status = 'New';
+      query.assignedTo = null;
+      query.claimedBy = null;
+    } else if (filters.assignedTo) {
+      query.assignedTo = toObjectId(filters.assignedTo);
+    } else if (filters.assignedToMe) {
+      query.assignedTo = toObjectId(ctx.user.id);
+    }
+
+    if (filters.overdueOnly) {
+      query.nextActionDate = { $ne: null, $lt: new Date() };
+      if (!filters.status) {
+        query.status = { $nin: ['Won', 'Lost', 'Rejected'] };
+      }
+    }
+
+    const leads = await scopedFind(Lead, query, ctx, { ownerField: 'assignedTo' })
+      .sort({ createdAt: -1 })
+      .populate('assignedTo claimedBy', 'name email role')
+      .exec();
+
+    const headers = [
+      'Company Name',
+      'Primary Contact Person',
+      'Designation',
+      'Mobile',
+      'Secondary Contact Person',
+      'Secondary Designation',
+      'Secondary Mobile',
+      'Email',
+      'Company Address',
+      'Company Location',
+      'City',
+      'Source',
+      'Status',
+      'Assigned To',
+      'Claimed By',
+      'Next Action Date',
+      'Budget (INR)',
+      'Location Preference',
+      'Campaign Duration',
+      'Target Audience',
+      'Created At',
+    ];
+
+    const escapeCsv = (val: any): string => {
+      if (val === null || val === undefined) return '';
+      const str = String(val).trim();
+      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const rows = leads.map((l: any) => {
+      const assignedToName = l.assignedTo?.name || '';
+      const claimedByName = l.claimedBy?.name || '';
+      const nextAction = l.nextActionDate ? new Date(l.nextActionDate).toLocaleString('en-IN') : '';
+      const budgetRupees = l.qualification?.budget ? (l.qualification.budget / 100).toFixed(0) : '';
+      const createdAtFormatted = l.createdAt ? new Date(l.createdAt).toLocaleString('en-IN') : '';
+
+      return [
+        escapeCsv(l.companyName),
+        escapeCsv(l.contactPerson),
+        escapeCsv(l.designation || ''),
+        escapeCsv(l.mobile),
+        escapeCsv(l.secondaryContactPerson || ''),
+        escapeCsv(l.secondaryDesignation || ''),
+        escapeCsv(l.secondaryMobile || ''),
+        escapeCsv(l.email || ''),
+        escapeCsv(l.companyAddress || ''),
+        escapeCsv(l.companyLocation || ''),
+        escapeCsv(l.city || ''),
+        escapeCsv(l.source),
+        escapeCsv(l.status),
+        escapeCsv(assignedToName),
+        escapeCsv(claimedByName),
+        escapeCsv(nextAction),
+        escapeCsv(budgetRupees),
+        escapeCsv(l.qualification?.locationPreference || ''),
+        escapeCsv(l.qualification?.campaignDuration || ''),
+        escapeCsv(l.qualification?.targetAudience || ''),
+        escapeCsv(createdAtFormatted),
+      ].join(',');
+    });
+
+    return '\uFEFFsep=,\r\n' + [headers.join(','), ...rows].join('\r\n');
+  }
+
   static async getLead(id: string, ctx: RequestContext): Promise<ILead> {
     if (!Types.ObjectId.isValid(id)) throw new NotFoundError('Lead not found');
 
