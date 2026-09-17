@@ -6,7 +6,10 @@
  * go through the Next.js rewrite proxy defined in next.config.ts → backend:5000.
  * In production, set NEXT_PUBLIC_API_URL to the deployed backend URL.
  */
+const envApiUrl = process.env.NEXT_PUBLIC_API_URL;
+
 export const appConfig = {
-  apiUrl: (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000').replace(/\/$/, ''),
+  apiUrl: (envApiUrl && envApiUrl.trim() !== '' ? envApiUrl : '').replace(/\/$/, ''),
   appName: 'Media Octus CRM',
 } as const;
+

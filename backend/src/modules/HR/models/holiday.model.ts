@@ -5,6 +5,8 @@ export interface IHoliday extends BaseDocument {
   name: string;
   date: Date;
   description?: string;
+  code?: string;
+  isPredefined?: boolean;
 }
 
 const holidaySchema = new Schema<IHoliday>(
@@ -12,6 +14,8 @@ const holidaySchema = new Schema<IHoliday>(
     name: { type: String, required: true, trim: true },
     date: { type: Date, required: true },
     description: { type: String, trim: true },
+    code: { type: String, trim: true },
+    isPredefined: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

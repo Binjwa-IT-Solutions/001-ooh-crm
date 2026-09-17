@@ -239,15 +239,71 @@ export async function getMyRequests(ctx: RequestContext): Promise<LeaveRequestDt
 }
 
 
+export async function getCalendarLeaves(year?: number, month?: number, ctx?: RequestContext): Promise<Array<LeaveRequestDto & { employeeName?: string }>> {
+  const currentYear = year ?? new Date().getUTCFullYear();
+  let fromDate: Date;
+  let toDate: Date;
+
+  if (month !== undefined && month >= 0 && month <= 11) {
+    fromDate = new Date(Date.UTC(currentYear, month, 1));
+    toDate = new Date(Date.UTC(currentYear, month + 1, 0, 23, 59, 59, 999));
+  } else {
+    fromDate = new Date(Date.UTC(currentYear, 0, 1));
+    toDate = new Date(Date.UTC(currentYear, 11, 31, 23, 59, 59, 999));
+  }
+
+  const isHrOrAdmin = ctx && (ctx.user.role === 'hr' || ctx.user.role === 'admin' || ctx.user.role === 'manager');
+  const filter: Record<string, unknown> = {
+    status: 'Approved',
+    fromDate: { $lte: toDate },
+    toDate: { $gte: fromDate },
+  };
+
+  if (!isHrOrAdmin && ctx) {
+    const employee = await employeeService.getMine(ctx).catch(() => null);
+    if (employee) {
+      filter.employeeId = employee.id;
+    } else {
+      return [];
+    }
+  }
+
+  const requests = await LeaveRequest.find(filter).sort({ fromDate: 1 });
+  const leaveTypes = await LeaveType.find({});
+  const typeMap = new Map(leaveTypes.map((t) => [String(t._id), t.name]));
+
+  return Promise.all(requests.map(async (req) => {
+    const emp = ctx ? await employeeService.getById(String(req.employeeId), { ...ctx, user: { ...ctx.user, role: 'hr' } }).catch(() => null) : null;
+    return {
+      ...toDto(req),
+      leaveTypeName: typeMap.get(String(req.leaveTypeId)) || 'Leave',
+      employeeName: emp?.fullName || 'Employee',
+      employeeCode: emp?.employeeCode || '',
+      department: emp?.department || '',
+    };
+  }));
+}
+
 export async function getTeamRequests(ctx: RequestContext): Promise<LeaveRequestDto[]> {
   const employee = ctx.user.role === 'hr' || ctx.user.role === 'admin' ? null : await employeeService.getMine(ctx);
   const filter: Record<string, unknown> = employee ? { approverId: employee.id, status: 'Pending' } : { status: 'Pending' };
   const requests = await scopedFind(LeaveRequest, filter, ctx).sort({ createdAt: 1 });
   return Promise.all(requests.map(async (request) => {
-    const employeeRecord = await employeeService.getById(String(request.employeeId), { ...ctx, user: { ...ctx.user, role: 'hr' } });
+    const employeeRecord = await employeeService.getById(String(request.employeeId), { ...ctx, user: { ...ctx.user, role: 'hr' } }).catch(() => null);
     const type = await LeaveType.findById(request.leaveTypeId);
-    const balance = await leaveTypeService.getBalance(String(request.employeeId), String(request.leaveTypeId), request.fromDate.getUTCFullYear());
-    return { ...toDto(request), employeeName: employeeRecord.fullName, employeeCode: employeeRecord.employeeCode, department: employeeRecord.department, leaveTypeName: type?.name, allocated: balance.allocated, used: balance.used, remaining: balance.balance, attendance: await attendanceFor(String(request.employeeId), request.fromDate, request.toDate, ctx) };
+    const balance = await leaveTypeService.getBalance(String(request.employeeId), String(request.leaveTypeId), request.fromDate.getUTCFullYear()).catch(() => ({ allocated: 0, used: 0, carriedForward: 0, balance: 0 }));
+    const att = await attendanceFor(String(request.employeeId), request.fromDate, request.toDate, ctx).catch(() => []);
+    return {
+      ...toDto(request),
+      employeeName: employeeRecord?.fullName || 'Unknown',
+      employeeCode: employeeRecord?.employeeCode || '',
+      department: employeeRecord?.department || '',
+      leaveTypeName: type?.name,
+      allocated: balance.allocated,
+      used: balance.used,
+      remaining: balance.balance,
+      attendance: att,
+    };
   }));
 }
 

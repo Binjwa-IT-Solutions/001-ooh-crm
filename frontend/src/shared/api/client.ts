@@ -63,6 +63,8 @@ async function refreshAccessToken(): Promise<boolean> {
     if (!response.ok) return false;
 
     const session = await response.json();
+    if (!session?.accessToken || !session?.refreshToken) return false;
+
     sessionStore.save({
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
@@ -87,11 +89,10 @@ async function request<T>(
     headers['Content-Type'] = 'application/json';
   }
 
-
-
+  let sentAccessToken: string | null = null;
   if (!options.skipAuth) {
-    const accessToken = sessionStore.getAccessToken();
-    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+    sentAccessToken = sessionStore.getAccessToken();
+    if (sentAccessToken) headers.Authorization = `Bearer ${sentAccessToken}`;
   }
 
   const response = await fetch(`${appConfig.apiUrl}${path}`, {
@@ -103,6 +104,13 @@ async function request<T>(
 
   // Access token expired — refresh once, then replay the request.
   if (response.status === 401 && !options.skipAuth && !options.skipRefresh) {
+    // If the token in localStorage already changed while this request was in flight,
+    // another concurrent request already refreshed it! Retry immediately with the new token.
+    const latestAccessToken = sessionStore.getAccessToken();
+    if (latestAccessToken && sentAccessToken && latestAccessToken !== sentAccessToken) {
+      return request<T>(method, path, body, { ...options, skipRefresh: true });
+    }
+
     refreshInFlight ??= refreshAccessToken().finally(() => {
       refreshInFlight = null;
     });

@@ -35,7 +35,12 @@ export function useLeaveBalance() {
 
   const fetchData = useCallback(async () => {
     try {
-      const employee = await employeesApi.getMine();
+      const employee = await employeesApi.getMine().catch(() => null);
+      if (!employee) {
+        setData([]);
+        setError(null);
+        return;
+      }
       const res = await leaveApi.getBalance(employee.id);
       setData(res);
       setError(null);
@@ -124,4 +129,30 @@ export function useHolidays() {
 
   return { data, isLoading, error, mutate: fetchData };
 }
+
+export function useCalendarLeaves(year?: number, month?: number) {
+  const [data, setData] = useState<LeaveRequest[] | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const res = await leaveApi.getCalendarLeaves(year, month);
+      setData(res);
+      setError(null);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err : new Error(String(err)));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [year, month]);
+
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
+
+  return { data, isLoading, error, mutate: fetchData };
+}
+
 

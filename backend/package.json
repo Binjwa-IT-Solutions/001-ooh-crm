@@ -15,7 +15,7 @@
     "start": "node dist/server.js",
     "seed": "tsx src/scripts/seed.ts",
     "cleanup:campaigns": "tsx src/scripts/cleanup-campaigns.ts",
-    "test": "tsx --test \"src/**/*.test.ts\"",
+    "test": "tsx --test --test-concurrency=1 \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
