@@ -26,6 +26,7 @@ declare module 'lucide-react' {
   export const ArrowRight: LucideIcon;
   export const ArrowUpFromLine: LucideIcon;
   export const ArrowUpRight: LucideIcon;
+  export const ArrowUpDown: LucideIcon;
   export const BarChart3: LucideIcon;
   export const Bell: LucideIcon;
   export const Briefcase: LucideIcon;
@@ -75,6 +76,7 @@ declare module 'lucide-react' {
   export const Table: LucideIcon;
   export const Target: LucideIcon;
   export const Timer: LucideIcon;
+  export const Trash2: LucideIcon;
   export const MessageSquare: LucideIcon;
   export const Pencil: LucideIcon;
   export const RotateCw: LucideIcon;

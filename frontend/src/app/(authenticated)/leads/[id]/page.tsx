@@ -12,11 +12,18 @@ import {
   STATUS_TRANSITIONS,
   ActivityItem,
   LogCallValues,
+  LEAD_DOCUMENT_TYPES,
+  type LeadDocument,
+  type LeadDocumentType,
 } from '@/modules/leads/types';
 import { Card, Badge, Spinner, Button, Field, Alert, Modal, TextAreaField } from '@/shared/ui';
 import { LeadsSelect } from '@/modules/leads/components/leads-select';
 import LogCallModal from '@/modules/leads/component/log-call-modal';
 import { useAuth } from '@/shared/auth/auth-context';
+import { sessionStore } from '@/shared/auth/session-store';
+import { appConfig } from '@/shared/config';
+import { getCampaigns } from '@/modules/campaigns/api';
+import type { Campaign } from '@/modules/campaigns/types';
 import {
   Timer,
   Clock,
@@ -33,6 +40,14 @@ import {
   Plus,
   ArrowRight,
   RotateCw,
+  Layers,
+  Briefcase,
+  User,
+  Building2,
+  Upload,
+  Trash2,
+  Download,
+  ExternalLink,
 } from 'lucide-react';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -74,6 +89,24 @@ const STATUS_TEXT_COLORS: Record<string, string> = {
   duplicate: 'text-red-600 dark:text-red-400',
 };
 
+const DOC_TYPE_BADGES: Record<string, string> = {
+  'GST Certificate': 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300',
+  'PAN Card': 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300',
+  'Purchase Order (PO)': 'border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-800 dark:bg-purple-950/50 dark:text-purple-300',
+  'Client Agreement': 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300',
+  'Creative Artwork': 'border-pink-200 bg-pink-50 text-pink-700 dark:border-pink-800 dark:bg-pink-950/50 dark:text-pink-300',
+  'Brand Guidelines': 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300',
+  'Payment Proof': 'border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-800 dark:bg-teal-950/50 dark:text-teal-300',
+  Other: 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-950/50 dark:text-slate-300',
+};
+
+function formatFileSize(bytes?: number): string {
+  if (!bytes || bytes <= 0) return '-';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function renderFollowUpIcon(type?: string) {
   switch (type) {
     case 'Call':
@@ -109,11 +142,16 @@ function formatDateTime(dateStr?: string | Date | null) {
 export default function LeadDetailPage() {
   const params = useParams();
   const id = params.id as string;
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const isManagerOrAdmin = ['admin', 'manager'].includes(user?.role?.toLowerCase() || '');
+  const canManageCampaigns = Boolean(
+    hasPermission?.('campaigns.manage') ||
+      isManagerOrAdmin ||
+      user?.role?.toLowerCase() === 'ops'
+  );
   const { lead, isLoading, error, mutate } = useLead(id);
 
-  const [activeTab, setActiveTab] = useState<'info' | 'qualification' | 'activity' | 'documents'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'qualification' | 'campaigns' | 'activity' | 'documents'>('info');
 
   const [isQualifying, setIsQualifying] = useState(false);
   const [qualifyError, setQualifyError] = useState('');
@@ -168,18 +206,110 @@ export default function LeadDetailPage() {
     }
   };
 
+  // Document upload & management state
+  const [docModalOpen, setDocModalOpen] = useState(false);
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [docType, setDocType] = useState<LeadDocumentType>('GST Certificate');
+  const [docTitle, setDocTitle] = useState('');
+  const [docNotes, setDocNotes] = useState('');
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const [docError, setDocError] = useState('');
+  const [docSuccess, setDocSuccess] = useState('');
+
+  const handleOpenDocModal = () => {
+    setDocFile(null);
+    setDocType('GST Certificate');
+    setDocTitle('');
+    setDocNotes('');
+    setDocError('');
+    setDocModalOpen(true);
+  };
+
+  const handleUploadDocument = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!lead) return;
+    if (!docFile) {
+      setDocError('Please select a file to upload');
+      return;
+    }
+    if (!docTitle.trim()) {
+      setDocError('Please provide a document title or label');
+      return;
+    }
+
+    setIsUploadingDoc(true);
+    setDocError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', docFile);
+      formData.append('documentType', docType);
+      formData.append('title', docTitle.trim());
+      if (docNotes.trim()) {
+        formData.append('notes', docNotes.trim());
+      }
+
+      await leadsApi.uploadDocument(lead._id || lead.id, formData);
+      setDocSuccess('Document uploaded successfully!');
+      setDocModalOpen(false);
+      await mutate();
+      setTimeout(() => setDocSuccess(''), 4000);
+    } catch (err: any) {
+      setDocError(err.message || 'Failed to upload document');
+    } finally {
+      setIsUploadingDoc(false);
+    }
+  };
+
+  const handleDeleteDocument = async (docId: string, title: string) => {
+    if (!lead) return;
+    if (!confirm(`Are you sure you want to delete "${title}"?`)) return;
+    setDeletingDocId(docId);
+    try {
+      await leadsApi.deleteDocument(lead._id || lead.id, docId);
+      await mutate();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete document');
+    } finally {
+      setDeletingDocId(null);
+    }
+  };
+
+  // Linked Campaigns state
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
+  const [selectedTimelineCampaign, setSelectedTimelineCampaign] = useState<string>('all');
+
+  useEffect(() => {
+    const leadId = (lead?._id || lead?.id || id) as string;
+    if (!leadId) return;
+    setLoadingCampaigns(true);
+    getCampaigns({ leadId })
+      .then((res) => setCampaigns(res.data || []))
+      .catch(() => setCampaigns([]))
+      .finally(() => setLoadingCampaigns(false));
+  }, [id, lead?._id, lead?.id]);
+
   // Activity timeline state
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
 
+  const refreshActivities = async () => {
+    if (!id) return;
+    setLoadingActivities(true);
+    try {
+      const res = await leadsApi.getActivity(id);
+      setActivities(res.activities || []);
+    } catch {
+      setActivities([]);
+    } finally {
+      setLoadingActivities(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'activity' && id) {
-      setLoadingActivities(true);
-      leadsApi
-        .getActivity(id)
-        .then((res) => setActivities(res.activities || []))
-        .catch(() => setActivities([]))
-        .finally(() => setLoadingActivities(false));
+      refreshActivities();
     }
   }, [activeTab, id, lead?.status]);
 
@@ -269,6 +399,7 @@ export default function LeadDetailPage() {
       await leadsApi.logFollowUp(lead._id || lead.id, payload);
       setLogModalOpen(false);
       await mutate();
+      await refreshActivities();
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Failed to save action record');
     }
@@ -339,7 +470,13 @@ export default function LeadDetailPage() {
             )}
           </div>
           <p className="text-sm text-slate-500 mt-1">
-            {lead.contactPerson} • {lead.mobile} {lead.email ? `• ${lead.email}` : ''}
+            <span className="font-semibold text-slate-700 dark:text-slate-200">
+              {lead.contactPerson}
+              {lead.designation ? ` (${lead.designation})` : ''}
+            </span>
+            {' • '}
+            <span>{lead.mobile}</span>
+            {lead.email ? ` • ${lead.email}` : ''}
           </p>
         </div>
 
@@ -413,12 +550,13 @@ export default function LeadDetailPage() {
         {[
           { id: 'info', label: 'Information' },
           { id: 'qualification', label: 'Requirements' },
+          { id: 'campaigns', label: `Campaigns (${campaigns.length})` },
           { id: 'activity', label: 'Activity Timeline (ATR)' },
-          { id: 'documents', label: 'Documents' },
+          { id: 'documents', label: `Documents (${lead.documents?.length || 0})` },
         ].map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as 'info' | 'qualification' | 'activity' | 'documents')}
+            onClick={() => setActiveTab(tab.id as 'info' | 'qualification' | 'campaigns' | 'activity' | 'documents')}
             className={`h-11 px-4 text-sm font-medium border-b-2 transition-colors ${
               activeTab === tab.id
                 ? 'border-red-600 text-red-600 dark:border-red-400 dark:text-red-400'
@@ -435,12 +573,58 @@ export default function LeadDetailPage() {
         <div className="space-y-6">
           <Card className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-6 p-6">
             <div>
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Source</h3>
-              <p className="text-base text-slate-800 dark:text-slate-200">{lead.source}</p>
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Primary Concern Person</h3>
+              <p className="text-base font-semibold text-slate-800 dark:text-slate-100">
+                {lead.contactPerson}
+                {lead.designation && (
+                  <span className="text-xs font-normal text-slate-500 dark:text-slate-400 ml-1.5">
+                    ({lead.designation})
+                  </span>
+                )}
+              </p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {lead.mobile} {lead.email ? `• ${lead.email}` : ''}
+              </p>
             </div>
+
+            {lead.secondaryContactPerson ? (
+              <div>
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Secondary Concern Person</h3>
+                <p className="text-base font-semibold text-slate-800 dark:text-slate-100">
+                  {lead.secondaryContactPerson}
+                  {lead.secondaryDesignation && (
+                    <span className="text-xs font-normal text-slate-500 dark:text-slate-400 ml-1.5">
+                      ({lead.secondaryDesignation})
+                    </span>
+                  )}
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {lead.secondaryMobile || 'No Alternate Phone'}
+                </p>
+              </div>
+            ) : (
+              <div>
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Source</h3>
+                <p className="text-base text-slate-800 dark:text-slate-200">{lead.source}</p>
+              </div>
+            )}
+
+            {lead.secondaryContactPerson && (
+              <div>
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Source</h3>
+                <p className="text-base text-slate-800 dark:text-slate-200">{lead.source}</p>
+              </div>
+            )}
+
             <div>
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">City</h3>
-              <p className="text-base text-slate-800 dark:text-slate-200">{lead.city || '-'}</p>
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">City & Location</h3>
+              <p className="text-base text-slate-800 dark:text-slate-200">
+                {lead.city || '-'}
+                {lead.companyLocation ? ` • ${lead.companyLocation}` : ''}
+              </p>
+              {lead.companyAddress && (
+                <p className="text-xs text-slate-500 mt-0.5">{lead.companyAddress}</p>
+              )}
             </div>
             <div>
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Assigned Agent</h3>
@@ -693,19 +877,164 @@ export default function LeadDetailPage() {
         </Card>
       )}
 
+      {/* Tab: Linked Campaigns */}
+      {activeTab === 'campaigns' && (
+        <Card className="p-6">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-6 flex-wrap gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                <Briefcase className="w-4 h-4 text-[#8B2424] shrink-0" />
+                <span>Linked Campaigns ({campaigns.length})</span>
+              </h3>
+              <p className="text-xs text-slate-500">
+                Independent parallel outdoor campaigns running or planned for this client.
+              </p>
+            </div>
+            {canManageCampaigns && (
+              <Link href={`/campaigns?leadId=${lead._id || lead.id}&create=true`}>
+                <Button variant="primary" className="!h-9 !px-3 inline-flex items-center gap-1.5 bg-[#8B2424] text-white hover:bg-[#6E1D1D] shadow-2xs !text-xs font-semibold">
+                  <Plus className="w-3.5 h-3.5 shrink-0" />
+                  <span>Launch New Campaign</span>
+                </Button>
+              </Link>
+            )}
+          </div>
+
+          {loadingCampaigns ? (
+            <div className="py-8 flex justify-center">
+              <Spinner label="Loading campaigns..." />
+            </div>
+          ) : campaigns.length === 0 ? (
+            <div className="py-10 text-center space-y-3">
+              <div className="w-12 h-12 mx-auto rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                <Briefcase className="w-6 h-6" />
+              </div>
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                No campaigns launched for this lead yet.
+              </p>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                Once a client inquiry matures, you can launch multiple parallel campaigns (e.g. City-specific launches, DOOH, or Highways).
+              </p>
+              {canManageCampaigns && (
+                <Link href={`/campaigns?leadId=${lead._id || lead.id}&create=true`}>
+                  <Button variant="secondary" className="!text-xs mt-2">
+                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    Create First Campaign
+                  </Button>
+                </Link>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-slate-200 dark:border-slate-800 text-xs font-semibold uppercase text-slate-500">
+                  <tr>
+                    <th className="pb-3 px-3">Campaign Code</th>
+                    <th className="pb-3 px-3">Campaign Name</th>
+                    <th className="pb-3 px-3">City</th>
+                    <th className="pb-3 px-3">Dates</th>
+                    <th className="pb-3 px-3">Contract Value</th>
+                    <th className="pb-3 px-3">Status</th>
+                    <th className="pb-3 px-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                  {campaigns.map((c) => {
+                    const statusColors: Record<string, string> = {
+                      Draft: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300',
+                      Approved: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300',
+                      InProgress: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300',
+                      Completed: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300',
+                      Cancelled: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300',
+                    };
+
+                    return (
+                      <tr key={c._id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        <td className="py-3 px-3 font-mono text-xs font-semibold text-slate-900 dark:text-white">
+                          {c.campaignCode}
+                        </td>
+                        <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">
+                          {c.name}
+                        </td>
+                        <td className="py-3 px-3 text-slate-600 dark:text-slate-400">
+                          {c.city}
+                        </td>
+                        <td className="py-3 px-3 text-xs text-slate-500">
+                          {formatDateTime(c.startDate)} → {formatDateTime(c.endDate)}
+                        </td>
+                        <td className="py-3 px-3 font-semibold text-slate-900 dark:text-white">
+                          ₹{((c.contractedValue || 0) / 100).toLocaleString('en-IN')}
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold border ${statusColors[c.status] || 'bg-slate-100 text-slate-700'}`}>
+                            {c.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <Link href={`/campaigns?search=${encodeURIComponent(c.campaignCode || c.name)}`}>
+                            <Button variant="ghost" className="!h-8 !px-2.5 !text-xs text-blue-600 hover:text-blue-800">
+                              View
+                            </Button>
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Tab: Activity Timeline (ATR) */}
       {activeTab === 'activity' && (
         <Card className="p-6">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-6">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-6 flex-wrap gap-3">
             <div>
               <h3 className="text-base font-semibold text-slate-900 dark:text-white">Action Taken History (ATR)</h3>
-              <p className="text-xs text-slate-500">Chained follow-up logs, status transitions, and manager approvals.</p>
+              <p className="text-xs text-slate-500">Chained follow-up logs, quotations, campaigns, and manager approvals.</p>
             </div>
             <Button variant="secondary" onClick={() => setLogModalOpen(true)} className="!h-9 !px-3 inline-flex items-center gap-1.5 !text-xs font-medium">
               <Plus className="w-3.5 h-3.5 shrink-0" />
               <span>Log Action</span>
             </Button>
           </div>
+
+          {/* Timeline Filter Pills */}
+          {campaigns.length > 0 && (
+            <div className="mb-6 flex items-center gap-2 flex-wrap text-xs">
+              <span className="text-slate-400 font-medium mr-1">Filter by Campaign:</span>
+              <button
+                type="button"
+                onClick={() => setSelectedTimelineCampaign('all')}
+                className={`px-2.5 py-1 rounded-full font-medium transition-colors ${
+                  selectedTimelineCampaign === 'all'
+                    ? 'bg-[#8B2424] text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                }`}
+              >
+                All Activities ({activities.length})
+              </button>
+              {campaigns.map((c) => {
+                const count = activities.filter((a) => a.campaignId === c._id).length;
+                return (
+                  <button
+                    key={c._id}
+                    type="button"
+                    onClick={() => setSelectedTimelineCampaign(c._id)}
+                    className={`px-2.5 py-1 rounded-full font-medium transition-colors ${
+                      selectedTimelineCampaign === c._id
+                        ? 'bg-[#8B2424] text-white shadow-2xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                    }`}
+                  >
+                    {c.name} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {loadingActivities ? (
             <div className="py-8 flex justify-center">
@@ -717,7 +1046,12 @@ export default function LeadDetailPage() {
             </div>
           ) : (
             <div className="relative border-l-2 border-slate-200 dark:border-slate-800 ml-4 space-y-6 py-2">
-              {activities.map((item, idx) => {
+              {activities
+                .filter((item) => {
+                  if (selectedTimelineCampaign === 'all') return true;
+                  return item.campaignId === selectedTimelineCampaign;
+                })
+                .map((item, idx) => {
                 const isCycleRestart = Boolean(item.type === 'status_change' && item.from && ['Won', 'Lost'].includes(item.from));
 
                 return (
@@ -730,6 +1064,10 @@ export default function LeadDetailPage() {
                             ? (item.to ? STATUS_DOT_COLORS[item.to] || 'bg-blue-500' : 'bg-blue-500')
                             : item.type === 'manager_review'
                             ? 'bg-amber-500'
+                            : item.type === 'quotation'
+                            ? 'bg-indigo-500'
+                            : item.type === 'campaign_event'
+                            ? 'bg-emerald-500'
                             : 'bg-blue-500'
                         }`}
                       />
@@ -770,6 +1108,48 @@ export default function LeadDetailPage() {
                             {formatDateTime(item.timestamp)}
                           </div>
                         </div>
+                      ) : item.type === 'quotation' ? (
+                        <div className="rounded-lg bg-indigo-50/70 dark:bg-indigo-950/40 p-4 border border-indigo-200/80 dark:border-indigo-900">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <span className="flex items-center justify-center w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
+                                <FileText className="w-3.5 h-3.5 shrink-0" />
+                              </span>
+                              <span className="text-sm font-bold text-indigo-950 dark:text-indigo-200">
+                                {item.reason || `Quotation #${item.referenceCode}`}
+                              </span>
+                            </div>
+                            {typeof item.amount === 'number' && (
+                              <span className="text-xs font-bold text-indigo-800 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900 px-2 py-0.5 rounded">
+                                Value: ₹{((item.amount || 0) / 100).toLocaleString('en-IN')}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-indigo-600 dark:text-indigo-400 mt-2">
+                            {formatDateTime(item.timestamp)}
+                          </div>
+                        </div>
+                      ) : item.type === 'campaign_event' ? (
+                        <div className="rounded-lg bg-emerald-50/70 dark:bg-emerald-950/40 p-4 border border-emerald-200/80 dark:border-emerald-900">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <span className="flex items-center justify-center w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300">
+                                <Briefcase className="w-3.5 h-3.5 shrink-0" />
+                              </span>
+                              <span className="text-sm font-bold text-emerald-950 dark:text-emerald-200">
+                                {item.reason || `Campaign: ${item.campaignName}`}
+                              </span>
+                            </div>
+                            {typeof item.amount === 'number' && item.amount > 0 && (
+                              <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900 px-2 py-0.5 rounded">
+                                Contract: ₹{((item.amount || 0) / 100).toLocaleString('en-IN')}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-emerald-600 dark:text-emerald-400 mt-2">
+                            {formatDateTime(item.timestamp)}
+                          </div>
+                        </div>
                       ) : item.type === 'manager_review' ? (
                       <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 p-3 border border-amber-200 dark:border-amber-900">
                         <div className="flex items-center gap-1.5 text-sm font-semibold text-amber-900 dark:text-amber-300">
@@ -788,13 +1168,24 @@ export default function LeadDetailPage() {
                     ) : (
                       <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 p-4 border border-slate-200 dark:border-slate-700">
                         <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="flex items-center justify-center w-7 h-7 rounded-full bg-slate-200/60 dark:bg-slate-700/60">
                               {renderFollowUpIcon(item.followUpType)}
                             </span>
                             <span className="text-sm font-bold text-slate-900 dark:text-white">
                               {item.followUpType || 'Action'} — {item.reason || 'Follow-up'}
                             </span>
+                            {item.campaignName && (
+                              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
+                                Campaign: {item.campaignName}
+                              </span>
+                            )}
+                            {item.contactedPerson && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-[#8B2424] border border-[#F2CACA] dark:bg-red-950/60 dark:text-red-300 dark:border-red-900">
+                                <User className="w-3 h-3 shrink-0" />
+                                With: {item.contactedPerson}
+                              </span>
+                            )}
                           </div>
                           {item.nextActionDate && (
                             <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 px-2 py-0.5 rounded">
@@ -847,11 +1238,125 @@ export default function LeadDetailPage() {
 
       {/* Tab: Documents */}
       {activeTab === 'documents' && (
-        <Card className="p-6">
-          <div className="text-sm text-slate-500">
-            Proposal documents generated from this lead appear in the Quotations & Proposals track.
+        <div className="space-y-4">
+          {docSuccess && (
+            <Alert tone="success" title="Success">
+              {docSuccess}
+            </Alert>
+          )}
+
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+                Attached Lead Documents ({lead.documents?.length || 0})
+              </h2>
+              <p className="text-xs text-slate-500">
+                Official documents, GST/PAN certificates, client POs, agreements, and creative assets.
+              </p>
+            </div>
+            <Button
+              variant="primary"
+              onClick={handleOpenDocModal}
+              className="!h-9 !px-3 inline-flex items-center gap-1.5 bg-[#8B2424] text-white hover:bg-[#6E1D1D] shadow-2xs !text-xs font-semibold"
+            >
+              <Upload className="w-3.5 h-3.5 shrink-0" />
+              <span>Upload Document</span>
+            </Button>
           </div>
-        </Card>
+
+          {(!lead.documents || lead.documents.length === 0) ? (
+            <Card className="p-8 text-center">
+              <div className="mx-auto w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-3">
+                <FileText className="w-6 h-6" />
+              </div>
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">No documents attached yet</h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                Upload GST, PAN cards, purchase orders, client agreements, or creative artwork relevant to this lead.
+              </p>
+              <Button
+                variant="secondary"
+                onClick={handleOpenDocModal}
+                className="mt-4 !h-8 !text-xs inline-flex items-center gap-1.5"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Upload First Document</span>
+              </Button>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {lead.documents.map((doc: LeadDocument) => {
+                const docId = doc._id || doc.id || '';
+                const token = sessionStore.getAccessToken();
+                const baseFileUrl = doc.fileUrl || (doc.fileKey ? `${appConfig.apiUrl}/api/files/${encodeURIComponent(doc.fileKey)}` : '');
+                const viewUrl = baseFileUrl
+                  ? `${baseFileUrl}${baseFileUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(token || '')}`
+                  : '';
+
+                return (
+                  <Card key={docId} className="p-4 flex flex-col justify-between space-y-3 hover:shadow-md transition-shadow">
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium mb-1.5 ${
+                              DOC_TYPE_BADGES[doc.documentType] || DOC_TYPE_BADGES.Other
+                            }`}
+                          >
+                            {doc.documentType}
+                          </span>
+                          <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate" title={doc.title}>
+                            {doc.title}
+                          </h4>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {viewUrl && (
+                            <a
+                              href={viewUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold text-[#8B2424] bg-red-50 hover:bg-[#8B2424] hover:text-white dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-[#8B2424] dark:hover:text-white transition-all shadow-2xs"
+                              title="Open & View document in new tab"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              <span>View</span>
+                            </a>
+                          )}
+                          <button
+                            type="button"
+                            disabled={deletingDocId === docId}
+                            onClick={() => handleDeleteDocument(docId, doc.title)}
+                            className="p-1.5 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors disabled:opacity-50"
+                            title="Delete document"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="text-xs text-slate-500 space-y-1">
+                        <p className="truncate" title={doc.originalName}>
+                          <span className="font-medium text-slate-700 dark:text-slate-300">File:</span> {doc.originalName} ({formatFileSize(doc.fileSize)})
+                        </p>
+                        {doc.notes && (
+                          <p className="text-slate-600 dark:text-slate-300 italic bg-slate-50 dark:bg-slate-800/60 p-2 rounded text-[11px]">
+                            "{doc.notes}"
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                      <span>
+                        Uploaded by {doc.uploadedBy?.name || 'User'}
+                      </span>
+                      <span>{formatDateTime(doc.uploadedAt)}</span>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Lost Reason Modal */}
@@ -890,6 +1395,34 @@ export default function LeadDetailPage() {
         open={logModalOpen}
         onClose={() => setLogModalOpen(false)}
         onSubmit={submitLogFollowUp}
+        campaigns={campaigns.map((c) => ({ id: c._id, name: c.name, campaignCode: c.campaignCode }))}
+        contacts={[
+          {
+            name: lead.contactPerson,
+            role: 'Primary Contact',
+            designation: lead.designation,
+            phone: lead.mobile,
+          },
+          ...(lead.secondaryContactPerson
+            ? [
+                {
+                  name: lead.secondaryContactPerson,
+                  role: 'Secondary Contact',
+                  designation: lead.secondaryDesignation,
+                  phone: lead.secondaryMobile,
+                },
+              ]
+            : []),
+        ]}
+        leadDefaults={{
+          budget: lead.qualification?.budget,
+          companyAddress: lead.companyAddress,
+          companyLocation: lead.companyLocation,
+          email: lead.email,
+          secondaryContactPerson: lead.secondaryContactPerson,
+          secondaryDesignation: lead.secondaryDesignation,
+          secondaryMobile: lead.secondaryMobile,
+        }}
       />
 
       {/* Re-assign Agent Modal */}
@@ -952,6 +1485,95 @@ export default function LeadDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Upload Document Modal */}
+      <Modal
+        open={docModalOpen}
+        onClose={() => {
+          if (!isUploadingDoc) setDocModalOpen(false);
+        }}
+        title="Upload Lead Document"
+      >
+        <form onSubmit={handleUploadDocument} className="space-y-4 pt-2">
+          {docError && (
+            <Alert tone="error" title="Upload Failed">
+              {docError}
+            </Alert>
+          )}
+
+          <div>
+            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Select File <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="file"
+              required
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null;
+                setDocFile(file);
+                if (file && !docTitle) {
+                  const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
+                  setDocTitle(nameWithoutExt);
+                }
+              }}
+              className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 dark:file:bg-slate-800 dark:file:text-slate-200 cursor-pointer border border-slate-300 dark:border-slate-700 rounded-md p-1.5"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Document Type <span className="text-rose-500">*</span>
+            </label>
+            <select
+              value={docType}
+              onChange={(e) => setDocType(e.target.value as LeadDocumentType)}
+              className="w-full rounded-md border border-slate-300 bg-white p-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+            >
+              {LEAD_DOCUMENT_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <Field
+            label="Document Title / Label *"
+            placeholder="e.g. GST Registration Certificate, Signed PO #402"
+            value={docTitle}
+            onChange={(e) => setDocTitle(e.target.value)}
+            required
+          />
+
+          <TextAreaField
+            label="Notes / Comments (Optional)"
+            placeholder="e.g. Valid until Dec 2026, approved by legal team..."
+            value={docNotes}
+            onChange={(e) => setDocNotes(e.target.value)}
+            rows={2}
+          />
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={isUploadingDoc}
+              onClick={() => setDocModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              isLoading={isUploadingDoc}
+              className="bg-[#8B2424] text-white hover:bg-[#6E1D1D]"
+            >
+              <Upload className="w-3.5 h-3.5 mr-1.5" />
+              Upload Document
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

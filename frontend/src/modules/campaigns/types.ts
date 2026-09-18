@@ -87,15 +87,11 @@ export interface Campaign {
 
 export interface CampaignFilters {
   search?: string;
-
+  leadId?: string;
   status?: CampaignStatus;
-
   city?: string;
-
   manager?: string;
-
   startDate?: string;
-
   endDate?: string;
 }
 

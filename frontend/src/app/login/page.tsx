@@ -170,11 +170,11 @@ function LoginForm() {
   return (
     <main
       className="flex min-h-screen items-center justify-center bg-cover bg-center px-4 py-12"
-      style={{ backgroundImage: "url('/bglogin.png')" }}
+      style={{ backgroundImage: "url('/bglogin.png?v=2')" }}
     >
       <div className="w-full max-w-md bg-white rounded-3xl p-8 sm:p-10 shadow-2xl relative">
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="Media Octus" className="h-12 mx-auto object-contain" />
+          <img src="/logo.png?v=4" alt="Media Octus" className="h-24 mx-auto object-contain" />
         </div>
 
         {displayedNotice && (
@@ -453,7 +453,7 @@ export default function LoginPage() {
       fallback={
         <main
           className="flex min-h-screen items-center justify-center bg-cover bg-center px-4"
-          style={{ backgroundImage: "url('/bglogin.png')" }}
+          style={{ backgroundImage: "url('/bglogin.png?v=2')" }}
         >
           <div className="w-full max-w-md bg-white rounded-3xl p-12 shadow-2xl flex justify-center">
             <Spinner />

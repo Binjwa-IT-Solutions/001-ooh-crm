@@ -4,6 +4,7 @@ import {
   LEAD_STATUSES,
   LOCATION_PREFERENCES,
   FOLLOW_UP_TYPES,
+  LEAD_DOCUMENT_TYPES,
 } from './leads.model.js';
 
 export const objectIdSchema = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid object ID');
@@ -41,12 +42,25 @@ export const leadQualificationSchema = z.object({
 
 export const logFollowUpSchema = z.object({
   followUpType: z.enum(FOLLOW_UP_TYPES).default('Call'),
+  contactedPerson: z.string().trim().optional(),
+  campaignId: z.string().trim().optional(),
   reason: z.string().trim().optional(),
   remarks: z.string().trim().optional(),
   note: z.string().trim().optional(),
   nextActionDate: z.coerce.date().optional(),
   delayResponsibility: z.string().trim().optional(),
   durationSec: z.coerce.number().min(0).optional(),
+  budget: z.coerce
+    .number()
+    .min(0)
+    .optional()
+    .transform((val) => (val !== undefined && !Number.isNaN(val) ? Math.round(val * 100) : undefined)),
+  secondaryContactPerson: z.string().trim().optional(),
+  secondaryDesignation: z.string().trim().optional(),
+  secondaryMobile: z.string().trim().optional(),
+  companyAddress: z.string().trim().optional(),
+  companyLocation: z.string().trim().optional(),
+  email: z.string().trim().email('Invalid email').optional().or(z.literal('')),
 });
 
 export const managerApprovalSchema = z.object({
@@ -57,7 +71,13 @@ export const managerApprovalSchema = z.object({
 export const createLeadSchema = z.object({
   companyName: z.string().trim().min(1, 'Company Name is required'),
   contactPerson: z.string().trim().min(1, 'Contact Person is required'),
+  designation: z.string().trim().optional(),
   mobile: z.string().trim().min(1, 'Mobile is required'),
+  secondaryContactPerson: z.string().trim().optional(),
+  secondaryDesignation: z.string().trim().optional(),
+  secondaryMobile: z.string().trim().optional(),
+  companyAddress: z.string().trim().optional(),
+  companyLocation: z.string().trim().optional(),
   email: z.string().trim().email('Invalid email').optional().or(z.literal('')),
   city: z.string().trim().optional().default(''),
   source: z.enum(LEAD_SOURCES).default('Manual'),
@@ -76,6 +96,7 @@ export const intakeLeadSchema = z
   .object({
     companyName: z.string().trim().optional(),
     contactPerson: z.string().trim().optional(),
+    designation: z.string().trim().optional(),
     name: z.string().trim().optional(),
     firstName: z.string().trim().optional(),
     lastName: z.string().trim().optional(),
@@ -85,6 +106,13 @@ export const intakeLeadSchema = z
     mobile: z.string().trim().optional(),
     phone: z.string().trim().optional(),
     contactNumber: z.string().trim().optional(),
+    secondaryContactPerson: z.string().trim().optional(),
+    secondaryDesignation: z.string().trim().optional(),
+    secondaryMobile: z.string().trim().optional(),
+    companyAddress: z.string().trim().optional(),
+    companyLocation: z.string().trim().optional(),
+    address: z.string().trim().optional(),
+    location: z.string().trim().optional(),
     email: z.string().trim().optional(),
     city: z.string().trim().optional(),
     area: z.string().trim().optional(),
@@ -140,6 +168,16 @@ export const listLeadsSchema = z.object({
   assignedTo: objectIdSchema.optional(),
   assignedToMe: z.coerce.boolean().optional(),
   unassigned: z.coerce.boolean().optional(),
+  overdueOnly: z.coerce.boolean().optional(),
+  sortBy: z.enum(['receivedAt', 'createdAt', 'companyName', 'source', 'nextActionDate']).optional(),
+  sortDir: z.enum(['asc', 'desc']).optional(),
   fromDate: z.coerce.date().optional(),
   toDate: z.coerce.date().optional(),
 });
+
+export const uploadLeadDocumentSchema = z.object({
+  documentType: z.enum(LEAD_DOCUMENT_TYPES).default('Other'),
+  title: z.string().trim().min(1, 'Document title is required'),
+  notes: z.string().trim().optional(),
+});
+
