@@ -230,6 +230,7 @@ export interface LogCallValues {
   reason?: string;
   remarks?: string;
   note?: string;
+  loggedAt?: string;
   nextActionDate?: string;
   delayResponsibility?: string;
   durationSec?: number;

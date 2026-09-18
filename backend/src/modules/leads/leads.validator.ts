@@ -47,6 +47,7 @@ export const logFollowUpSchema = z.object({
   reason: z.string().trim().optional(),
   remarks: z.string().trim().optional(),
   note: z.string().trim().optional(),
+  loggedAt: z.coerce.date().optional(),
   nextActionDate: z.coerce.date().optional(),
   delayResponsibility: z.string().trim().optional(),
   durationSec: z.coerce.number().min(0).optional(),

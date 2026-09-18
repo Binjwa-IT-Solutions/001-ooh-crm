@@ -5,6 +5,22 @@ import { Button, Field, TextAreaField, SelectField } from '@/shared/ui';
 import { ChevronDown } from 'lucide-react';
 import { FOLLOW_UP_TYPES, FOLLOW_UP_REASONS, type FollowUpType } from '../types';
 
+function toLocalDatetimeString(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function getMinLoggedAt(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  d.setHours(0, 0, 0, 0);
+  return toLocalDatetimeString(d);
+}
+
+function getMaxLoggedAt(): string {
+  return toLocalDatetimeString(new Date());
+}
+
 export interface LogFollowUpPayload {
   followUpType?: FollowUpType;
   contactedPerson?: string;
@@ -12,6 +28,7 @@ export interface LogFollowUpPayload {
   reason?: string;
   remarks?: string;
   note?: string;
+  loggedAt?: string;
   nextActionDate?: string;
   delayResponsibility?: string;
   durationSec?: number;
@@ -77,6 +94,7 @@ function LogCallModalContent({
   const [campaignId, setCampaignId] = useState<string>('');
   const [reason, setReason] = useState<string>('General Follow-up');
   const [remarks, setRemarks] = useState('');
+  const [loggedAt, setLoggedAt] = useState(() => toLocalDatetimeString(new Date()));
   const [nextActionDate, setNextActionDate] = useState('');
   const [delayResponsibility, setDelayResponsibility] = useState('');
   const [durationSec, setDurationSec] = useState<string>('');
@@ -142,6 +160,36 @@ function LogCallModalContent({
             />
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Field
+                label="Logged At (Interaction Time) *"
+                type="datetime-local"
+                min={getMinLoggedAt()}
+                max={getMaxLoggedAt()}
+                value={loggedAt}
+                onChange={(e) => setLoggedAt(e.target.value)}
+                required
+              />
+              <p className="text-[11px] text-slate-500 mt-1">
+                Backdating allowed up to 1 day prior (yesterday).
+              </p>
+            </div>
+
+            {followUpType === 'Call' ? (
+              <Field
+                label="Call Duration (seconds)"
+                type="number"
+                min="0"
+                placeholder="e.g. 120"
+                value={durationSec}
+                onChange={(e) => setDurationSec(e.target.value)}
+              />
+            ) : (
+              <div className="hidden sm:block" />
+            )}
+          </div>
+
           <TextAreaField
             label="Conversation Remarks & Key Points *"
             placeholder="What was discussed? (e.g. Client requested 10% discount on Bandra Billboard, agreed to review quotation by Thursday)..."
@@ -169,8 +217,8 @@ function LogCallModalContent({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field
               label="Next Action Date"
-              type="datetime-local"
-              min={new Date().toISOString().slice(0, 16)}
+              type="date"
+              min={new Date().toISOString().slice(0, 10)}
               value={nextActionDate}
               onChange={(e) => setNextActionDate(e.target.value)}
             />
@@ -188,17 +236,6 @@ function LogCallModalContent({
               ]}
             />
           </div>
-
-          {followUpType === 'Call' && (
-            <Field
-              label="Call Duration (seconds)"
-              type="number"
-              min="0"
-              placeholder="e.g. 120"
-              value={durationSec}
-              onChange={(e) => setDurationSec(e.target.value)}
-            />
-          )}
 
           {/* Quick Profile Updates Toggle */}
           <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
@@ -278,6 +315,23 @@ function LogCallModalContent({
           <Button
             disabled={!remarks.trim()}
             onClick={async () => {
+              if (loggedAt) {
+                const loggedDate = new Date(loggedAt);
+                const minAllowed = new Date();
+                minAllowed.setDate(minAllowed.getDate() - 1);
+                minAllowed.setHours(0, 0, 0, 0);
+                const maxAllowed = new Date(Date.now() + 5 * 60 * 1000);
+
+                if (loggedDate > maxAllowed) {
+                  alert('Logged At date & time cannot be in the future.');
+                  return;
+                }
+                if (loggedDate < minAllowed) {
+                  alert('Logged At date cannot be more than 1 day in the past.');
+                  return;
+                }
+              }
+
               setIsSubmitting(true);
               try {
                 const payload: LogFollowUpPayload = {
@@ -287,6 +341,7 @@ function LogCallModalContent({
                   reason,
                   remarks: remarks.trim(),
                   note: remarks.trim(),
+                  loggedAt: loggedAt ? new Date(loggedAt).toISOString() : undefined,
                   nextActionDate: nextActionDate ? new Date(nextActionDate).toISOString() : undefined,
                   delayResponsibility: delayResponsibility || undefined,
                   durationSec: durationSec ? Number(durationSec) : undefined,

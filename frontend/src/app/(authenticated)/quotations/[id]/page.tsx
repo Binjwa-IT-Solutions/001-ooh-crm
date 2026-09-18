@@ -48,7 +48,7 @@ export default function QuotationDetailPage() {
   function withAuthToken(rawUrl: string): string {
     if (!rawUrl) return '';
     const token = sessionStore.getAccessToken();
-    if (token && rawUrl.startsWith('/api/files/')) {
+    if (token && (rawUrl.startsWith('/api/files/') || rawUrl.includes('/api/files/')) && !rawUrl.includes('token=')) {
       const separator = rawUrl.includes('?') ? '&' : '?';
       return `${rawUrl}${separator}token=${encodeURIComponent(token)}`;
     }

@@ -3,6 +3,7 @@ import cron, { type ScheduledTask } from 'node-cron';
 import { config } from '../config/index.js';
 import { withJobLock } from './job-runner.js';
 import { escalationJob } from './escalation.job.js';
+import { leadSlaReleaseJob } from './lead-sla.job.js';
 
 export { withJobLock } from './job-runner.js';
 
@@ -38,6 +39,13 @@ const JOBS: JobDefinition[] = [
     lockTtlSeconds: 15 * 60,
     description: 'D4 — escalate overdue tasks',
     run: escalationJob,
+  },
+  {
+    name: 'lead-sla-unclaim',
+    schedule: '*/10 * * * *',
+    lockTtlSeconds: 5 * 60,
+    description: 'Auto-release claimed leads with breached 24h SLA and no action back to Unclaimed pool',
+    run: leadSlaReleaseJob,
   },
   {
     name: 'heartbeat',
