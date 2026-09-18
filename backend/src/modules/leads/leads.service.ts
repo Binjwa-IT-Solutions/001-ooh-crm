@@ -8,12 +8,20 @@ import {
   type LeadStatus,
   type LeadSource,
   type FollowUpType,
+  type LeadDocumentType,
 } from './leads.model.js';
 import { STATUS_TRANSITIONS } from './leads.validator.js';
 import { toObjectId } from '../../core/db/basePlugin.js';
+import { fileService } from '../../core/files/index.js';
 import { AuthUser } from '../../core/auth/auth-model.js';
 import { notifyMany } from '../../core/notifications/index.js';
 import { extractLeadWithGemini } from './leads.ai.js';
+import { Quotation } from '../quotations/quotations.model.js';
+import { Campaign } from '../campaigns/campaign.model.js';
+
+function escapeRegex(text: string): string {
+  return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+}
 
 export class LeadsService {
   /**
@@ -31,7 +39,7 @@ export class LeadsService {
     }
 
     if (filters.status) query.status = filters.status;
-    if (filters.city) query.city = filters.city;
+    if (filters.city) query.city = new RegExp(escapeRegex(filters.city.trim()), 'i');
     if (filters.source) query.source = filters.source;
 
     if (filters.fromDate || filters.toDate) {
@@ -40,8 +48,32 @@ export class LeadsService {
       if (filters.toDate) query.createdAt.$lte = filters.toDate;
     }
 
+    if (filters.overdueOnly) {
+      query.nextActionDate = { $ne: null, $lt: new Date() };
+      if (!filters.status) {
+        query.status = { $nin: ['Won', 'Lost', 'Rejected'] };
+      }
+    }
+
     // Always exclude soft-deleted
     query.deletedAt = null;
+
+    let sortObj: Record<string, any> = { createdAt: -1 };
+    if (filters.sortBy === 'nextActionDate') {
+      const dir = filters.sortDir === 'desc' ? -1 : 1;
+      sortObj = { nextActionDate: dir, createdAt: -1 };
+    } else if (filters.sortBy === 'companyName') {
+      const dir = filters.sortDir === 'desc' ? -1 : 1;
+      sortObj = { companyName: dir, createdAt: -1 };
+    } else if (filters.sortBy === 'source') {
+      const dir = filters.sortDir === 'desc' ? -1 : 1;
+      sortObj = { source: dir, createdAt: -1 };
+    } else if (filters.sortBy === 'receivedAt' || filters.sortBy === 'createdAt') {
+      const dir = filters.sortDir === 'asc' ? 1 : -1;
+      sortObj = { createdAt: dir };
+    } else if (filters.overdueOnly) {
+      sortObj = { nextActionDate: 1, createdAt: -1 };
+    }
 
     if (filters.unassigned) {
       query.status = 'New';
@@ -51,7 +83,7 @@ export class LeadsService {
       const skip = (filters.page - 1) * filters.limit;
       const [leads, total] = await Promise.all([
         Lead.find(query)
-          .sort({ createdAt: -1 })
+          .sort(sortObj)
           .skip(skip)
           .limit(filters.limit)
           .populate('assignedTo claimedBy', 'name email role')
@@ -87,7 +119,7 @@ export class LeadsService {
 
     const [leads, total] = await Promise.all([
       scopedFind(Lead, query, ctx, { ownerField: 'assignedTo' })
-        .sort({ createdAt: -1 })
+        .sort(sortObj)
         .skip(skip)
         .limit(filters.limit)
         .populate('assignedTo claimedBy', 'name email role')
@@ -96,6 +128,122 @@ export class LeadsService {
     ]);
 
     return { leads, total };
+  }
+
+  static async exportLeads(filters: any, ctx: RequestContext): Promise<string> {
+    const query: Record<string, any> = { deletedAt: null };
+
+    if (filters.search) {
+      const searchRegex = new RegExp(filters.search, 'i');
+      query.$or = [
+        { companyName: searchRegex },
+        { contactPerson: searchRegex },
+        { mobile: searchRegex },
+        { email: searchRegex },
+        { city: searchRegex },
+      ];
+    }
+
+    if (filters.status) {
+      query.status = filters.status;
+    }
+
+    if (filters.city) {
+      query.city = new RegExp(escapeRegex(filters.city.trim()), 'i');
+    }
+
+    if (filters.source) {
+      query.source = filters.source;
+    }
+
+    if (filters.unassigned) {
+      query.status = 'New';
+      query.assignedTo = null;
+      query.claimedBy = null;
+    } else if (filters.assignedTo) {
+      query.assignedTo = toObjectId(filters.assignedTo);
+    } else if (filters.assignedToMe) {
+      query.assignedTo = toObjectId(ctx.user.id);
+    }
+
+    if (filters.overdueOnly) {
+      query.nextActionDate = { $ne: null, $lt: new Date() };
+      if (!filters.status) {
+        query.status = { $nin: ['Won', 'Lost', 'Rejected'] };
+      }
+    }
+
+    const leads = await scopedFind(Lead, query, ctx, { ownerField: 'assignedTo' })
+      .sort({ createdAt: -1 })
+      .populate('assignedTo claimedBy', 'name email role')
+      .exec();
+
+    const headers = [
+      'Company Name',
+      'Primary Contact Person',
+      'Designation',
+      'Mobile',
+      'Secondary Contact Person',
+      'Secondary Designation',
+      'Secondary Mobile',
+      'Email',
+      'Company Address',
+      'Company Location',
+      'City',
+      'Source',
+      'Status',
+      'Assigned To',
+      'Claimed By',
+      'Next Action Date',
+      'Budget (INR)',
+      'Location Preference',
+      'Campaign Duration',
+      'Target Audience',
+      'Created At',
+    ];
+
+    const escapeCsv = (val: any): string => {
+      if (val === null || val === undefined) return '';
+      const str = String(val).trim();
+      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const rows = leads.map((l: any) => {
+      const assignedToName = l.assignedTo?.name || '';
+      const claimedByName = l.claimedBy?.name || '';
+      const nextAction = l.nextActionDate ? new Date(l.nextActionDate).toLocaleString('en-IN') : '';
+      const budgetRupees = l.qualification?.budget ? (l.qualification.budget / 100).toFixed(0) : '';
+      const createdAtFormatted = l.createdAt ? new Date(l.createdAt).toLocaleString('en-IN') : '';
+
+      return [
+        escapeCsv(l.companyName),
+        escapeCsv(l.contactPerson),
+        escapeCsv(l.designation || ''),
+        escapeCsv(l.mobile),
+        escapeCsv(l.secondaryContactPerson || ''),
+        escapeCsv(l.secondaryDesignation || ''),
+        escapeCsv(l.secondaryMobile || ''),
+        escapeCsv(l.email || ''),
+        escapeCsv(l.companyAddress || ''),
+        escapeCsv(l.companyLocation || ''),
+        escapeCsv(l.city || ''),
+        escapeCsv(l.source),
+        escapeCsv(l.status),
+        escapeCsv(assignedToName),
+        escapeCsv(claimedByName),
+        escapeCsv(nextAction),
+        escapeCsv(budgetRupees),
+        escapeCsv(l.qualification?.locationPreference || ''),
+        escapeCsv(l.qualification?.campaignDuration || ''),
+        escapeCsv(l.qualification?.targetAudience || ''),
+        escapeCsv(createdAtFormatted),
+      ].join(',');
+    });
+
+    return '\uFEFFsep=,\r\n' + [headers.join(','), ...rows].join('\r\n');
   }
 
   static async getLead(id: string, ctx: RequestContext): Promise<ILead> {
@@ -120,7 +268,20 @@ export class LeadsService {
 
     if (!lead) throw new NotFoundError('Lead not found');
 
-    await lead.populate('assignedTo claimedBy rejectedBy', 'name email role');
+    if (lead.populate) {
+      await lead.populate('assignedTo claimedBy rejectedBy documents.uploadedBy', 'name email role');
+    }
+    if (lead.documents && lead.documents.length > 0) {
+      for (const doc of lead.documents) {
+        if (doc.fileKey && !doc.fileUrl) {
+          try {
+            doc.fileUrl = await fileService.url(doc.fileKey);
+          } catch {
+            // ignore
+          }
+        }
+      }
+    }
     return lead;
   }
 
@@ -368,7 +529,13 @@ export class LeadsService {
       source: source as LeadSource,
       companyName,
       contactPerson,
+      designation: payload.designation || undefined,
       mobile,
+      secondaryContactPerson: payload.secondaryContactPerson || undefined,
+      secondaryDesignation: payload.secondaryDesignation || undefined,
+      secondaryMobile: payload.secondaryMobile || undefined,
+      companyAddress: payload.companyAddress || payload.address || undefined,
+      companyLocation: payload.companyLocation || payload.location || undefined,
       email,
       city,
       qualification: Object.keys(qualificationData).length > 0 ? qualificationData : undefined,
@@ -468,12 +635,21 @@ export class LeadsService {
     id: string,
     payload: {
       followUpType?: FollowUpType;
+      contactedPerson?: string;
+      campaignId?: string;
       reason?: string;
       remarks?: string;
       note?: string;
       nextActionDate?: Date;
       delayResponsibility?: string;
       durationSec?: number;
+      budget?: number;
+      secondaryContactPerson?: string;
+      secondaryDesignation?: string;
+      secondaryMobile?: string;
+      companyAddress?: string;
+      companyLocation?: string;
+      email?: string;
     },
     ctx: RequestContext,
   ): Promise<ILead> {
@@ -484,7 +660,9 @@ export class LeadsService {
 
     const followUpEntry = {
       user: toObjectId(ctx.user.id),
+      campaignId: payload.campaignId && Types.ObjectId.isValid(payload.campaignId) ? toObjectId(payload.campaignId) : undefined,
       followUpType: payload.followUpType || 'Call',
+      contactedPerson: payload.contactedPerson || undefined,
       reason: payload.reason ?? '',
       remarks: payload.remarks || payload.note || '',
       note: payload.note || payload.remarks || '',
@@ -496,6 +674,30 @@ export class LeadsService {
 
     lead.callLogs = lead.callLogs || [];
     lead.callLogs.push(followUpEntry);
+
+    // Optional quick profile updates during call
+    if (payload.budget !== undefined) {
+      lead.qualification = lead.qualification || {};
+      lead.qualification.budget = payload.budget;
+    }
+    if (payload.secondaryContactPerson) {
+      lead.secondaryContactPerson = payload.secondaryContactPerson;
+    }
+    if (payload.secondaryDesignation) {
+      lead.secondaryDesignation = payload.secondaryDesignation;
+    }
+    if (payload.secondaryMobile) {
+      lead.secondaryMobile = payload.secondaryMobile;
+    }
+    if (payload.companyAddress) {
+      lead.companyAddress = payload.companyAddress;
+    }
+    if (payload.companyLocation) {
+      lead.companyLocation = payload.companyLocation;
+    }
+    if (payload.email) {
+      lead.email = payload.email.toLowerCase().trim();
+    }
 
     if (payload.nextActionDate) {
       lead.nextActionDate = payload.nextActionDate;
@@ -754,10 +956,29 @@ export class LeadsService {
   }
 
   /**
-   * Activity timeline combining status changes and follow-ups chronologically.
+   * Activity timeline combining status changes, follow-ups, quotations, and campaigns chronologically.
    */
   static async getActivity(id: string, ctx: RequestContext): Promise<{ activities: any[] }> {
     const lead = await LeadsService.getLead(id, ctx);
+    const leadObjId = toObjectId(id);
+
+    // Fetch linked quotations and campaigns in parallel (with safe fallback for disconnected test environments)
+    let quotations: any[] = [];
+    let campaigns: any[] = [];
+    try {
+      [quotations, campaigns] = await Promise.all([
+        Quotation.find({ leadId: leadObjId, deletedAt: null }).sort({ createdAt: -1 }).lean().exec(),
+        Campaign.find({ leadId: leadObjId, deletedAt: null }).sort({ createdAt: -1 }).lean().exec(),
+      ]);
+    } catch {
+      quotations = [];
+      campaigns = [];
+    }
+
+    const campaignMap = new Map<string, string>();
+    for (const c of campaigns) {
+      campaignMap.set(c._id.toString(), c.name);
+    }
 
     const activities: any[] = [];
 
@@ -776,12 +997,16 @@ export class LeadsService {
       }
     }
 
-    // Push follow-up logs
+    // Push follow-up logs (with campaign tagging)
     if (lead.callLogs) {
       for (const cl of lead.callLogs) {
+        const cId = cl.campaignId ? cl.campaignId.toString() : undefined;
         activities.push({
           type: 'follow_up',
           followUpType: cl.followUpType || 'Call',
+          contactedPerson: cl.contactedPerson,
+          campaignId: cId,
+          campaignName: cId ? campaignMap.get(cId) : undefined,
           reason: cl.reason,
           remarks: cl.remarks || cl.note,
           note: cl.note || cl.remarks,
@@ -805,6 +1030,48 @@ export class LeadsService {
       });
     }
 
+    // Push quotation milestones
+    for (const q of quotations) {
+      activities.push({
+        type: 'quotation',
+        referenceCode: q.quoteNumber,
+        amount: q.total,
+        reason: `Quotation #${q.quoteNumber} created (${q.status})`,
+        timestamp: q.createdAt,
+      });
+      if (q.sentAt) {
+        activities.push({
+          type: 'quotation',
+          referenceCode: q.quoteNumber,
+          amount: q.total,
+          reason: `Quotation #${q.quoteNumber} sent to client`,
+          timestamp: q.sentAt,
+        });
+      }
+      if (q.acceptedAt) {
+        activities.push({
+          type: 'quotation',
+          referenceCode: q.quoteNumber,
+          amount: q.total,
+          reason: `Quotation #${q.quoteNumber} accepted by client`,
+          timestamp: q.acceptedAt,
+        });
+      }
+    }
+
+    // Push campaign execution milestones
+    for (const c of campaigns) {
+      activities.push({
+        type: 'campaign_event',
+        campaignId: c._id.toString(),
+        campaignName: c.name,
+        referenceCode: c.campaignCode,
+        amount: c.contractedValue,
+        reason: `Campaign "${c.name}" initiated (${c.status})`,
+        timestamp: c.createdAt,
+      });
+    }
+
     // Sort descending by timestamp
     activities.sort(
       (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
@@ -812,4 +1079,85 @@ export class LeadsService {
 
     return { activities };
   }
+
+  /**
+   * Upload and attach a document to a lead.
+   */
+  static async uploadDocument(
+    id: string,
+    file: Express.Multer.File | undefined,
+    data: { documentType: LeadDocumentType; title: string; notes?: string },
+    ctx: RequestContext,
+  ): Promise<ILead> {
+    if (!file) throw new ValidationError('No file was uploaded');
+    const lead = await LeadsService.getLead(id, ctx);
+
+    const stored = await fileService.save(file, { folder: 'leads', ctx });
+
+    const newDoc = {
+      documentType: data.documentType,
+      title: data.title.trim(),
+      originalName: stored.originalName,
+      fileKey: stored.key,
+      fileUrl: stored.url,
+      fileSize: stored.size,
+      mimeType: stored.contentType,
+      uploadedBy: toObjectId(ctx.user.id),
+      uploadedAt: new Date(),
+      notes: data.notes?.trim() || '',
+    };
+
+    lead.documents = lead.documents || [];
+    lead.documents.push(newDoc as any);
+    await lead.save();
+
+    if (lead.populate) {
+      await lead.populate('assignedTo claimedBy rejectedBy documents.uploadedBy', 'name email role');
+    }
+    return lead;
+  }
+
+  /**
+   * Delete an attached document from a lead.
+   */
+  static async deleteDocument(
+    id: string,
+    docId: string,
+    ctx: RequestContext,
+  ): Promise<ILead> {
+    const lead = await LeadsService.getLead(id, ctx);
+    const docIndex = (lead.documents || []).findIndex(
+      (d: any) => String(d._id) === docId || String(d.id) === docId,
+    );
+    if (docIndex === -1) throw new NotFoundError('Document not found');
+
+    const doc = lead.documents![docIndex];
+    if (doc.fileKey) {
+      try {
+        await fileService.remove(doc.fileKey);
+      } catch {
+        // Continue even if file already absent from storage
+      }
+    }
+
+    lead.documents!.splice(docIndex, 1);
+    await lead.save();
+
+    if (lead.populate) {
+      await lead.populate('assignedTo claimedBy rejectedBy documents.uploadedBy', 'name email role');
+    }
+    return lead;
+  }
+
+  static async getDistinctCities(ctx: RequestContext): Promise<string[]> {
+    const rawCities = await Lead.distinct('city', { deletedAt: null });
+    const cleanSet = new Set<string>();
+    for (const c of rawCities) {
+      if (!c || typeof c !== 'string') continue;
+      const clean = c.replace(/^.*?\]/, '').trim();
+      if (clean) cleanSet.add(clean);
+    }
+    return Array.from(cleanSet).sort((a, b) => a.localeCompare(b));
+  }
 }
+

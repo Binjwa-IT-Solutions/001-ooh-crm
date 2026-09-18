@@ -37,6 +37,7 @@ type CreateCampaignInput = {
 
 type CampaignFilters = {
   status?: CampaignStatus;
+  leadId?: string;
   city?: string;
   manager?: string;
   startDate?: Date;
@@ -623,6 +624,10 @@ export async function listCampaigns(
 
   if (filters.status) {
     query.status = filters.status;
+  }
+
+  if (filters.leadId && Types.ObjectId.isValid(filters.leadId)) {
+    query.leadId = new Types.ObjectId(filters.leadId);
   }
 
   if (filters.city?.trim()) {

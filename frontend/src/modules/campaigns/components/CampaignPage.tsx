@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import CampaignFilters from "./CampaignFilters";
 import CampaignForm from "./CampaignForm";
@@ -18,6 +19,10 @@ import type {
 } from "../types";
 
 export default function CampaignPage() {
+  const searchParams = useSearchParams();
+  const urlLeadId = searchParams.get("leadId") || "";
+  const shouldCreate = searchParams.get("create") === "true";
+
   const [filters, setFilters] =
     useState<CampaignFiltersType>({});
 
@@ -33,6 +38,12 @@ export default function CampaignPage() {
 
   const [showForm, setShowForm] =
     useState(false);
+
+  useEffect(() => {
+    if (shouldCreate) {
+      setShowForm(true);
+    }
+  }, [shouldCreate]);
 
   const [selectedCampaign, setSelectedCampaign] =
     useState<Campaign | null>(null);
@@ -326,6 +337,7 @@ export default function CampaignPage() {
       {showForm && (
         <CampaignForm
           campaign={selectedCampaign}
+          defaultLeadId={urlLeadId}
           onClose={handleCloseForm}
           onSuccess={handleFormSuccess}
         />

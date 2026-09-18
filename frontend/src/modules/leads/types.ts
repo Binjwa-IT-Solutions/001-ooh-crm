@@ -71,7 +71,9 @@ export interface ManagerApproval {
 
 export interface FollowUpLog {
   user?: any;
+  campaignId?: string | null;
   followUpType?: FollowUpType;
+  contactedPerson?: string;
   reason?: string;
   remarks?: string;
   note?: string;
@@ -82,21 +84,53 @@ export interface FollowUpLog {
 }
 
 export interface ActivityItem {
-  type: 'status_change' | 'call_log' | 'follow_up' | 'manager_review';
+  type: 'status_change' | 'call_log' | 'follow_up' | 'manager_review' | 'quotation' | 'booking' | 'campaign_event';
   from?: string;
   to?: string;
   reason?: string;
   changedBy?: any;
   user?: any;
+  campaignId?: string;
+  campaignName?: string;
   note?: string;
   remarks?: string;
   followUpType?: FollowUpType;
+  contactedPerson?: string;
   nextActionDate?: string | null;
   delayResponsibility?: string;
   approved?: boolean;
   durationSec?: number;
   cycle?: number;
+  amount?: number;
+  referenceCode?: string;
   timestamp: string;
+}
+
+export const LEAD_DOCUMENT_TYPES = [
+  'GST Certificate',
+  'PAN Card',
+  'Purchase Order (PO)',
+  'Client Agreement',
+  'Creative Artwork',
+  'Brand Guidelines',
+  'Payment Proof',
+  'Other',
+] as const;
+export type LeadDocumentType = (typeof LEAD_DOCUMENT_TYPES)[number];
+
+export interface LeadDocument {
+  _id: string;
+  id?: string;
+  documentType: LeadDocumentType;
+  title: string;
+  originalName: string;
+  fileKey: string;
+  fileUrl?: string;
+  fileSize?: number;
+  mimeType?: string;
+  uploadedBy?: { _id: string; name: string; email: string };
+  uploadedAt: string;
+  notes?: string;
 }
 
 export interface Lead {
@@ -104,7 +138,13 @@ export interface Lead {
   _id?: string;
   companyName: string;
   contactPerson: string;
+  designation?: string;
   mobile: string;
+  secondaryContactPerson?: string;
+  secondaryDesignation?: string;
+  secondaryMobile?: string;
+  companyAddress?: string;
+  companyLocation?: string;
   email?: string;
   city?: string;
   source: LeadSource;
@@ -124,6 +164,7 @@ export interface Lead {
   statusHistory?: Array<{ from?: string; to: string; changedBy?: any; reason?: string; cycle?: number; changedAt: string }>;
   callLogs?: FollowUpLog[];
   qualification?: LeadQualification;
+  documents?: LeadDocument[];
   cycle?: number;
   createdAt: string;
   updatedAt: string;
@@ -156,9 +197,10 @@ export interface LeadListQuery {
   assignedTo?: string;
   assignedToMe?: boolean;
   unassigned?: boolean;
+  overdueOnly?: boolean;
   fromDate?: string;
   toDate?: string;
-  sortBy?: 'receivedAt' | 'companyName' | 'source';
+  sortBy?: 'receivedAt' | 'createdAt' | 'companyName' | 'source' | 'nextActionDate';
   sortDir?: 'asc' | 'desc';
 }
 
@@ -167,7 +209,13 @@ export type LeadFilters = LeadListQuery;
 export interface LeadFormValues {
   companyName: string;
   contactPerson: string;
+  designation?: string;
   mobile: string;
+  secondaryContactPerson?: string;
+  secondaryDesignation?: string;
+  secondaryMobile?: string;
+  companyAddress?: string;
+  companyLocation?: string;
   email: string;
   city: string;
 }
@@ -177,10 +225,19 @@ export type CallOutcome = 'Connected' | 'Busy' | 'Left Message' | 'No Answer';
 export interface LogCallValues {
   outcome?: CallOutcome;
   followUpType?: FollowUpType;
+  contactedPerson?: string;
+  campaignId?: string;
   reason?: string;
   remarks?: string;
   note?: string;
   nextActionDate?: string;
   delayResponsibility?: string;
   durationSec?: number;
+  budget?: number;
+  secondaryContactPerson?: string;
+  secondaryDesignation?: string;
+  secondaryMobile?: string;
+  companyAddress?: string;
+  companyLocation?: string;
+  email?: string;
 }

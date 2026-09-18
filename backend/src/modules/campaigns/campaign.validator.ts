@@ -49,6 +49,7 @@ export const updateCampaignStatusSchema = z.object({
 
 export const campaignListQuerySchema = z.object({
   search: z.string().trim().optional(),
+  leadId: objectId.optional(),
 
   status: z
     .enum([

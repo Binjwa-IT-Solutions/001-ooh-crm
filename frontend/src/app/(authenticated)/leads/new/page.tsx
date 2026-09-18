@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, Field, Button, Alert, TextAreaField, SelectField } from '@/shared/ui';
 import { LeadsSelect } from '@/modules/leads/components/leads-select';
 import { leadsApi } from '@/modules/leads/api';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, User, Users, Building2, MapPin, Phone, Briefcase, Plus, X } from 'lucide-react';
 import {
   LeadSource,
   FOLLOW_UP_TYPES,
@@ -30,6 +30,7 @@ export default function NewLeadPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [showFollowUpSection, setShowFollowUpSection] = useState(true);
+  const [showSecondaryContact, setShowSecondaryContact] = useState(false);
 
   // Field-level validations
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -42,11 +43,21 @@ export default function NewLeadPage() {
 
     const formData = new FormData(e.currentTarget);
     const companyName = (formData.get('companyName') as string) || '';
-    const contactPerson = (formData.get('contactPerson') as string) || '';
-    const mobile = (formData.get('mobile') as string) || '';
-    const email = (formData.get('email') as string) || '';
+    const companyAddress = (formData.get('companyAddress') as string) || '';
+    const companyLocation = (formData.get('companyLocation') as string) || '';
     const city = (formData.get('city') as string) || '';
+    const email = (formData.get('email') as string) || '';
     const source = (formData.get('source') as LeadSource) || 'Manual';
+
+    // Primary Concern Person (Mandatory)
+    const contactPerson = (formData.get('contactPerson') as string) || '';
+    const designation = (formData.get('designation') as string) || '';
+    const mobile = (formData.get('mobile') as string) || '';
+
+    // Secondary Concern Person (Optional)
+    const secondaryContactPerson = (formData.get('secondaryContactPerson') as string) || '';
+    const secondaryDesignation = (formData.get('secondaryDesignation') as string) || '';
+    const secondaryMobile = (formData.get('secondaryMobile') as string) || '';
 
     // Optional follow-up & ATR fields
     const followUpType = formData.get('followUpType') as FollowUpType;
@@ -63,8 +74,8 @@ export default function NewLeadPage() {
     const newErrors: Record<string, string> = {};
     if (!source) newErrors.source = 'Source is required';
     if (!companyName.trim()) newErrors.companyName = 'Company name is required';
-    if (!contactPerson.trim()) newErrors.contactPerson = 'Contact person is required';
-    if (!mobile.trim()) newErrors.mobile = 'Mobile is required';
+    if (!contactPerson.trim()) newErrors.contactPerson = 'Primary contact person is required';
+    if (!mobile.trim()) newErrors.mobile = 'Primary mobile number is required';
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -75,10 +86,20 @@ export default function NewLeadPage() {
     const payload: any = {
       source,
       companyName: companyName.trim(),
-      contactPerson: contactPerson.trim(),
-      mobile: mobile.trim(),
-      email: email.trim() || undefined,
+      companyAddress: companyAddress.trim() || undefined,
+      companyLocation: companyLocation.trim() || undefined,
       city: city.trim() || undefined,
+      email: email.trim() || undefined,
+
+      // Primary Concern Person
+      contactPerson: contactPerson.trim(),
+      designation: designation.trim() || undefined,
+      mobile: mobile.trim(),
+
+      // Secondary Concern Person (Optional)
+      secondaryContactPerson: secondaryContactPerson.trim() || undefined,
+      secondaryDesignation: secondaryDesignation.trim() || undefined,
+      secondaryMobile: secondaryMobile.trim() || undefined,
     };
 
     if (remarks && remarks.trim()) {
@@ -127,12 +148,15 @@ export default function NewLeadPage() {
 
       <Card className="p-6">
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Section 1: Basic Lead Details */}
+          {/* Section 1: Company & Office Location Details */}
           <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-4">
-              1. Basic Lead Information
-            </h2>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="flex items-center gap-2 mb-4">
+              <Building2 className="w-4 h-4 text-slate-500" />
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                1. Company & Office Location
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <LeadsSelect
                 label="Source *"
                 name="source"
@@ -150,22 +174,7 @@ export default function NewLeadPage() {
               />
 
               <Field
-                label="Contact Person *"
-                name="contactPerson"
-                placeholder="e.g. Rajesh Sharma"
-                error={errors.contactPerson}
-              />
-
-              <Field
-                label="Mobile Number *"
-                name="mobile"
-                type="tel"
-                placeholder="+91 98765 43210"
-                error={errors.mobile}
-              />
-
-              <Field
-                label="Email Address (Optional)"
+                label="Official Email (Optional)"
                 name="email"
                 type="email"
                 placeholder="contact@company.com"
@@ -178,15 +187,113 @@ export default function NewLeadPage() {
                 placeholder="e.g. Mumbai"
                 error={errors.city}
               />
+
+              <Field
+                label="Company Location / Landmark (Optional)"
+                name="companyLocation"
+                placeholder="e.g. BKC / Andheri East / Industrial Area"
+              />
+
+              <Field
+                label="Company Address (Optional)"
+                name="companyAddress"
+                placeholder="e.g. Suite 402, Trade Tower, Opposite Metro Station"
+              />
             </div>
           </div>
 
-          {/* Section 2: Initial Follow-up & ATR Details (Optional) */}
+          {/* Section 2: Concern Persons (Contact Details) */}
+          <div className="pt-5 border-t border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-slate-500" />
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                  2. Concern Person (Contact Details)
+                </h2>
+              </div>
+              {!showSecondaryContact && (
+                <button
+                  type="button"
+                  onClick={() => setShowSecondaryContact(true)}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-[#8B2424] hover:text-[#6E1D1D] dark:text-red-400 dark:hover:text-red-300 transition"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Add Secondary Contact</span>
+                </button>
+              )}
+            </div>
+
+            {/* Primary Contact Row */}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <Field
+                label="Contact Person Name *"
+                name="contactPerson"
+                placeholder="e.g. Rajesh Sharma"
+                error={errors.contactPerson}
+              />
+
+              <Field
+                label="Designation (Optional)"
+                name="designation"
+                placeholder="e.g. Marketing Director / CMO"
+              />
+
+              <Field
+                label="Mobile Number *"
+                name="mobile"
+                type="tel"
+                placeholder="+91 98765 43210"
+                error={errors.mobile}
+              />
+            </div>
+
+            {/* Secondary Contact Row (Smooth toggle) */}
+            {showSecondaryContact && (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Secondary Concern Person (Optional)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowSecondaryContact(false)}
+                    className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span>Remove</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <Field
+                    label="Secondary Person Name"
+                    name="secondaryContactPerson"
+                    placeholder="e.g. Amit Verma"
+                  />
+
+                  <Field
+                    label="Secondary Designation"
+                    name="secondaryDesignation"
+                    placeholder="e.g. Media Planner / Manager"
+                  />
+
+                  <Field
+                    label="Secondary Mobile Number"
+                    name="secondaryMobile"
+                    type="tel"
+                    placeholder="+91 91234 56789"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Section 3: Initial Follow-up & ATR Details (Optional) */}
           <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-                  2. Initial Follow-up & Next Action (Optional — ATR)
+                  3. Initial Follow-up & Next Action (Optional — ATR)
                 </h2>
                 <p className="text-xs text-slate-500">Record what was discussed in the initial inquiry.</p>
               </div>

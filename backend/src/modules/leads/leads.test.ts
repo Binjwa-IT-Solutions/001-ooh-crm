@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { Lead } from './leads.model.js';
 import { LeadsService } from './leads.service.js';
-import { leadQualificationSchema } from './leads.validator.js';
+import { leadQualificationSchema, listLeadsSchema, uploadLeadDocumentSchema } from './leads.validator.js';
 
 const FAKE_USER_CTX = { user: { id: '64b7f9a1c2d3e4f5a6b7c8d9', role: 'sales' } } as any;
 
@@ -435,3 +435,158 @@ test('changeStatus allows restoring Rejected lead back to New and clears assigne
     LeadsService.getLead = origGetLead;
   }
 });
+
+test('getActivity returns combined chronological activities with follow-up logs', async () => {
+  const fakeLead: any = {
+    _id: '6a87e4b4c93947ba317108aa',
+    status: 'Contacted',
+    statusHistory: [
+      { from: 'New', to: 'Contacted', changedAt: new Date('2026-09-10T10:00:00Z'), reason: 'First Call' },
+    ],
+    callLogs: [
+      { followUpType: 'Call', remarks: 'Client requested proposal', createdAt: new Date('2026-09-11T10:00:00Z') },
+    ],
+  };
+
+  const origGetLead = LeadsService.getLead;
+  LeadsService.getLead = async () => fakeLead;
+
+  try {
+    const res = await LeadsService.getActivity(
+      '6a87e4b4c93947ba317108aa',
+      { user: { id: '6a87e4b4c93947ba31710801', role: 'admin' } } as any,
+    );
+
+    assert(Array.isArray(res.activities));
+    assert(res.activities.length >= 2);
+    assert.equal(res.activities[0].type, 'follow_up');
+    assert.equal(res.activities[0].remarks, 'Client requested proposal');
+  } finally {
+    LeadsService.getLead = origGetLead;
+  }
+});
+
+test('createLead supports secondary concern person, designations, and company address/location', async () => {
+  await withPatchedModel(
+    {
+      findOne: () => ({ exec: async () => null }),
+      create: async (payload: any) => payload,
+    },
+    async () => {
+      const data = {
+        source: 'Manual' as const,
+        companyName: 'Acme Corp Pvt Ltd',
+        companyAddress: 'Tower B, 7th Floor, Cyber City',
+        companyLocation: 'DLF Phase 2',
+        city: 'Gurugram',
+        contactPerson: 'Vikram Malhotra',
+        designation: 'VP Marketing',
+        mobile: '9811122233',
+        secondaryContactPerson: 'Ritu Sharma',
+        secondaryDesignation: 'Media Planner',
+        secondaryMobile: '9811144455',
+      };
+
+      const created: any = await LeadsService.createLead(data, FAKE_USER_CTX);
+
+      assert.equal(created.companyName, 'Acme Corp Pvt Ltd');
+      assert.equal(created.companyAddress, 'Tower B, 7th Floor, Cyber City');
+      assert.equal(created.companyLocation, 'DLF Phase 2');
+      assert.equal(created.city, 'Gurugram');
+      assert.equal(created.contactPerson, 'Vikram Malhotra');
+      assert.equal(created.designation, 'VP Marketing');
+      assert.equal(created.mobile, '9811122233');
+      assert.equal(created.secondaryContactPerson, 'Ritu Sharma');
+      assert.equal(created.secondaryDesignation, 'Media Planner');
+      assert.equal(created.secondaryMobile, '9811144455');
+      assert.equal(created.status, 'New');
+    },
+  );
+});
+
+test('logFollowUpLead records contactedPerson and updates lead profile fields during call', async () => {
+  const fakeLead: any = {
+    _id: '6a87e4b4c93947ba317108bb',
+    status: 'Contacted',
+    contactPerson: 'Samyak Jain',
+    mobile: '9876543210',
+    callLogs: [],
+    qualification: {},
+    save: async () => fakeLead,
+    populate: async () => fakeLead,
+  };
+
+  const origGetLead = LeadsService.getLead;
+  LeadsService.getLead = async () => fakeLead;
+
+  try {
+    const res = await LeadsService.logFollowUpLead(
+      '6a87e4b4c93947ba317108bb',
+      {
+        followUpType: 'Call',
+        contactedPerson: 'Samyak Jain (Marketing Director)',
+        remarks: 'Client agreed to 3-month campaign on Ring Road',
+        budget: 45000000,
+        email: 'samyak@client.com',
+        companyAddress: 'Suite 402, Trade Tower',
+        companyLocation: 'BKC',
+        secondaryContactPerson: 'Amit Verma',
+        secondaryDesignation: 'Media Planner',
+        secondaryMobile: '9123456789',
+      },
+      FAKE_USER_CTX,
+    );
+
+    assert.equal(res.callLogs?.length, 1);
+    assert.equal(res.callLogs?.[0].contactedPerson, 'Samyak Jain (Marketing Director)');
+    assert.equal(res.qualification?.budget, 45000000);
+    assert.equal(res.email, 'samyak@client.com');
+    assert.equal(res.companyAddress, 'Suite 402, Trade Tower');
+    assert.equal(res.companyLocation, 'BKC');
+    assert.equal(res.secondaryContactPerson, 'Amit Verma');
+    assert.equal(res.secondaryDesignation, 'Media Planner');
+    assert.equal(res.secondaryMobile, '9123456789');
+  } finally {
+    LeadsService.getLead = origGetLead;
+  }
+});
+
+test('listLeadsSchema validates overdueOnly, sortBy, and sortDir', () => {
+  const parsed = listLeadsSchema.parse({
+    overdueOnly: 'true',
+    sortBy: 'nextActionDate',
+    sortDir: 'asc',
+  });
+  assert.equal(parsed.overdueOnly, true);
+  assert.equal(parsed.sortBy, 'nextActionDate');
+  assert.equal(parsed.sortDir, 'asc');
+});
+
+test('uploadLeadDocumentSchema validates documentType, title, and notes', () => {
+  const parsed = uploadLeadDocumentSchema.parse({
+    documentType: 'Purchase Order (PO)',
+    title: 'PO #1042 - Ring Road Hoardings',
+    notes: 'Signed and stamped by client',
+  });
+  assert.equal(parsed.documentType, 'Purchase Order (PO)');
+  assert.equal(parsed.title, 'PO #1042 - Ring Road Hoardings');
+  assert.equal(parsed.notes, 'Signed and stamped by client');
+
+  assert.throws(() => {
+    uploadLeadDocumentSchema.parse({
+      documentType: 'InvalidType' as any,
+      title: 'Doc',
+    });
+  });
+
+  assert.throws(() => {
+    uploadLeadDocumentSchema.parse({
+      documentType: 'PAN Card',
+      title: '   ',
+    });
+  });
+});
+
+
+
+

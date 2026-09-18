@@ -55,7 +55,9 @@ export interface ILeadStatusHistory {
 
 export interface IFollowUpLog {
   user?: Types.ObjectId | null;
+  campaignId?: Types.ObjectId | null;
   followUpType?: FollowUpType;
+  contactedPerson?: string;
   reason?: string;
   remarks?: string;
   note?: string;
@@ -84,10 +86,42 @@ export interface ILeadQualification {
   lostReason?: string;
 }
 
+export const LEAD_DOCUMENT_TYPES = [
+  'GST Certificate',
+  'PAN Card',
+  'Purchase Order (PO)',
+  'Client Agreement',
+  'Creative Artwork',
+  'Brand Guidelines',
+  'Payment Proof',
+  'Other',
+] as const;
+export type LeadDocumentType = (typeof LEAD_DOCUMENT_TYPES)[number];
+
+export interface ILeadDocument {
+  _id?: Types.ObjectId;
+  documentType: LeadDocumentType;
+  title: string;
+  originalName: string;
+  fileKey: string;
+  fileUrl?: string;
+  fileSize?: number;
+  mimeType?: string;
+  uploadedBy?: Types.ObjectId | null;
+  uploadedAt: Date;
+  notes?: string;
+}
+
 export interface ILead extends BaseDocument {
   companyName: string;
   contactPerson: string;
+  designation?: string;
   mobile: string;
+  secondaryContactPerson?: string;
+  secondaryDesignation?: string;
+  secondaryMobile?: string;
+  companyAddress?: string;
+  companyLocation?: string;
   email?: string;
   city?: string;
   source: LeadSource;
@@ -108,6 +142,7 @@ export interface ILead extends BaseDocument {
   qualification?: ILeadQualification;
   managerApproval?: IManagerApproval;
   statusHistory?: ILeadStatusHistory[];
+  documents?: ILeadDocument[];
   cycle?: number;
 }
 
@@ -126,7 +161,9 @@ const statusHistorySchema = new Schema<ILeadStatusHistory>(
 const followUpLogSchema = new Schema<IFollowUpLog>(
   {
     user: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    campaignId: { type: Schema.Types.ObjectId, ref: 'Campaign', default: null },
     followUpType: { type: String, enum: FOLLOW_UP_TYPES, default: 'Call' },
+    contactedPerson: { type: String, trim: true },
     reason: { type: String, trim: true },
     remarks: { type: String, trim: true },
     note: { type: String, trim: true },
@@ -163,10 +200,37 @@ const qualificationSchema = new Schema<ILeadQualification>(
   { _id: false },
 );
 
+const leadDocumentSchema = new Schema<ILeadDocument>(
+  {
+    documentType: {
+      type: String,
+      enum: LEAD_DOCUMENT_TYPES,
+      default: 'Other',
+      required: true,
+    },
+    title: { type: String, required: true, trim: true },
+    originalName: { type: String, required: true, trim: true },
+    fileKey: { type: String, required: true, trim: true },
+    fileUrl: { type: String, trim: true },
+    fileSize: { type: Number },
+    mimeType: { type: String },
+    uploadedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    uploadedAt: { type: Date, default: Date.now },
+    notes: { type: String, trim: true },
+  },
+  { _id: true },
+);
+
 const leadSchema = new Schema<ILead>({
   companyName: { type: String, required: true, trim: true },
   contactPerson: { type: String, required: true, trim: true },
+  designation: { type: String, trim: true },
   mobile: { type: String, required: true, trim: true, index: true },
+  secondaryContactPerson: { type: String, trim: true },
+  secondaryDesignation: { type: String, trim: true },
+  secondaryMobile: { type: String, trim: true },
+  companyAddress: { type: String, trim: true },
+  companyLocation: { type: String, trim: true },
   email: { type: String, trim: true, lowercase: true },
   city: { type: String, trim: true },
   source: { type: String, enum: LEAD_SOURCES, required: true },
@@ -187,6 +251,7 @@ const leadSchema = new Schema<ILead>({
   firstResponseAt: { type: Date, default: null },
   statusHistory: { type: [statusHistorySchema], default: [] },
   callLogs: { type: [followUpLogSchema], default: [] },
+  documents: { type: [leadDocumentSchema], default: [] },
   cycle: { type: Number, default: 1, min: 1 },
 });
 

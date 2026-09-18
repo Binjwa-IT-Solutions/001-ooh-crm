@@ -17,6 +17,10 @@ function buildQuery(filters: CampaignFilters): string {
     params.set("search", filters.search.trim());
   }
 
+  if (filters.leadId?.trim()) {
+    params.set("leadId", filters.leadId.trim());
+  }
+
   if (filters.status) {
     params.set("status", filters.status);
   }
