@@ -93,6 +93,11 @@ export async function getMonthlyRegister(
         checkInTime: r.checkInTime,
         checkOutTime: r.checkOutTime,
         totalHours: r.totalHours,
+        actualHours: r.actualHours ?? r.totalHours,
+        overtimeHours: r.overtimeHours ?? (r.actualHours ? Math.max(0, r.actualHours - 8) : 0),
+        totalBreakMinutes: r.totalBreakMinutes ?? 0,
+        breaks: r.breaks ?? [],
+        shiftDetails: r.shiftDetails,
         workType: r.workType,
         location: r.checkInGps ? `${r.checkInGps.lat.toFixed(4)}, ${r.checkInGps.lng.toFixed(4)}` : r.workType || 'Office',
       };
@@ -131,11 +136,16 @@ export async function getAbsenceReport(fromDate: string, toDate: string, ctx: Re
   const absences = [];
 
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const dateStr = d.toISOString().split('T')[0];
+    const dObj = new Date(d);
+    const dateStr = `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
 
     for (const emp of allEmployees) {
       const hasAttendance = records.some(
-        r => r.employeeId.toString() === emp.id && new Date(r.date).toISOString().split('T')[0] === dateStr
+        r => {
+          const rd = new Date(r.date);
+          const rDateStr = `${rd.getFullYear()}-${String(rd.getMonth() + 1).padStart(2, '0')}-${String(rd.getDate()).padStart(2, '0')}`;
+          return r.employeeId.toString() === emp.id && rDateStr === dateStr;
+        }
       );
 
       const hasLeave = approvedLeaves.some(
@@ -144,7 +154,6 @@ export async function getAbsenceReport(fromDate: string, toDate: string, ctx: Re
       );
 
       // Only flag as absent if no attendance AND no approved leave
-      // Also maybe skip weekends depending on config, but for now we flag it if no record
       if (!hasAttendance && !hasLeave) {
         absences.push({
           date: dateStr,

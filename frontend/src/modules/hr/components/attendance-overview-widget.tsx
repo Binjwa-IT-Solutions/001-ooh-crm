@@ -86,6 +86,9 @@ interface CellTooltipData {
   checkOutTime?: string | Date;
   location?: string;
   totalHours?: number;
+  actualHours?: number;
+  overtimeHours?: number;
+  totalBreakMinutes?: number;
   x: number;
   y: number;
   employeeName: string;
@@ -556,6 +559,9 @@ export function AttendanceOverviewWidget({
                                   checkOutTime: dayDetail?.checkOutTime,
                                   location: dayDetail?.location,
                                   totalHours: dayDetail?.totalHours,
+                                  actualHours: dayDetail?.actualHours ?? dayDetail?.totalHours,
+                                  overtimeHours: dayDetail?.overtimeHours,
+                                  totalBreakMinutes: dayDetail?.totalBreakMinutes,
                                   employeeName: row.employee.fullName || '',
                                   x: rect.left + rect.width / 2,
                                   y: rect.top - 8,
@@ -725,6 +731,12 @@ export function AttendanceOverviewWidget({
                   <span className="text-slate-400">Check-out:</span>
                   <span className="font-mono">{formatTime(tooltip.checkOutTime)}</span>
                 </div>
+                {tooltip.totalBreakMinutes !== undefined && tooltip.totalBreakMinutes > 0 && (
+                  <div className="flex items-center justify-between gap-4 text-slate-300">
+                    <span className="text-slate-400">Break:</span>
+                    <span className="font-mono text-amber-300">{Math.round(tooltip.totalBreakMinutes)}m</span>
+                  </div>
+                )}
                 {tooltip.location && (
                   <div className="flex items-center justify-between gap-4 text-slate-300">
                     <span className="text-slate-400 flex items-center gap-1">
@@ -737,12 +749,18 @@ export function AttendanceOverviewWidget({
                 )}
                 <div className="flex items-center justify-between gap-4 text-slate-300 pt-0.5 border-t border-slate-800">
                   <span className="text-slate-400 flex items-center gap-1">
-                    <Clock className="h-3 w-3" /> Total Hours:
+                    <Clock className="h-3 w-3" /> Working Hours:
                   </span>
                   <span className="font-bold text-[#F8E6E6]">
-                    {formatHoursToHM(tooltip.totalHours)}
+                    {formatHoursToHM(tooltip.actualHours ?? tooltip.totalHours)}
                   </span>
                 </div>
+                {tooltip.overtimeHours !== undefined && tooltip.overtimeHours > 0 && (
+                  <div className="flex items-center justify-between gap-4 text-emerald-400">
+                    <span>Overtime:</span>
+                    <span className="font-bold font-mono">+{formatHoursToHM(tooltip.overtimeHours)}</span>
+                  </div>
+                )}
               </>
             )}
           </div>

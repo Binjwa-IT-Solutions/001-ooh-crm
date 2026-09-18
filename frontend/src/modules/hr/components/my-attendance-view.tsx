@@ -33,7 +33,7 @@ export function MyAttendanceView() {
   const daysInMonth = new Date(year, month, 0).getDate();
   const allDays = Array.from({ length: daysInMonth }, (_, i) => {
     const d = new Date(year, month - 1, i + 1);
-    const dateStr = d.toISOString().split('T')[0];
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`;
     const dayOfWeek = d.getDay();
     const isWeekend = dayOfWeek === 0;
     return { date: d, dateStr, isWeekend };
@@ -42,7 +42,10 @@ export function MyAttendanceView() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h2 className="text-xl font-semibold text-slate-800">My Attendance</h2>
+        <div>
+          <h2 className="text-xl font-semibold text-slate-800">My Attendance</h2>
+          <p className="text-xs text-slate-500">Standard working requirement: 8 hours actual work per day (excluding breaks).</p>
+        </div>
 
         <div className="flex items-center gap-3 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
           <select
@@ -117,7 +120,7 @@ export function MyAttendanceView() {
                 <Clock className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-sm font-medium text-slate-500">Work Hours</p>
+                <p className="text-sm font-medium text-slate-500">Actual Work Hours</p>
                 <p className="text-2xl font-semibold text-slate-800">
                   {isLoading ? ' ' : formatHoursToHM(data?.stats.totalWorkHours)}
                 </p>
@@ -136,25 +139,27 @@ export function MyAttendanceView() {
                 <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-medium">
                   <tr>
                     <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3">Shift</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Clock In</th>
                     <th className="px-4 py-3">Clock Out</th>
-                    <th className="px-4 py-3">Total Hours</th>
-                    <th className="px-4 py-3">Regular Hours</th>
-                    <th className="px-4 py-3">Overtime</th>
+                    <th className="px-4 py-3">Break</th>
+                    <th className="px-4 py-3 font-semibold text-slate-800">Working Hours</th>
+                    {/* <th className="px-4 py-3">Required</th> */}
+                    <th className="px-4 py-3 font-semibold text-emerald-700">Overtime</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {isLoading ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
+                      <td colSpan={9} className="px-4 py-12 text-center text-slate-500">
                         <Loader2 className="h-6 w-6 animate-spin mx-auto text-brand-500 mb-2" />
                         <p>Loading attendance records...</p>
                       </td>
                     </tr>
                   ) : data?.records.length === 0 && data?.stats.absentCount === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
+                      <td colSpan={9} className="px-4 py-12 text-center text-slate-500">
                         <Calendar className="h-8 w-8 mx-auto text-slate-300 mb-3" />
                         <p className="text-base font-medium text-slate-600">No records found</p>
                         <p className="text-sm mt-1">There is no attendance data for {MONTHS.find(m => m.value === month)?.label} {year}.</p>
@@ -162,12 +167,17 @@ export function MyAttendanceView() {
                     </tr>
                   ) : (
                     allDays.map((day) => {
-                      const record = data?.records.find(r => new Date(r.date).toISOString().split('T')[0] === day.dateStr);
+                      const record = data?.records.find((r) => {
+                        const rd = new Date(r.date);
+                        const rDateStr = `${rd.getFullYear()}-${String(rd.getMonth() + 1).padStart(2, '0')}-${String(rd.getDate()).padStart(2, '0')}`;
+                        return rDateStr === day.dateStr;
+                      });
 
                       if (!record) {
                         return (
                           <tr key={day.dateStr} className={cx("hover:bg-slate-50/50", day.isWeekend ? "bg-slate-50/50 text-slate-400" : "")}>
                             <td className="px-4 py-3 font-medium text-slate-600">{day.date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', weekday: 'short' })}</td>
+                            <td className="px-4 py-3 text-slate-400 text-xs">General</td>
                             <td className="px-4 py-3">
                               {day.isWeekend ? (
                                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">
@@ -183,14 +193,25 @@ export function MyAttendanceView() {
                             <td className="px-4 py-3 text-center">-</td>
                             <td className="px-4 py-3 text-center">-</td>
                             <td className="px-4 py-3 text-center">-</td>
+                            {/* <td className="px-4 py-3 text-center text-slate-400">8h 00m</td> */}
                             <td className="px-4 py-3 text-center">-</td>
                           </tr>
                         );
                       }
 
+                      const shiftLabel = record.shiftDetails?.name
+                        ? `${record.shiftDetails.name} (${record.shiftDetails.startTime})`
+                        : 'General';
+
+                      const hasCheckedOut = !!record.checkOutTime;
+                      const breakMinutes = record.totalBreakMinutes ?? (record.breaks?.reduce((acc: number, b: any) => acc + (b.durationMinutes || 0), 0) ?? 0);
+                      const workHours = record.actualHours ?? record.totalHours;
+                      const ovt = record.overtime ?? (workHours && workHours > 8 ? workHours - 8 : 0);
+
                       return (
                         <tr key={day.dateStr} className="hover:bg-slate-50">
                           <td className="px-4 py-3 font-medium text-slate-800">{day.date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', weekday: 'short' })}</td>
+                          <td className="px-4 py-3 text-slate-600 text-xs">{shiftLabel}</td>
                           <td className="px-4 py-3">
                             <span className={cx(
                               "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",
@@ -206,16 +227,31 @@ export function MyAttendanceView() {
                             {record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
                           </td>
                           <td className="px-4 py-3 text-slate-600">
-                            {record.checkOutTime ? new Date(record.checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
-                          </td>
-                          <td className="px-4 py-3 font-medium text-brand-700">
-                            {formatHoursToHM(record.totalHours)}
+                            {hasCheckedOut ? (
+                              new Date(record.checkOutTime!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">
+                                In Progress
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-slate-600">
-                            {formatHoursToHM(record.regularHours)}
+                            {breakMinutes > 0 ? `${Math.round(breakMinutes)}m` : '0m'}
                           </td>
-                          <td className="px-4 py-3 text-slate-600">
-                            {formatHoursToHM(record.overtime)}
+                          <td className="px-4 py-3 font-semibold text-brand-800">
+                            {hasCheckedOut ? formatHoursToHM(workHours) : '--'}
+                          </td>
+                          {/* <td className="px-4 py-3 text-slate-600 text-xs font-medium">
+                            8h 00m
+                          </td> */}
+                          <td className="px-4 py-3">
+                            {hasCheckedOut && ovt > 0 ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                +{formatHoursToHM(ovt)}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">-</span>
+                            )}
                           </td>
                         </tr>
                       );

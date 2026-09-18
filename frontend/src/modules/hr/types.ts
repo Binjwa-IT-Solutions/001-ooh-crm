@@ -15,6 +15,20 @@ export interface IGps {
   lng: number;
 }
 
+export interface BreakRecord {
+  type: 'Lunch' | 'Tea' | 'Other';
+  startTime: string | number | Date;
+  endTime: string | number | Date;
+  durationMinutes: number;
+}
+
+export interface ShiftSnapshot {
+  name?: string;
+  startTime?: string;
+  endTime?: string;
+  requiredHours?: number;
+}
+
 export interface Attendance {
   id: string;
   _id?: string;
@@ -25,6 +39,11 @@ export interface Attendance {
   checkInGps?: IGps;
   checkOutGps?: IGps;
   totalHours?: number;
+  actualHours?: number;
+  overtimeHours?: number;
+  totalBreakMinutes?: number;
+  breaks?: BreakRecord[];
+  shiftDetails?: ShiftSnapshot;
   workType: WorkType;
   status: AttendanceStatus;
   deviceInfo?: string;
@@ -100,6 +119,11 @@ export interface DayAttendanceDetail {
   checkInTime?: string | Date;
   checkOutTime?: string | Date;
   totalHours?: number;
+  actualHours?: number;
+  overtimeHours?: number;
+  totalBreakMinutes?: number;
+  breaks?: BreakRecord[];
+  shiftDetails?: ShiftSnapshot;
   workType?: string;
   location?: string;
 }
