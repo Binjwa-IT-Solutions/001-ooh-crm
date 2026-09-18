@@ -27,6 +27,22 @@ import {
   ExternalLink,
 } from 'lucide-react';
 
+function toLocalDatetimeString(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function getMinLoggedAt(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  d.setHours(0, 0, 0, 0);
+  return toLocalDatetimeString(d);
+}
+
+function getMaxLoggedAt(): string {
+  return toLocalDatetimeString(new Date());
+}
+
 interface QuickLogActionModalProps {
   open: boolean;
   onClose: () => void;
@@ -51,6 +67,7 @@ export default function QuickLogActionModal({
   const [reason, setReason] = useState<FollowUpReason>('General Follow-up');
   const [contactedPerson, setContactedPerson] = useState('');
   const [note, setNote] = useState('');
+  const [loggedAt, setLoggedAt] = useState<string>(() => toLocalDatetimeString(new Date()));
   const [nextActionDate, setNextActionDate] = useState('');
   const [statusUpdate, setStatusUpdate] = useState<string>('');
   const [lostReason, setLostReason] = useState<string>('');
@@ -79,6 +96,7 @@ export default function QuickLogActionModal({
       setReason('General Follow-up');
       setContactedPerson('');
       setNote('');
+      setLoggedAt(toLocalDatetimeString(new Date()));
       setNextActionDate('');
       setStatusUpdate('');
       setLostReason('');
@@ -155,6 +173,7 @@ export default function QuickLogActionModal({
     setLeadDetails(null);
     setContactedPerson('');
     setNote('');
+    setLoggedAt(toLocalDatetimeString(new Date()));
     setStatusUpdate('');
     setLostReason('');
     setDurationSec('');
@@ -177,6 +196,23 @@ export default function QuickLogActionModal({
       return;
     }
 
+    if (loggedAt) {
+      const loggedDate = new Date(loggedAt);
+      const minAllowed = new Date();
+      minAllowed.setDate(minAllowed.getDate() - 1);
+      minAllowed.setHours(0, 0, 0, 0);
+      const maxAllowed = new Date(Date.now() + 5 * 60 * 1000); // 5 min buffer
+
+      if (loggedDate > maxAllowed) {
+        setErrorMsg('Logged At date & time cannot be in the future.');
+        return;
+      }
+      if (loggedDate < minAllowed) {
+        setErrorMsg('Logged At date cannot be more than 1 day in the past.');
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     setErrorMsg('');
 
@@ -187,6 +223,7 @@ export default function QuickLogActionModal({
         contactedPerson: contactedPerson.trim() || selectedLead.contactPerson,
         remarks: note.trim(),
         note: note.trim(),
+        loggedAt: loggedAt ? new Date(loggedAt).toISOString() : undefined,
         ...(nextActionDate ? { nextActionDate } : {}),
       };
 
@@ -422,7 +459,37 @@ export default function QuickLogActionModal({
                 />
               </div>
 
-              {/* Status Update & Duration */}
+              {/* Logged At (Backdate up to 1 day prior) & Duration */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Field
+                    label="Logged At (Interaction Time) *"
+                    type="datetime-local"
+                    min={getMinLoggedAt()}
+                    max={getMaxLoggedAt()}
+                    value={loggedAt}
+                    onChange={(e) => setLoggedAt(e.target.value)}
+                    required
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Backdating allowed up to 1 day prior (yesterday).
+                  </p>
+                </div>
+                {followUpType === 'Call' ? (
+                  <Field
+                    label="Call Duration (seconds)"
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 120 (2 mins)"
+                    value={durationSec}
+                    onChange={(e) => setDurationSec(e.target.value)}
+                  />
+                ) : (
+                  <div className="hidden sm:block" />
+                )}
+              </div>
+
+              {/* Status Update */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <SelectField
                   label="Update Lead Status (Optional)"
@@ -439,18 +506,7 @@ export default function QuickLogActionModal({
                     { label: 'Lost', value: 'Lost' },
                   ]}
                 />
-                {followUpType === 'Call' ? (
-                  <Field
-                    label="Call Duration (seconds)"
-                    type="number"
-                    min="0"
-                    placeholder="e.g. 120 (2 mins)"
-                    value={durationSec}
-                    onChange={(e) => setDurationSec(e.target.value)}
-                  />
-                ) : (
-                  <div className="hidden sm:block" />
-                )}
+                <div className="hidden sm:block" />
               </div>
 
               {statusUpdate === 'Lost' && (

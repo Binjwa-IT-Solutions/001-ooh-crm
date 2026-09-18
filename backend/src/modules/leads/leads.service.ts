@@ -14,7 +14,7 @@ import { STATUS_TRANSITIONS } from './leads.validator.js';
 import { toObjectId } from '../../core/db/basePlugin.js';
 import { fileService } from '../../core/files/index.js';
 import { AuthUser } from '../../core/auth/auth-model.js';
-import { notifyMany } from '../../core/notifications/index.js';
+import { notify, notifyMany } from '../../core/notifications/index.js';
 import { extractLeadWithGemini } from './leads.ai.js';
 import { Quotation } from '../quotations/quotations.model.js';
 import { Campaign } from '../campaigns/campaign.model.js';
@@ -25,12 +25,86 @@ function escapeRegex(text: string): string {
 
 export class LeadsService {
   /**
+   * Release leads back to Unclaimed pool if claimed for >= 24 hours
+   * without any action/response taken (firstResponseAt is empty, callLogs is empty, and status is still New).
+   */
+  static async releaseBreachedClaimedLeads(): Promise<number> {
+    const now = new Date();
+    const cutoff24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    const candidates = await Lead.find({
+      status: 'New',
+      claimedBy: { $ne: null },
+      deletedAt: null,
+      $or: [
+        { firstResponseAt: null },
+        { firstResponseAt: { $exists: false } },
+      ],
+      $and: [
+        {
+          $or: [
+            { slaTimerEnd: { $ne: null, $lt: now } },
+            { claimedAt: { $ne: null, $lt: cutoff24h } },
+          ],
+        },
+      ],
+    }).exec();
+
+    let releasedCount = 0;
+
+    for (const lead of candidates) {
+      if (lead.callLogs && lead.callLogs.length > 0) {
+        continue;
+      }
+
+      const prevClaimedBy = lead.claimedBy;
+      const prevClaimedById = prevClaimedBy ? prevClaimedBy.toString() : null;
+
+      lead.claimedBy = null as any;
+      lead.assignedTo = null as any;
+      lead.claimedAt = null as any;
+      lead.slaTimerEnd = null as any;
+      lead.status = 'New';
+
+      lead.statusHistory = lead.statusHistory || [];
+      lead.statusHistory.push({
+        from: 'New',
+        to: 'New',
+        changedBy: prevClaimedBy,
+        reason: 'Auto-released to Unclaimed pool: 24h SLA breached without any action/response taken.',
+        changedAt: now,
+      });
+
+      await lead.save();
+      releasedCount++;
+
+      if (prevClaimedById && mongoose.connection.readyState === 1) {
+        void notify({
+          userId: prevClaimedById,
+          type: 'leads.sla_breached_unclaimed',
+          title: 'Lead SLA Breached - Claim Released',
+          body: `Lead "${lead.companyName}" was returned to the Unclaimed pool because no action was logged within 24 hours of claiming.`,
+          link: `/leads/${lead._id}`,
+        });
+      }
+    }
+
+    return releasedCount;
+  }
+
+  /**
    * List leads with filtering, pagination, and scoping rules applied.
    */
   static async listLeads(
     filters: any,
     ctx: RequestContext,
   ): Promise<{ leads: ILead[]; total: number }> {
+    try {
+      await LeadsService.releaseBreachedClaimedLeads();
+    } catch (err) {
+      console.error('[leads] failed to release breached leads on list:', err);
+    }
+
     const query: Record<string, any> = {};
 
     if (filters.search) {
@@ -248,6 +322,52 @@ export class LeadsService {
 
   static async getLead(id: string, ctx: RequestContext): Promise<ILead> {
     if (!Types.ObjectId.isValid(id)) throw new NotFoundError('Lead not found');
+
+    const now = new Date();
+    const cutoff24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    // Auto-release if this lead was previously claimed but breached 24h SLA with no action
+    const existing = await Lead.findOne({ _id: toObjectId(id), deletedAt: null });
+    if (
+      existing &&
+      existing.status === 'New' &&
+      existing.claimedBy &&
+      !existing.firstResponseAt &&
+      (!existing.callLogs || existing.callLogs.length === 0)
+    ) {
+      const isBreached =
+        (existing.slaTimerEnd && existing.slaTimerEnd.getTime() < now.getTime()) ||
+        (existing.claimedAt && existing.claimedAt.getTime() < cutoff24h.getTime());
+
+      if (isBreached) {
+        const prevClaimedBy = existing.claimedBy;
+        const prevClaimedById = prevClaimedBy ? prevClaimedBy.toString() : null;
+
+        existing.claimedBy = null as any;
+        existing.assignedTo = null as any;
+        existing.claimedAt = null as any;
+        existing.slaTimerEnd = null as any;
+        existing.statusHistory = existing.statusHistory || [];
+        existing.statusHistory.push({
+          from: 'New',
+          to: 'New',
+          changedBy: prevClaimedBy,
+          reason: 'Auto-released to Unclaimed pool: 24h SLA breached without any action/response taken.',
+          changedAt: now,
+        });
+        await existing.save();
+
+        if (prevClaimedById && mongoose.connection.readyState === 1) {
+          void notify({
+            userId: prevClaimedById,
+            type: 'leads.sla_breached_unclaimed',
+            title: 'Lead SLA Breached - Claim Released',
+            body: `Lead "${existing.companyName}" was returned to the Unclaimed pool because no action was logged within 24 hours of claiming.`,
+            link: `/leads/${existing._id}`,
+          });
+        }
+      }
+    }
 
     let lead = await scopedFindOne(Lead, { _id: toObjectId(id) }, ctx, {
       ownerField: 'assignedTo',
@@ -586,6 +706,50 @@ export class LeadsService {
     if (!Types.ObjectId.isValid(id)) throw new NotFoundError('Lead not found');
 
     const now = new Date();
+    const cutoff24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    // If target lead has breached 24h SLA without action, release it before attempting claim
+    const targetLead = await Lead.findOne({ _id: toObjectId(id), deletedAt: null });
+    if (
+      targetLead &&
+      targetLead.status === 'New' &&
+      targetLead.claimedBy &&
+      !targetLead.firstResponseAt &&
+      (!targetLead.callLogs || targetLead.callLogs.length === 0)
+    ) {
+      const isBreached =
+        (targetLead.slaTimerEnd && targetLead.slaTimerEnd.getTime() < now.getTime()) ||
+        (targetLead.claimedAt && targetLead.claimedAt.getTime() < cutoff24h.getTime());
+
+      if (isBreached) {
+        const prevClaimedBy = targetLead.claimedBy;
+        const prevClaimedById = prevClaimedBy ? prevClaimedBy.toString() : null;
+
+        targetLead.claimedBy = null as any;
+        targetLead.assignedTo = null as any;
+        targetLead.claimedAt = null as any;
+        targetLead.slaTimerEnd = null as any;
+        targetLead.statusHistory = targetLead.statusHistory || [];
+        targetLead.statusHistory.push({
+          from: 'New',
+          to: 'New',
+          changedBy: prevClaimedBy,
+          reason: 'Auto-released to Unclaimed pool: 24h SLA breached without any action/response taken.',
+          changedAt: now,
+        });
+        await targetLead.save();
+
+        if (prevClaimedById && mongoose.connection.readyState === 1) {
+          void notify({
+            userId: prevClaimedById,
+            type: 'leads.sla_breached_unclaimed',
+            title: 'Lead SLA Breached - Claim Released',
+            body: `Lead "${targetLead.companyName}" was returned to the Unclaimed pool because no action was logged within 24 hours of claiming.`,
+            link: `/leads/${targetLead._id}`,
+          });
+        }
+      }
+    }
 
     const updated = await Lead.findOneAndUpdate(
       {
@@ -640,6 +804,7 @@ export class LeadsService {
       reason?: string;
       remarks?: string;
       note?: string;
+      loggedAt?: Date;
       nextActionDate?: Date;
       delayResponsibility?: string;
       durationSec?: number;
@@ -658,6 +823,18 @@ export class LeadsService {
     const lead = await LeadsService.getLead(id, ctx);
     const now = new Date();
 
+    if (payload.loggedAt) {
+      const minDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0);
+      if (payload.loggedAt.getTime() > now.getTime() + 5 * 60 * 1000) {
+        throw new ValidationError('Interaction date/time cannot be in the future.');
+      }
+      if (payload.loggedAt.getTime() < minDate.getTime()) {
+        throw new ValidationError('Action cannot be backdated more than 1 day.');
+      }
+    }
+
+    const interactionTime = payload.loggedAt || now;
+
     const followUpEntry = {
       user: toObjectId(ctx.user.id),
       campaignId: payload.campaignId && Types.ObjectId.isValid(payload.campaignId) ? toObjectId(payload.campaignId) : undefined,
@@ -669,7 +846,7 @@ export class LeadsService {
       nextActionDate: payload.nextActionDate || undefined,
       delayResponsibility: payload.delayResponsibility || undefined,
       durationSec: payload.durationSec ?? undefined,
-      createdAt: now,
+      createdAt: interactionTime,
     };
 
     lead.callLogs = lead.callLogs || [];
@@ -704,16 +881,16 @@ export class LeadsService {
     }
 
     if (followUpEntry.followUpType === 'Call' && !lead.firstCallAt) {
-      lead.firstCallAt = now;
+      lead.firstCallAt = interactionTime;
     }
 
     if (!lead.firstResponseAt) {
-      lead.firstResponseAt = now;
+      lead.firstResponseAt = interactionTime;
       if (lead.status === 'New') {
         lead.status = 'Contacted';
         lead.assignedTo = lead.assignedTo || toObjectId(ctx.user.id);
         lead.claimedBy = lead.claimedBy || toObjectId(ctx.user.id);
-        lead.claimedAt = lead.claimedAt || now;
+        lead.claimedAt = lead.claimedAt || interactionTime;
 
         lead.statusHistory = lead.statusHistory || [];
         lead.statusHistory.push({
@@ -721,7 +898,7 @@ export class LeadsService {
           to: 'Contacted',
           changedBy: toObjectId(ctx.user.id),
           reason: `First Follow-up Logged (${followUpEntry.followUpType}): ${followUpEntry.reason || followUpEntry.remarks || 'Client Contacted'}`,
-          changedAt: now,
+          changedAt: interactionTime,
         });
       }
     }
@@ -737,7 +914,7 @@ export class LeadsService {
    */
   static async logCallLead(
     id: string,
-    payload: { note?: string; durationSec?: number; followUpType?: FollowUpType; reason?: string; nextActionDate?: Date; delayResponsibility?: string },
+    payload: { note?: string; durationSec?: number; followUpType?: FollowUpType; reason?: string; loggedAt?: Date; nextActionDate?: Date; delayResponsibility?: string },
     ctx: RequestContext,
   ): Promise<ILead> {
     return LeadsService.logFollowUpLead(id, payload, ctx);

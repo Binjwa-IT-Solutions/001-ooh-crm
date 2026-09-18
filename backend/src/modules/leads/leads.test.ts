@@ -551,6 +551,81 @@ test('logFollowUpLead records contactedPerson and updates lead profile fields du
   }
 });
 
+test('logFollowUpLead validates loggedAt cannot exceed 1 day past or be in future', async () => {
+  const fakeLead: any = {
+    _id: '6a87e4b4c93947ba317108bb',
+    status: 'New',
+    contactPerson: 'Rahul Roy',
+    callLogs: [],
+    save: async () => fakeLead,
+    populate: async () => fakeLead,
+  };
+
+  const origGetLead = LeadsService.getLead;
+  LeadsService.getLead = async () => fakeLead;
+
+  try {
+    // 1. Valid backdate (start of yesterday)
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(14, 0, 0, 0);
+
+    const res = await LeadsService.logFollowUpLead(
+      '6a87e4b4c93947ba317108bb',
+      {
+        followUpType: 'Call',
+        reason: 'Initial Connect',
+        remarks: 'Spoke with Rahul',
+        loggedAt: yesterday,
+      },
+      FAKE_USER_CTX,
+    );
+
+    assert.equal(res.callLogs?.length, 1);
+    assert.equal(res.callLogs?.[0].createdAt.getTime(), yesterday.getTime());
+    assert.equal(res.firstResponseAt?.getTime(), yesterday.getTime());
+
+    // 2. Future date should be rejected
+    const futureDate = new Date(Date.now() + 2 * 60 * 60 * 1000);
+    await assert.rejects(
+      async () => {
+        await LeadsService.logFollowUpLead(
+          '6a87e4b4c93947ba317108bb',
+          {
+            followUpType: 'Call',
+            reason: 'Future test',
+            remarks: 'Should fail',
+            loggedAt: futureDate,
+          },
+          FAKE_USER_CTX,
+        );
+      },
+      /cannot be in the future/i,
+    );
+
+    // 3. Older than 1 day (e.g. 3 days ago) should be rejected
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    await assert.rejects(
+      async () => {
+        await LeadsService.logFollowUpLead(
+          '6a87e4b4c93947ba317108bb',
+          {
+            followUpType: 'Call',
+            reason: 'Old test',
+            remarks: 'Should fail',
+            loggedAt: threeDaysAgo,
+          },
+          FAKE_USER_CTX,
+        );
+      },
+      /cannot be backdated more than 1 day/i,
+    );
+  } finally {
+    LeadsService.getLead = origGetLead;
+  }
+});
+
 test('listLeadsSchema validates overdueOnly, sortBy, and sortDir', () => {
   const parsed = listLeadsSchema.parse({
     overdueOnly: 'true',
@@ -586,6 +661,82 @@ test('uploadLeadDocumentSchema validates documentType, title, and notes', () => 
     });
   });
 });
+
+test('releaseBreachedClaimedLeads auto-releases leads claimed > 24h ago with no action back to unclaimed pool', async () => {
+  const origFind = Lead.find;
+  const now = new Date();
+  const thirtyHoursAgo = new Date(now.getTime() - 30 * 60 * 60 * 1000);
+
+  let savedCount = 0;
+  const mockBreachedLead: any = {
+    _id: '64b7f9a1c2d3e4f5a6b7c8d1',
+    companyName: 'Breached Corp',
+    status: 'New',
+    claimedBy: '64b7f9a1c2d3e4f5a6b7c801',
+    assignedTo: '64b7f9a1c2d3e4f5a6b7c801',
+    claimedAt: thirtyHoursAgo,
+    slaTimerEnd: new Date(thirtyHoursAgo.getTime() + 24 * 60 * 60 * 1000),
+    firstResponseAt: null,
+    callLogs: [],
+    statusHistory: [],
+    save: async function () {
+      savedCount++;
+      return this;
+    },
+  };
+
+  (Lead as any).find = () => ({
+    exec: async () => [mockBreachedLead],
+  });
+
+  try {
+    const released = await LeadsService.releaseBreachedClaimedLeads();
+    assert.equal(released, 1);
+    assert.equal(savedCount, 1);
+    assert.equal(mockBreachedLead.claimedBy, null);
+    assert.equal(mockBreachedLead.assignedTo, null);
+    assert.equal(mockBreachedLead.claimedAt, null);
+    assert.equal(mockBreachedLead.slaTimerEnd, null);
+    assert.equal(mockBreachedLead.status, 'New');
+    assert.equal(mockBreachedLead.statusHistory.length, 1);
+    assert.match(mockBreachedLead.statusHistory[0].reason, /Auto-released to Unclaimed pool/);
+  } finally {
+    Lead.find = origFind;
+  }
+});
+
+test('releaseBreachedClaimedLeads does NOT release leads that have call logs or firstResponseAt', async () => {
+  const origFind = Lead.find;
+  const now = new Date();
+  const thirtyHoursAgo = new Date(now.getTime() - 30 * 60 * 60 * 1000);
+
+  const mockActiveLead: any = {
+    _id: '64b7f9a1c2d3e4f5a6b7c8d2',
+    companyName: 'Active Corp',
+    status: 'New',
+    claimedBy: '64b7f9a1c2d3e4f5a6b7c801',
+    assignedTo: '64b7f9a1c2d3e4f5a6b7c801',
+    claimedAt: thirtyHoursAgo,
+    slaTimerEnd: new Date(thirtyHoursAgo.getTime() + 24 * 60 * 60 * 1000),
+    firstResponseAt: null,
+    callLogs: [{ followUpType: 'Call', createdAt: new Date() }],
+    statusHistory: [],
+    save: async function () { return this; },
+  };
+
+  (Lead as any).find = () => ({
+    exec: async () => [mockActiveLead],
+  });
+
+  try {
+    const released = await LeadsService.releaseBreachedClaimedLeads();
+    assert.equal(released, 0);
+    assert.ok(mockActiveLead.claimedBy !== null);
+  } finally {
+    Lead.find = origFind;
+  }
+});
+
 
 
 

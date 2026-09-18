@@ -293,6 +293,7 @@ export default function LeadDetailPage() {
   // Activity timeline state
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
+  const [isClaimingLead, setIsClaimingLead] = useState(false);
 
   const refreshActivities = async () => {
     if (!id) return;
@@ -447,6 +448,11 @@ export default function LeadDetailPage() {
                 Repeat Client ({lead.cycle}x)
               </span>
             )}
+            {lead.status === 'New' && !lead.claimedBy && !lead.assignedTo && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 dark:bg-amber-950/60 px-2.5 py-0.5 text-xs font-semibold text-amber-800 dark:text-amber-300 border border-amber-300/80 dark:border-amber-800 shadow-2xs">
+                Unclaimed Pool
+              </span>
+            )}
             <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-medium text-slate-600 dark:text-slate-400">
               <Timer className="w-3.5 h-3.5 shrink-0" />
               Lead: {agingDays}d
@@ -481,6 +487,29 @@ export default function LeadDetailPage() {
         </div>
 
         <div className="flex items-center justify-start lg:justify-end gap-2 shrink-0 flex-nowrap">
+          {/* Claim Lead Button (When in Unclaimed Pool) */}
+          {lead.status === 'New' && !lead.claimedBy && !lead.assignedTo && (
+            <Button
+              variant="primary"
+              isLoading={isClaimingLead}
+              onClick={async () => {
+                setIsClaimingLead(true);
+                try {
+                  await leadsApi.claimLead(lead._id || lead.id);
+                  await mutate();
+                } catch (err: unknown) {
+                  alert(err instanceof Error ? err.message : 'Failed to claim lead');
+                } finally {
+                  setIsClaimingLead(false);
+                }
+              }}
+              className="!h-9 !px-3 inline-flex items-center gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 shadow-2xs !text-xs font-semibold"
+            >
+              <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+              <span>Claim Lead</span>
+            </Button>
+          )}
+
           {/* Re-open Lead Button (When Closed / Won / Lost) vs Normal Stage Dropdown */}
           {['Won', 'Lost'].includes(lead.status) ? (
             <Button
