@@ -1,6 +1,7 @@
 import { api } from '@/shared/api/client';
 import {
   Attendance,
+  BreakRecord,
   LeaveType,
   LeaveRequest,
   LeaveBalance,
@@ -16,7 +17,7 @@ export const attendanceApi = {
     const res = await api.post<Attendance>('/api/attendance/check-in', data);
     return res;
   },
-  checkOut: async (data: { gps?: { lat: number; lng: number } }) => {
+  checkOut: async (data: { gps?: { lat: number; lng: number }; breaks?: BreakRecord[] }) => {
     const res = await api.post<Attendance>('/api/attendance/check-out', data);
     return res;
   },

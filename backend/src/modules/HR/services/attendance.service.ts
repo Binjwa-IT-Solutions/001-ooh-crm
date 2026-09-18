@@ -36,6 +36,13 @@ export async function checkIn(
     }
   }
 
+  const shiftSnapshot = {
+    name: employee.department ? `${employee.department} Shift` : 'General Shift',
+    startTime: shiftConfig?.startTime || '09:30',
+    endTime: shiftConfig?.endTime || '18:30',
+    requiredHours: 8,
+  };
+
   // Pehle check karo aaj ka record already hai kya
   let record = await Attendance.findOne({ employeeId, date: today });
 
@@ -44,6 +51,7 @@ export async function checkIn(
     record.checkInTime = new Date();
     if (data.gps) record.checkInGps = data.gps;
     if (data.workType) record.workType = data.workType;
+    if (!record.shiftDetails) record.shiftDetails = shiftSnapshot;
     record.status = isLate ? 'Late' : 'Present';
     await record.save();
     return record;
@@ -57,6 +65,7 @@ export async function checkIn(
     checkInGps: data.gps ?? undefined,
     workType: data.workType ?? 'Office',
     deviceInfo: data.deviceInfo,
+    shiftDetails: shiftSnapshot,
     status: isLate ? 'Late' : 'Present',
     createdBy: employeeId,
   });
@@ -87,7 +96,15 @@ export async function checkIn(
 }
 
 export async function checkOut(
-  data: { gps?: { lat: number; lng: number } },
+  data: {
+    gps?: { lat: number; lng: number };
+    breaks?: Array<{
+      type: 'Lunch' | 'Tea' | 'Other';
+      startTime: Date;
+      endTime: Date;
+      durationMinutes: number;
+    }>;
+  },
   ctx: RequestContext,
 ) {
   const today = startOfDay(new Date());
@@ -114,7 +131,19 @@ export async function checkOut(
   record.checkOutTime = new Date();
   if (data.gps) record.checkOutGps = data.gps;
 
-  // totalHours calculate karo
+  // Record breaks if provided
+  if (data.breaks && Array.isArray(data.breaks) && data.breaks.length > 0) {
+    record.breaks = data.breaks as any;
+  }
+
+  // Calculate totalBreakMinutes
+  const totalBreakMinutes = (record.breaks || []).reduce(
+    (acc, b) => acc + (Number(b.durationMinutes) || 0),
+    0
+  );
+  record.totalBreakMinutes = Number(totalBreakMinutes.toFixed(2));
+
+  // Calculate gross totalHours
   const diffMs =
     record.checkOutTime.getTime() -
     record.checkInTime.getTime();
@@ -122,11 +151,25 @@ export async function checkOut(
     (diffMs / (1000 * 60 * 60)).toFixed(2),
   );
 
-  // Half-day check karo shift config se
+  // Calculate actual working hours (gross hours - break duration in hours)
+  const breakHours = record.totalBreakMinutes / 60;
+  record.actualHours = Math.max(
+    0,
+    Number((record.totalHours - breakHours).toFixed(2))
+  );
+
+  // Calculate overtime hours based on standard 8-hour working day requirement
+  const REQUIRED_HOURS = 8.0;
+  record.overtimeHours = Math.max(
+    0,
+    Number((record.actualHours - REQUIRED_HOURS).toFixed(2))
+  );
+
+  // Half-day check based on actual working hours (not gross duration)
   const shiftConfig = await ShiftConfig.findOne({ department: employee.department });
   const threshold = shiftConfig?.halfDayThresholdHours ?? 4;
 
-  if (record.totalHours < threshold) {
+  if (record.actualHours < threshold) {
     record.status = "Half-Day";
   }
 
@@ -146,7 +189,7 @@ export async function getMyAttendance(ctx: RequestContext, filters: Record<strin
 export async function getTeamAttendance(ctx: RequestContext, filters: Record<string, any> = {}) {
   const records = await scopedFind(Attendance, filters, ctx, { ownerField: 'employeeId' })
     .sort({ date: -1 })
-    .populate('employeeId', 'fullName name');
+    .populate('employeeId', 'fullName name department');
   return records;
 }
 
@@ -164,16 +207,7 @@ export async function getMyAttendanceSummary(ctx: RequestContext, month: number,
     deletedAt: null,
   }).sort({ date: 1 });
 
-  // Fetch shift config to compute regular vs overtime
-  const shiftConfig = await ShiftConfig.findOne({ department: employee.department });
-  let shiftDurationHours = 8;
-  if (shiftConfig && shiftConfig.startTime && shiftConfig.endTime) {
-    const [startH, startM] = shiftConfig.startTime.split(':').map(Number);
-    const [endH, endM] = shiftConfig.endTime.split(':').map(Number);
-    let diff = (endH + endM / 60) - (startH + startM / 60);
-    if (diff < 0) diff += 24;
-    shiftDurationHours = diff;
-  }
+  const REQUIRED_HOURS = 8.0;
 
   let presentCount = 0;
   let leaveHalfCount = 0;
@@ -181,7 +215,8 @@ export async function getMyAttendanceSummary(ctx: RequestContext, month: number,
   const daysWithRecords = new Set<string>();
 
   const mappedRecords = records.map((r) => {
-    const dateStr = new Date(r.date).toISOString().split('T')[0];
+    const dObj = new Date(r.date);
+    const dateStr = `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
     daysWithRecords.add(dateStr);
 
     if (r.status === 'Present' || r.status === 'Late') {
@@ -190,17 +225,22 @@ export async function getMyAttendanceSummary(ctx: RequestContext, month: number,
       leaveHalfCount++;
     }
 
-    if (r.totalHours) {
-      totalWorkHours += r.totalHours;
+    // Effective actual work hours (fallback to totalHours for historical records)
+    const effectiveWorkHours = r.actualHours ?? r.totalHours ?? 0;
+    if (r.checkOutTime) {
+      totalWorkHours += effectiveWorkHours;
     }
 
-    const regHours = r.totalHours ? Math.min(r.totalHours, shiftDurationHours) : 0;
-    const ovtHours = r.totalHours ? Math.max(0, r.totalHours - shiftDurationHours) : 0;
+    const regHours = r.checkOutTime ? Math.min(effectiveWorkHours, REQUIRED_HOURS) : 0;
+    const ovtHours = r.overtimeHours ?? (r.checkOutTime ? Math.max(0, effectiveWorkHours - REQUIRED_HOURS) : 0);
 
     return {
       ...r.toObject(),
-      regularHours: regHours,
-      overtime: ovtHours,
+      actualHours: r.actualHours ?? (r.checkOutTime ? r.totalHours : undefined),
+      regularHours: Number(regHours.toFixed(2)),
+      overtime: Number(ovtHours.toFixed(2)),
+      totalBreakMinutes: r.totalBreakMinutes ?? 0,
+      breaks: r.breaks ?? [],
     };
   });
 
@@ -215,7 +255,7 @@ export async function getMyAttendanceSummary(ctx: RequestContext, month: number,
   for (let d = new Date(start); d <= limitDate; d.setDate(d.getDate() + 1)) {
     const dayOfWeek = d.getDay();
     const isWeekend = dayOfWeek === 0; // Sunday
-    const dateStr = d.toISOString().split('T')[0];
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
     if (!isWeekend) {
       workingDays++;

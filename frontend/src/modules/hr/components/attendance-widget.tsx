@@ -76,9 +76,9 @@ export function AttendanceWidget() {
   const now = new Date();
   const todayRecord = attendance?.find((r) => {
     const d = new Date(r.date);
-    return d.getFullYear() === now.getFullYear() && 
-           d.getMonth() === now.getMonth() && 
-           d.getDate() === now.getDate();
+    return d.getFullYear() === now.getFullYear() &&
+      d.getMonth() === now.getMonth() &&
+      d.getDate() === now.getDate();
   });
 
   const isCheckedIn = !!todayRecord?.checkInTime;
@@ -126,6 +126,7 @@ export function AttendanceWidget() {
     setLoading(true);
     setError(null);
     try {
+      let finalBreaks = [...pastBreaks];
       // Auto-end active break upon checkout
       if (action === 'check-out' && activeBreak) {
         const endTime = Date.now();
@@ -136,10 +137,10 @@ export function AttendanceWidget() {
           endTime,
           durationMinutes,
         };
-        const updatedPast = [...pastBreaks, completed];
-        setPastBreaks(updatedPast);
+        finalBreaks = [...pastBreaks, completed];
+        setPastBreaks(finalBreaks);
         setActiveBreak(null);
-        saveBreaks(null, updatedPast);
+        saveBreaks(null, finalBreaks);
         setCheckoutNote('Break ended automatically on checkout.');
       }
 
@@ -167,7 +168,15 @@ export function AttendanceWidget() {
       if (action === 'check-in') {
         await attendanceApi.checkIn({ gps, workType, deviceInfo: navigator.userAgent });
       } else {
-        await attendanceApi.checkOut({ gps });
+        await attendanceApi.checkOut({
+          gps,
+          breaks: finalBreaks.map(b => ({
+            type: b.type,
+            startTime: new Date(b.startTime),
+            endTime: new Date(b.endTime),
+            durationMinutes: Number(b.durationMinutes.toFixed(2)),
+          })),
+        });
       }
 
       await mutate();
@@ -194,17 +203,28 @@ export function AttendanceWidget() {
   }
 
   // Total break duration in hours
+  const serverBreakHours = todayRecord?.totalBreakMinutes ? todayRecord.totalBreakMinutes / 60 : 0;
   const completedBreakHours = pastBreaks.reduce((acc, b) => acc + (b.durationMinutes / 60), 0);
   const activeBreakHours = activeBreak ? Math.max(0, (currentTime - activeBreak.startTime) / (1000 * 60 * 60)) : 0;
-  const totalBreakHours = completedBreakHours + activeBreakHours;
+  const totalBreakHours = isCheckedOut && serverBreakHours > 0 ? serverBreakHours : (completedBreakHours + activeBreakHours);
 
-  // Net working hours = total time - total break time
-  const netWorkingHours = Math.max(0, grossHours - totalBreakHours);
+  // Net actual working hours = gross - break
+  const netWorkingHours = isCheckedOut && todayRecord?.actualHours !== undefined
+    ? todayRecord.actualHours
+    : Math.max(0, grossHours - totalBreakHours);
+
+  // Required hours (standard 8 hours)
+  const requiredHours = todayRecord?.shiftDetails?.requiredHours ?? 8;
+  const overtimeHours = isCheckedOut && todayRecord?.overtimeHours !== undefined
+    ? todayRecord.overtimeHours
+    : Math.max(0, netWorkingHours - requiredHours);
 
   return (
     <Card className="p-6 space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold text-slate-800">Attendance</h3>
+      <div className="flex justify-between  items-center">
+        <div>
+          <h3 className="text-lg font-semibold text-slate-800">Attendance</h3>
+        </div>
         {todayRecord?.status && (
           <div className="animate-in fade-in duration-300">
             <Badge>
@@ -216,31 +236,48 @@ export function AttendanceWidget() {
 
       {error && <Alert tone="error">{error}</Alert>}
 
-      <div className="grid grid-cols-2 gap-4 text-sm">
+      <div className="grid grid-cols-2 gap-3 text-sm">
         <div className="p-3 bg-slate-50 rounded-lg">
-          <p className="text-slate-500 mb-1">Check In</p>
+          <p className="text-slate-500 mb-0.5 text-xs">Check In</p>
           <p className="font-medium text-slate-800">
-            {todayRecord?.checkInTime ? new Date(todayRecord.checkInTime).toLocaleTimeString() : '--:--'}
+            {todayRecord?.checkInTime ? new Date(todayRecord.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
           </p>
         </div>
         <div className="p-3 bg-slate-50 rounded-lg">
-          <p className="text-slate-500 mb-1">Check Out</p>
+          <p className="text-slate-500 mb-0.5 text-xs">Check Out</p>
           <p className="font-medium text-slate-800">
-            {todayRecord?.checkOutTime ? new Date(todayRecord.checkOutTime).toLocaleTimeString() : '--:--'}
+            {todayRecord?.checkOutTime ? new Date(todayRecord.checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (isCheckedIn ? 'In Progress' : '--:--')}
+          </p>
+        </div>
+        <div className="p-3 bg-slate-50 rounded-lg">
+          <p className="text-slate-500 mb-0.5 text-xs">Break Time</p>
+          <p className="font-medium text-slate-800">
+            {totalBreakHours > 0 ? formatHoursToHM(totalBreakHours) : '0h 00m'}
+          </p>
+        </div>
+        <div className="p-3 bg-slate-50 rounded-lg">
+          <p className="text-slate-500 mb-0.5 text-xs">Required Hours</p>
+          <p className="font-medium text-slate-800">
+            {requiredHours}h 00m
           </p>
         </div>
       </div>
 
-      <div className="p-3 bg-slate-50 rounded-lg">
-        <div className="flex items-baseline justify-between mb-1">
-          <p className="text-slate-500 text-sm">Total Hours</p>
-          {totalBreakHours > 0 && (
-            <span className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200/80 px-1.5 py-0.5 rounded font-medium">
-              Break: -{formatHoursToHM(totalBreakHours)}
-            </span>
-          )}
+      {/* Net Working Hours Box */}
+      <div className="p-3.5 bg-brand-50/50 border border-brand-100 rounded-lg flex items-center justify-between">
+        <div>
+          <span className="text-xs font-medium text-slate-600">Actual Working Hours</span>
+          <p className="font-bold text-brand-800 text-xl tracking-tight">
+            {isCheckedIn || isCheckedOut ? formatHoursToHM(netWorkingHours) : '--:--'}
+          </p>
         </div>
-        <p className="font-medium text-slate-800 text-lg">{formatHoursToHM(netWorkingHours)}</p>
+        {overtimeHours > 0 && (
+          <div className="text-right">
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+              Overtime: +{formatHoursToHM(overtimeHours)}
+            </span>
+          </div>
+        )}
       </div>
 
       {!isCheckedIn && (
@@ -331,9 +368,9 @@ export function AttendanceWidget() {
                   onChange={(e) => setSelectedBreakType(e.target.value as BreakType)}
                   className="h-11 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-primary transition-colors"
                 >
-                  <option value="Lunch">Lunch</option>
-                  <option value="Tea">Tea</option>
-                  <option value="Other">Other</option>
+                  <option value="Lunch">Lunch Break</option>
+                  <option value="Tea">Tea Break</option>
+                  <option value="Other">Other Break</option>
                 </select>
                 <Button
                   type="button"
@@ -397,7 +434,7 @@ export function AttendanceWidget() {
               </div>
             </div>
           )}
-          <div className="p-3 bg-green-50 text-green-700 rounded-lg text-center font-medium animate-in fade-in zoom-in-95 duration-300">
+          <div className="p-3 bg-green-50 text-green-700 rounded-lg text-center font-medium animate-in fade-in zoom-in-95 duration-300 text-sm">
             Attendance completed for today.
           </div>
         </div>
