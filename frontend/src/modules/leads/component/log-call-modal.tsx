@@ -217,8 +217,8 @@ function LogCallModalContent({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field
               label="Next Action Date"
-              type="datetime-local"
-              min={new Date().toISOString().slice(0, 16)}
+              type="date"
+              min={new Date().toISOString().slice(0, 10)}
               value={nextActionDate}
               onChange={(e) => setNextActionDate(e.target.value)}
             />

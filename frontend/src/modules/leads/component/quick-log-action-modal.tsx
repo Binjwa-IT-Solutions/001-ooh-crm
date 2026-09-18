@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Modal, Button, Field, TextAreaField, SelectField, Spinner, Badge } from '@/shared/ui';
 import { leadsApi } from '../api';
 import {
@@ -54,6 +55,8 @@ export default function QuickLogActionModal({
   onClose,
   onSuccess,
 }: QuickLogActionModalProps) {
+  const router = useRouter();
+
   // Search & Selection State
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<Lead[]>([]);
@@ -224,7 +227,7 @@ export default function QuickLogActionModal({
         remarks: note.trim(),
         note: note.trim(),
         loggedAt: loggedAt ? new Date(loggedAt).toISOString() : undefined,
-        ...(nextActionDate ? { nextActionDate } : {}),
+        ...(nextActionDate ? { nextActionDate: new Date(nextActionDate).toISOString() } : {}),
       };
 
       if (followUpType === 'Call' && durationSec.trim()) {
@@ -385,15 +388,17 @@ export default function QuickLogActionModal({
                 </div>
               </div>
               <div className="flex items-center gap-2.5 shrink-0 text-xs">
-                <a
-                  href={`/leads/${selectedLead._id || selectedLead.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    router.push(`/leads/${selectedLead._id || selectedLead.id}`);
+                  }}
+                  className="inline-flex items-center gap-1 text-primary hover:underline font-medium cursor-pointer"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   <span>Open Lead</span>
-                </a>
+                </button>
                 <span className="text-slate-300 dark:text-slate-700">|</span>
                 <button
                   type="button"
@@ -571,9 +576,9 @@ export default function QuickLogActionModal({
 
               {/* Next Action Date */}
               <Field
-                label="Next Follow-up Date & Time"
-                type="datetime-local"
-                min={new Date().toISOString().slice(0, 16)}
+                label="Next Action Date"
+                type="date"
+                min={new Date().toISOString().slice(0, 10)}
                 value={nextActionDate}
                 onChange={(e) => setNextActionDate(e.target.value)}
               />
