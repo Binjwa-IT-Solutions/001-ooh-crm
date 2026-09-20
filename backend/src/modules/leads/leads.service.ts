@@ -108,8 +108,15 @@ export class LeadsService {
     const query: Record<string, any> = {};
 
     if (filters.search) {
-      const searchRegex = { $regex: filters.search, $options: 'i' };
-      query.$or = [{ companyName: searchRegex }, { mobile: searchRegex }];
+      const cleanSearch = escapeRegex(filters.search.trim());
+      const searchRegex = { $regex: cleanSearch, $options: 'i' };
+      query.$or = [
+        { companyName: searchRegex },
+        { contactPerson: searchRegex },
+        { mobile: searchRegex },
+        { email: searchRegex },
+        { city: searchRegex },
+      ];
     }
 
     if (filters.status) query.status = filters.status;
@@ -412,8 +419,20 @@ export class LeadsService {
     const now = new Date();
     const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
+    const rawMobile = String(data.mobile || '').trim();
+    const digitsOnly = rawMobile.replace(/\D/g, '');
+    const cleanMobile = digitsOnly.length >= 10 ? digitsOnly.slice(-10) : (digitsOnly || rawMobile);
+    data.mobile = cleanMobile;
+
+    if (data.secondaryMobile) {
+      const secDigits = String(data.secondaryMobile).replace(/\D/g, '');
+      if (secDigits.length >= 10) {
+        data.secondaryMobile = secDigits.slice(-10);
+      }
+    }
+
     const existing = await Lead.findOne({
-      mobile: data.mobile,
+      mobile: cleanMobile,
       source: data.source,
       createdAt: { $gte: windowStart },
       deletedAt: null,
@@ -1038,17 +1057,15 @@ export class LeadsService {
       if (!reason || reason.trim().length === 0) {
         throw new ValidationError('Lost status requires a reason.');
       }
-      if (lead.qualification) {
-        lead.qualification.lostReason = reason.trim();
-      }
+      lead.qualification = lead.qualification || {};
+      lead.qualification.lostReason = reason.trim();
     }
 
     // 4b. Rejected Gate: moving to Rejected records reason and tracks who rejected
     if (toStatus === 'Rejected') {
       const reason = payload.lostReason || lead.qualification?.lostReason || 'Junk / Irrelevant inquiry';
-      if (lead.qualification) {
-        lead.qualification.lostReason = reason.trim();
-      }
+      lead.qualification = lead.qualification || {};
+      lead.qualification.lostReason = reason.trim();
       lead.rejectedBy = toObjectId(ctx.user.id);
     }
 
@@ -1070,6 +1087,15 @@ export class LeadsService {
 
     const now = new Date();
     lead.status = toStatus;
+    if (toStatus === 'Contacted' && !lead.firstResponseAt) {
+      lead.firstResponseAt = now;
+      if (!lead.firstCallAt) {
+        lead.firstCallAt = now;
+      }
+    }
+    if (toStatus === 'Won' || toStatus === 'Lost' || toStatus === 'Rejected') {
+      lead.nextActionDate = null;
+    }
     lead.updatedBy = toObjectId(ctx.user.id);
 
     lead.statusHistory = lead.statusHistory || [];

@@ -348,8 +348,9 @@ export default function LeadDetailPage() {
   const createdDate = new Date(lead.createdAt || lead.receivedAt || Date.now());
   const agingDays = Math.max(0, Math.floor((Date.now() - createdDate.getTime()) / (24 * 60 * 60 * 1000)));
 
-  // Check if Next Action is overdue
-  const isOverdue = lead.nextActionDate && new Date(lead.nextActionDate).getTime() < Date.now();
+  // Check if Next Action is overdue (only applicable for active, unclosed leads)
+  const isClosed = lead.status === 'Won' || lead.status === 'Lost' || lead.status === 'Rejected';
+  const isOverdue = !isClosed && Boolean(lead.nextActionDate && new Date(lead.nextActionDate).getTime() < Date.now());
 
   const handleQualify = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

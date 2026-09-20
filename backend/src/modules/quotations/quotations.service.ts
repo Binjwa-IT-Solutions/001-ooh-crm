@@ -561,8 +561,20 @@ export class QuotationsService {
     quotation.acceptedAt = now;
     await quotation.save();
 
-    // Update Lead to Won
-    await Lead.updateOne({ _id: quotation.leadId }, { $set: { status: 'Won' } });
+    // Update Lead to Won with status history audit trail and clear next action
+    await Lead.updateOne(
+      { _id: quotation.leadId },
+      {
+        $set: { status: 'Won', nextActionDate: null },
+        $push: {
+          statusHistory: {
+            to: 'Won',
+            reason: `Proposal #${quotation.quoteNumber} accepted by client`,
+            changedAt: now,
+          },
+        },
+      },
+    );
 
     // Call campaignService.createFromQuotation
     try {

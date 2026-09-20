@@ -11,7 +11,7 @@ export const objectIdSchema = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid obj
 
 export const STATUS_TRANSITIONS: Record<string, string[]> = {
   New: ['Contacted', 'Lost', 'Rejected'],
-  Contacted: ['Interested', 'Lost'],
+  Contacted: ['Interested', 'Lost', 'Rejected'],
   Interested: ['Qualified', 'Lost'],
   Qualified: ['Proposal Sent', 'Negotiation', 'Lost'],
   'Proposal Sent': ['Negotiation', 'Won', 'Lost'],

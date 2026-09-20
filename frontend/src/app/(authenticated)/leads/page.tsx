@@ -696,7 +696,8 @@ export default function LeadsPage() {
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                 {displayedLeads.map((lead: Lead) => {
-                  const isOverdue = Boolean(lead.nextActionDate && new Date(lead.nextActionDate).getTime() < currentTime);
+                  const isClosed = lead.status === 'Won' || lead.status === 'Lost' || lead.status === 'Rejected';
+                  const isOverdue = !isClosed && Boolean(lead.nextActionDate && new Date(lead.nextActionDate).getTime() < currentTime);
 
                   return (
                     <tr key={lead._id || lead.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">

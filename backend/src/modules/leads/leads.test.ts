@@ -469,6 +469,104 @@ test('changeStatus allows restoring Rejected lead back to New and clears assigne
   }
 });
 
+test('changeStatus auto-clears nextActionDate when transitioning to terminal status (Won, Lost, Rejected)', async () => {
+  const fakeLead: any = {
+    _id: '6a87e4b4c93947ba317108aa',
+    status: 'Negotiation',
+    nextActionDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+    statusHistory: [],
+    save: async () => fakeLead,
+    populate: async () => fakeLead,
+  };
+
+  const origGetLead = LeadsService.getLead;
+  LeadsService.getLead = async () => fakeLead;
+
+  try {
+    const resWon = await LeadsService.changeStatus(
+      '6a87e4b4c93947ba317108aa',
+      { status: 'Won' },
+      { user: { id: '6a87e4b4c93947ba31710801', role: 'admin' } } as any,
+    );
+    assert.equal(resWon.status, 'Won');
+    assert.equal(resWon.nextActionDate, null);
+
+    fakeLead.status = 'Interested';
+    fakeLead.nextActionDate = new Date();
+    const resLost = await LeadsService.changeStatus(
+      '6a87e4b4c93947ba317108aa',
+      { status: 'Lost', lostReason: 'Budget mismatch' },
+      { user: { id: '6a87e4b4c93947ba31710801', role: 'admin' } } as any,
+    );
+    assert.equal(resLost.status, 'Lost');
+    assert.equal(resLost.nextActionDate, null);
+  } finally {
+    LeadsService.getLead = origGetLead;
+  }
+});
+
+test('changeStatus allows Contacted -> Rejected and records firstResponseAt on Contacted', async () => {
+  const fakeLead: any = {
+    _id: '6a87e4b4c93947ba317108aa',
+    status: 'New',
+    firstResponseAt: null,
+    statusHistory: [],
+    save: async () => fakeLead,
+    populate: async () => fakeLead,
+  };
+
+  const origGetLead = LeadsService.getLead;
+  LeadsService.getLead = async () => fakeLead;
+
+  try {
+    const resContacted = await LeadsService.changeStatus(
+      '6a87e4b4c93947ba317108aa',
+      { status: 'Contacted' },
+      { user: { id: '6a87e4b4c93947ba31710801', role: 'sales_agent' } } as any,
+    );
+    assert.equal(resContacted.status, 'Contacted');
+    assert.ok(resContacted.firstResponseAt instanceof Date, 'firstResponseAt should be set on Contacted');
+
+    const resRejected = await LeadsService.changeStatus(
+      '6a87e4b4c93947ba317108aa',
+      { status: 'Rejected', lostReason: 'Wrong number/junk inquiry' },
+      { user: { id: '6a87e4b4c93947ba31710801', role: 'sales_agent' } } as any,
+    );
+    assert.equal(resRejected.status, 'Rejected');
+    assert.equal(resRejected.qualification?.lostReason, 'Wrong number/junk inquiry');
+  } finally {
+    LeadsService.getLead = origGetLead;
+  }
+});
+
+test('createLead normalizes formatted mobile number to clean 10-digits for duplicate detection', async () => {
+  const now = new Date();
+  const previous = { mobile: '9876543210', source: 'Manual', createdAt: new Date(now.getTime() - 2 * 60 * 60 * 1000) };
+
+  await withPatchedModel(
+    {
+      findOne: (query: any) => {
+        if (query.mobile === '9876543210' && query.source === 'Manual') {
+          return { exec: async () => previous };
+        }
+        return { exec: async () => null };
+      },
+      create: async (payload: any) => payload,
+    },
+    async () => {
+      const data = {
+        companyName: 'New Brand',
+        contactPerson: 'Varun',
+        mobile: '+91 98765 43210', // formatted with country code and spaces
+        source: 'Manual',
+      };
+      const created = await LeadsService.createLead(data, FAKE_USER_CTX);
+      assert.equal(created.status, 'Duplicate');
+      assert.equal(data.mobile, '9876543210', 'mobile should be normalized to 10 digits');
+    },
+  );
+});
+
 test('getActivity returns combined chronological activities with follow-up logs', async () => {
   const fakeLead: any = {
     _id: '6a87e4b4c93947ba317108aa',
