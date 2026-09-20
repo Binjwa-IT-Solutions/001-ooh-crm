@@ -48,6 +48,8 @@ import {
   Trash2,
   Download,
   ExternalLink,
+  Calendar,
+  Filter,
 } from 'lucide-react';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -137,6 +139,15 @@ function formatDateTime(dateStr?: string | Date | null) {
     minute: '2-digit',
     hour12: true,
   });
+}
+
+function formatDuration(seconds?: number | null): string {
+  if (typeof seconds !== 'number' || seconds <= 0) return '';
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (mins > 0 && secs > 0) return `${mins}m ${secs}s`;
+  if (mins > 0) return `${mins}m`;
+  return `${secs}s`;
 }
 
 export default function LeadDetailPage() {
@@ -279,6 +290,7 @@ export default function LeadDetailPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loadingCampaigns, setLoadingCampaigns] = useState(false);
   const [selectedTimelineCampaign, setSelectedTimelineCampaign] = useState<string>('all');
+  const [selectedActivityType, setSelectedActivityType] = useState<'all' | 'follow_ups' | 'status' | 'quotations' | 'approvals'>('all');
 
   useEffect(() => {
     const leadId = (lead?._id || lead?.id || id) as string;
@@ -1017,253 +1029,492 @@ export default function LeadDetailPage() {
       )}
 
       {/* Tab: Activity Timeline (ATR) */}
-      {activeTab === 'activity' && (
-        <Card className="p-6">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-6 flex-wrap gap-3">
-            <div>
-              <h3 className="text-base font-semibold text-slate-900 dark:text-white">Action Taken History (ATR)</h3>
-              <p className="text-xs text-slate-500">Chained follow-up logs, quotations, campaigns, and manager approvals.</p>
-            </div>
-            <Button variant="secondary" onClick={() => setLogModalOpen(true)} className="!h-9 !px-3 inline-flex items-center gap-1.5 !text-xs font-medium">
-              <Plus className="w-3.5 h-3.5 shrink-0" />
-              <span>Log Action</span>
-            </Button>
-          </div>
+      {activeTab === 'activity' && (() => {
+        // Counts for filter pills
+        const followUpsCount = activities.filter((a) => a.type === 'follow_up' || a.type === 'call_log').length;
+        const statusCount = activities.filter((a) => a.type === 'status_change').length;
+        const quotationCount = activities.filter((a) => a.type === 'quotation').length;
+        const campaignEventCount = activities.filter((a) => a.type === 'campaign_event').length;
+        const managerReviewCount = activities.filter((a) => a.type === 'manager_review').length;
+        const dealsCount = quotationCount + campaignEventCount;
 
-          {/* Timeline Filter Pills */}
-          {campaigns.length > 0 && (
-            <div className="mb-6 flex items-center gap-2 flex-wrap text-xs">
-              <span className="text-slate-400 font-medium mr-1">Filter by Campaign:</span>
+        const filteredActivities = activities.filter((item) => {
+          if (selectedTimelineCampaign !== 'all' && item.campaignId !== selectedTimelineCampaign) {
+            return false;
+          }
+          if (selectedActivityType === 'follow_ups') {
+            return item.type === 'follow_up' || item.type === 'call_log';
+          }
+          if (selectedActivityType === 'status') {
+            return item.type === 'status_change';
+          }
+          if (selectedActivityType === 'quotations') {
+            return item.type === 'quotation' || item.type === 'campaign_event';
+          }
+          if (selectedActivityType === 'approvals') {
+            return item.type === 'manager_review';
+          }
+          return true;
+        });
+
+        // Check for upcoming / next follow-up
+        const nextActionDate = lead.nextActionDate ? new Date(lead.nextActionDate) : null;
+        const isNextActionOverdue = nextActionDate ? nextActionDate.getTime() < Date.now() : false;
+
+        return (
+          <Card className="p-6">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-5 flex-wrap gap-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>Action Taken History (ATR)</span>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                    {activities.length} total
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Chronological interactions, call logs, quotations, campaigns, and manager approvals.
+                </p>
+              </div>
+              <Button
+                variant="primary"
+                onClick={() => setLogModalOpen(true)}
+                className="!h-9 !px-3 inline-flex items-center gap-1.5 bg-[#8B2424] text-white hover:bg-[#6E1D1D] !text-xs font-semibold shadow-2xs"
+              >
+                <Plus className="w-3.5 h-3.5 shrink-0" />
+                <span>Log Action</span>
+              </Button>
+            </div>
+
+            {/* Pinned Next Action Banner */}
+            {nextActionDate && (
+              <div className={`mb-6 rounded-xl border p-4 shadow-2xs transition-colors ${
+                isNextActionOverdue
+                  ? 'border-rose-200 bg-rose-50/60 dark:border-rose-900/50 dark:bg-rose-950/30'
+                  : 'border-blue-200 bg-blue-50/60 dark:border-blue-900/50 dark:bg-blue-950/30'
+              }`}>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-9 w-9 items-center justify-center rounded-lg shrink-0 ${
+                      isNextActionOverdue
+                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300'
+                        : 'bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300'
+                    }`}>
+                      <Clock className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-xs font-bold uppercase tracking-wider ${
+                          isNextActionOverdue
+                            ? 'text-rose-800 dark:text-rose-300'
+                            : 'text-blue-800 dark:text-blue-300'
+                        }`}>
+                          Next Scheduled Follow-up
+                        </span>
+                        {isNextActionOverdue ? (
+                          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold bg-rose-200 text-rose-800 dark:bg-rose-900 dark:text-rose-200">
+                            Overdue
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold bg-blue-200 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                            Upcoming
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white mt-0.5">
+                        {formatDateTime(lead.nextActionDate)}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setLogModalOpen(true)}
+                    className="!h-8 !px-3 !text-xs font-semibold"
+                  >
+                    Log Outcome
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Filter Pills (Activity Types) */}
+            <div className="mb-4 flex items-center gap-2 flex-wrap text-xs">
+              <span className="text-slate-400 font-medium mr-1 flex items-center gap-1">
+                <Filter className="w-3 h-3" />
+                <span>Filter:</span>
+              </span>
+
               <button
                 type="button"
-                onClick={() => setSelectedTimelineCampaign('all')}
-                className={`px-2.5 py-1 rounded-full font-medium transition-colors ${
-                  selectedTimelineCampaign === 'all'
-                    ? 'bg-[#8B2424] text-white shadow-2xs'
+                onClick={() => setSelectedActivityType('all')}
+                className={`px-3 py-1 rounded-full font-semibold transition-all ${
+                  selectedActivityType === 'all'
+                    ? 'bg-[#8B2424] text-white shadow-xs'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
                 }`}
               >
-                All Activities ({activities.length})
+                All ({activities.length})
               </button>
-              {campaigns.map((c) => {
-                const count = activities.filter((a) => a.campaignId === c._id).length;
-                return (
-                  <button
-                    key={c._id}
-                    type="button"
-                    onClick={() => setSelectedTimelineCampaign(c._id)}
-                    className={`px-2.5 py-1 rounded-full font-medium transition-colors ${
-                      selectedTimelineCampaign === c._id
-                        ? 'bg-[#8B2424] text-white shadow-2xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
-                    }`}
-                  >
-                    {c.name} ({count})
-                  </button>
-                );
-              })}
+
+              <button
+                type="button"
+                onClick={() => setSelectedActivityType('follow_ups')}
+                className={`px-3 py-1 rounded-full font-semibold transition-all flex items-center gap-1.5 ${
+                  selectedActivityType === 'follow_ups'
+                    ? 'bg-[#8B2424] text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                }`}
+              >
+                <Phone className="w-3 h-3" />
+                <span>Calls & Notes ({followUpsCount})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedActivityType('status')}
+                className={`px-3 py-1 rounded-full font-semibold transition-all flex items-center gap-1.5 ${
+                  selectedActivityType === 'status'
+                    ? 'bg-[#8B2424] text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                }`}
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Status Changes ({statusCount})</span>
+              </button>
+
+              {dealsCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedActivityType('quotations')}
+                  className={`px-3 py-1 rounded-full font-semibold transition-all flex items-center gap-1.5 ${
+                    selectedActivityType === 'quotations'
+                      ? 'bg-[#8B2424] text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                  }`}
+                >
+                  <FileText className="w-3 h-3" />
+                  <span>Quotes & Campaigns ({dealsCount})</span>
+                </button>
+              )}
+
+              {managerReviewCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedActivityType('approvals')}
+                  className={`px-3 py-1 rounded-full font-semibold transition-all flex items-center gap-1.5 ${
+                    selectedActivityType === 'approvals'
+                      ? 'bg-[#8B2424] text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                  }`}
+                >
+                  <ShieldCheck className="w-3 h-3" />
+                  <span>Approvals ({managerReviewCount})</span>
+                </button>
+              )}
             </div>
-          )}
 
-          {loadingActivities ? (
-            <div className="py-8 flex justify-center">
-              <Spinner label="Loading timeline..." />
-            </div>
-          ) : activities.length === 0 ? (
-            <div className="py-8 text-center text-slate-500">
-              No activity records found for this lead yet. Click "+ Log Action" to record your first follow-up.
-            </div>
-          ) : (
-            <div className="relative border-l-2 border-slate-200 dark:border-slate-800 ml-4 space-y-6 py-2">
-              {activities
-                .filter((item) => {
-                  if (selectedTimelineCampaign === 'all') return true;
-                  return item.campaignId === selectedTimelineCampaign;
-                })
-                .map((item, idx) => {
-                const isCycleRestart = Boolean(item.type === 'status_change' && item.from && ['Won', 'Lost'].includes(item.from));
+            {/* Campaign Filter Pills (if any campaigns exist) */}
+            {campaigns.length > 0 && (
+              <div className="mb-6 flex items-center gap-2 flex-wrap text-xs pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                <span className="text-slate-400 font-medium mr-1 flex items-center gap-1">
+                  <Briefcase className="w-3 h-3" />
+                  <span>Campaign:</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTimelineCampaign('all')}
+                  className={`px-2.5 py-0.5 rounded-full font-medium transition-colors ${
+                    selectedTimelineCampaign === 'all'
+                      ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                  }`}
+                >
+                  All Campaigns
+                </button>
+                {campaigns.map((c) => {
+                  const count = activities.filter((a) => a.campaignId === c._id).length;
+                  return (
+                    <button
+                      key={c._id}
+                      type="button"
+                      onClick={() => setSelectedTimelineCampaign(c._id)}
+                      className={`px-2.5 py-0.5 rounded-full font-medium transition-colors ${
+                        selectedTimelineCampaign === c._id
+                          ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                      }`}
+                    >
+                      {c.name} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
-                return (
-                  <div key={idx} className="space-y-3">
-                    <div className="relative pl-6">
-                      {/* Timeline dot */}
-                      <div
-                        className={`absolute -left-2.25 top-1 h-4 w-4 rounded-full border-2 border-white dark:border-slate-900 ${
-                          item.type === 'status_change'
-                            ? (item.to ? STATUS_DOT_COLORS[item.to] || 'bg-blue-500' : 'bg-blue-500')
-                            : item.type === 'manager_review'
-                            ? 'bg-amber-500'
-                            : item.type === 'quotation'
-                            ? 'bg-indigo-500'
-                            : item.type === 'campaign_event'
-                            ? 'bg-emerald-500'
-                            : 'bg-blue-500'
-                        }`}
-                      />
-
-                      {item.type === 'status_change' ? (
-                        <div>
-                          <div className="flex items-center gap-1.5 flex-wrap text-sm font-semibold text-slate-900 dark:text-white">
-                            {item.from && item.from !== item.to ? (
-                              <>
-                                <span>Status changed from</span>
-                                <span className={STATUS_TEXT_COLORS[item.from] || 'text-slate-700 dark:text-slate-300'}>
-                                  {item.from}
-                                </span>
-                                <span>to</span>
-                                <span className={item.to ? STATUS_TEXT_COLORS[item.to] || 'text-slate-700 dark:text-slate-300' : ''}>
-                                  {item.to}
-                                </span>
-                              </>
-                            ) : item.from && item.from === item.to ? (
-                              <>
-                                <span>{item.reason || 'Lead event recorded'}</span>
-                              </>
-                            ) : (
-                              <>
-                                <span>Lead created with status</span>
-                                <span className={item.to ? STATUS_TEXT_COLORS[item.to] || 'text-slate-700 dark:text-slate-300' : ''}>
-                                  {item.to}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                          {item.reason && !(item.from && item.from === item.to) && (
-                            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 italic">
-                              Reason: "{item.reason}"
-                            </p>
-                          )}
-                          <div className="text-xs text-slate-400 mt-1">
-                            {formatDateTime(item.timestamp)}
-                          </div>
-                        </div>
-                      ) : item.type === 'quotation' ? (
-                        <div className="rounded-lg bg-indigo-50/70 dark:bg-indigo-950/40 p-4 border border-indigo-200/80 dark:border-indigo-900">
-                          <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <div className="flex items-center gap-2">
-                              <span className="flex items-center justify-center w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
-                                <FileText className="w-3.5 h-3.5 shrink-0" />
-                              </span>
-                              <span className="text-sm font-bold text-indigo-950 dark:text-indigo-200">
-                                {item.reason || `Quotation #${item.referenceCode}`}
-                              </span>
-                            </div>
-                            {typeof item.amount === 'number' && (
-                              <span className="text-xs font-bold text-indigo-800 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900 px-2 py-0.5 rounded">
-                                Value: ₹{((item.amount || 0) / 100).toLocaleString('en-IN')}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-xs text-indigo-600 dark:text-indigo-400 mt-2">
-                            {formatDateTime(item.timestamp)}
-                          </div>
-                        </div>
-                      ) : item.type === 'campaign_event' ? (
-                        <div className="rounded-lg bg-emerald-50/70 dark:bg-emerald-950/40 p-4 border border-emerald-200/80 dark:border-emerald-900">
-                          <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <div className="flex items-center gap-2">
-                              <span className="flex items-center justify-center w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300">
-                                <Briefcase className="w-3.5 h-3.5 shrink-0" />
-                              </span>
-                              <span className="text-sm font-bold text-emerald-950 dark:text-emerald-200">
-                                {item.reason || `Campaign: ${item.campaignName}`}
-                              </span>
-                            </div>
-                            {typeof item.amount === 'number' && item.amount > 0 && (
-                              <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900 px-2 py-0.5 rounded">
-                                Contract: ₹{((item.amount || 0) / 100).toLocaleString('en-IN')}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-xs text-emerald-600 dark:text-emerald-400 mt-2">
-                            {formatDateTime(item.timestamp)}
-                          </div>
-                        </div>
-                      ) : item.type === 'manager_review' ? (
-                      <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 p-3 border border-amber-200 dark:border-amber-900">
-                        <div className="flex items-center gap-1.5 text-sm font-semibold text-amber-900 dark:text-amber-300">
-                          <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                          <span>Manager Review Sign-off</span>
-                        </div>
-                        {item.remarks && (
-                          <p className="text-xs text-amber-800 dark:text-amber-400 mt-1">
-                            Remarks: {item.remarks}
-                          </p>
-                        )}
-                        <div className="text-xs text-amber-600 dark:text-amber-500 mt-1">
-                          {formatDateTime(item.timestamp)}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 p-4 border border-slate-200 dark:border-slate-700">
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="flex items-center justify-center w-7 h-7 rounded-full bg-slate-200/60 dark:bg-slate-700/60">
-                              {renderFollowUpIcon(item.followUpType)}
-                            </span>
-                            <span className="text-sm font-bold text-slate-900 dark:text-white">
-                              {item.followUpType || 'Action'} — {item.reason || 'Follow-up'}
-                            </span>
-                            {item.campaignName && (
-                              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
-                                Campaign: {item.campaignName}
-                              </span>
-                            )}
-                            {item.contactedPerson && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-[#8B2424] border border-[#F2CACA] dark:bg-red-950/60 dark:text-red-300 dark:border-red-900">
-                                <User className="w-3 h-3 shrink-0" />
-                                With: {item.contactedPerson}
-                              </span>
-                            )}
-                          </div>
-                          {item.nextActionDate && (
-                            <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 px-2 py-0.5 rounded">
-                              Next: {formatDateTime(item.nextActionDate)}
-                            </span>
-                          )}
-                        </div>
-
-                        {(item.remarks || item.note) && (
-                          <p className="text-sm text-slate-700 dark:text-slate-300 mt-2">
-                            {item.remarks || item.note}
-                          </p>
-                        )}
-
-                        {item.delayResponsibility && (
-                          <p className="text-xs text-rose-500 mt-1">
-                            Delay Responsible: {item.delayResponsibility}
-                          </p>
-                        )}
-
-                        {typeof item.durationSec === 'number' && (
-                          <p className="text-xs text-slate-500 mt-1">
-                            Call Duration: {item.durationSec}s
-                          </p>
-                        )}
-
-                        <div className="text-xs text-slate-400 mt-2">
-                          Logged at {formatDateTime(item.timestamp)}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  {isCycleRestart && (
-                    <div className="my-2 -ml-6 flex items-center gap-2">
-                      <div className="h-px flex-1 bg-purple-200 dark:bg-purple-900" />
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-50 px-2.5 py-0.5 text-[11px] font-bold text-purple-700 dark:bg-purple-950 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shadow-2xs">
-                        <RotateCw className="w-3 h-3 shrink-0" />
-                        <span>Cycle #{item.cycle || 2}: Re-opened Inquiry</span>
-                      </span>
-                      <div className="h-px flex-1 bg-purple-200 dark:bg-purple-900" />
-                    </div>
-                  )}
+            {/* Content Area */}
+            {loadingActivities ? (
+              <div className="py-12 flex justify-center">
+                <Spinner label="Loading timeline..." />
+              </div>
+            ) : filteredActivities.length === 0 ? (
+              <div className="py-12 text-center space-y-2">
+                <div className="w-10 h-10 mx-auto rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                  <Clock className="w-5 h-5" />
                 </div>
-              );
-            })}
-            </div>
-          )}
-        </Card>
-      )}
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  {activities.length === 0
+                    ? 'No activity records found for this lead yet.'
+                    : 'No activities match the selected filter.'}
+                </p>
+                <p className="text-xs text-slate-400">
+                  {activities.length === 0
+                    ? 'Click "+ Log Action" to record your first follow-up or client interaction.'
+                    : 'Try selecting "All" or a different filter to see other events.'}
+                </p>
+              </div>
+            ) : (
+              <div className="relative border-l-2 border-slate-200 dark:border-slate-800 ml-4 space-y-5 py-2">
+                {filteredActivities.map((item, idx) => {
+                  const isCycleRestart = Boolean(item.type === 'status_change' && item.from && ['Won', 'Lost'].includes(item.from));
+
+                  // Extract user/author name
+                  const authorName =
+                    typeof item.user === 'object' && item.user?.name
+                      ? item.user.name
+                      : typeof item.changedBy === 'object' && item.changedBy?.name
+                      ? item.changedBy.name
+                      : null;
+
+                  const durationText = formatDuration(item.durationSec);
+
+                  return (
+                    <div key={idx} className="space-y-3">
+                      <div className="relative pl-6">
+                        {/* Timeline dot */}
+                        <div
+                          className={`absolute -left-[9px] top-1.5 h-4 w-4 rounded-full border-2 border-white dark:border-slate-900 shadow-2xs ${
+                            item.type === 'status_change'
+                              ? (item.to ? STATUS_DOT_COLORS[item.to] || 'bg-blue-500' : 'bg-blue-500')
+                              : item.type === 'manager_review'
+                              ? 'bg-amber-500'
+                              : item.type === 'quotation'
+                              ? 'bg-indigo-500'
+                              : item.type === 'campaign_event'
+                              ? 'bg-emerald-500'
+                              : 'bg-blue-500'
+                          }`}
+                        />
+
+                        {/* 1. Status Change */}
+                        {item.type === 'status_change' ? (
+                          <div className="rounded-lg border border-slate-200/90 bg-white dark:bg-slate-900/60 dark:border-slate-800 p-3 shadow-2xs hover:border-slate-300 transition-colors">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-semibold text-slate-500">Stage Update:</span>
+                                {item.from && item.from !== item.to ? (
+                                  <div className="inline-flex items-center gap-1.5 text-xs font-semibold">
+                                    <span className={`px-2 py-0.5 rounded ${STATUS_STYLES[item.from as LeadStatus] || 'bg-slate-100 text-slate-700'}`}>
+                                      {item.from}
+                                    </span>
+                                    <ArrowRight className="w-3 h-3 text-slate-400" />
+                                    <span className={`px-2 py-0.5 rounded ${STATUS_STYLES[item.to as LeadStatus] || 'bg-slate-100 text-slate-700'}`}>
+                                      {item.to}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${STATUS_STYLES[item.to as LeadStatus] || 'bg-slate-100 text-slate-700'}`}>
+                                    {item.to || 'Stage Recorded'}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
+                                <Calendar className="w-3 h-3 text-slate-400" />
+                                {formatDateTime(item.timestamp)}
+                              </span>
+                            </div>
+
+                            {item.reason && (
+                              <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 bg-slate-50 dark:bg-slate-800/50 rounded-md px-2.5 py-1.5 italic">
+                                Reason: "{item.reason}"
+                              </p>
+                            )}
+
+                            {authorName && (
+                              <div className="text-[11px] text-slate-400 mt-2 flex items-center gap-1.5">
+                                <span className="w-3.5 h-3.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center text-[9px] font-bold">
+                                  {authorName.charAt(0).toUpperCase()}
+                                </span>
+                                <span>Updated by {authorName}</span>
+                              </div>
+                            )}
+                          </div>
+                        ) : item.type === 'quotation' ? (
+                          /* 2. Quotation Milestone */
+                          <div className="rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 p-4 border border-indigo-200/80 dark:border-indigo-900 shadow-2xs">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <div className="flex items-center gap-2.5">
+                                <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 shrink-0">
+                                  <FileText className="w-4 h-4" />
+                                </span>
+                                <div>
+                                  <span className="text-sm font-bold text-indigo-950 dark:text-indigo-200">
+                                    {item.reason || `Quotation #${item.referenceCode}`}
+                                  </span>
+                                </div>
+                              </div>
+                              {typeof item.amount === 'number' && (
+                                <span className="text-xs font-bold text-indigo-800 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900 px-2.5 py-1 rounded-md">
+                                  Value: ₹{((item.amount || 0) / 100).toLocaleString('en-IN')}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-indigo-600 dark:text-indigo-400 mt-2.5 flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              <span>{formatDateTime(item.timestamp)}</span>
+                            </div>
+                          </div>
+                        ) : item.type === 'campaign_event' ? (
+                          /* 3. Campaign Milestone */
+                          <div className="rounded-xl bg-emerald-50/70 dark:bg-emerald-950/40 p-4 border border-emerald-200/80 dark:border-emerald-900 shadow-2xs">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <div className="flex items-center gap-2.5">
+                                <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 shrink-0">
+                                  <Briefcase className="w-4 h-4" />
+                                </span>
+                                <div>
+                                  <span className="text-sm font-bold text-emerald-950 dark:text-emerald-200">
+                                    {item.reason || `Campaign: ${item.campaignName}`}
+                                  </span>
+                                </div>
+                              </div>
+                              {typeof item.amount === 'number' && item.amount > 0 && (
+                                <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900 px-2.5 py-1 rounded-md">
+                                  Contract: ₹{((item.amount || 0) / 100).toLocaleString('en-IN')}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-2.5 flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              <span>{formatDateTime(item.timestamp)}</span>
+                            </div>
+                          </div>
+                        ) : item.type === 'manager_review' ? (
+                          /* 4. Manager Approval */
+                          <div className="rounded-xl bg-amber-50/80 dark:bg-amber-950/40 p-4 border border-amber-200/90 dark:border-amber-900 shadow-2xs">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <div className="flex items-center gap-2 text-sm font-bold text-amber-900 dark:text-amber-300">
+                                <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                                <span>Manager Review Sign-off</span>
+                              </div>
+                              <span className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
+                                {formatDateTime(item.timestamp)}
+                              </span>
+                            </div>
+                            {item.remarks && (
+                              <p className="text-xs text-amber-800 dark:text-amber-300 mt-2 bg-amber-100/50 dark:bg-amber-900/30 rounded-md p-2 font-medium">
+                                Remarks: "{item.remarks}"
+                              </p>
+                            )}
+                            {authorName && (
+                              <div className="text-[11px] text-amber-700/80 dark:text-amber-400 mt-2 flex items-center gap-1">
+                                <User className="w-3 h-3" />
+                                <span>Reviewed by {authorName}</span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          /* 5. Follow-up / Client Interaction */
+                          <div className="rounded-xl border border-slate-200 bg-white dark:bg-slate-900/80 dark:border-slate-800 p-4 shadow-2xs hover:border-slate-300 transition-colors">
+                            <div className="flex items-start justify-between gap-3 flex-wrap">
+                              <div className="flex items-center gap-2.5 flex-wrap">
+                                <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
+                                  {renderFollowUpIcon(item.followUpType)}
+                                </span>
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-sm font-bold text-slate-900 dark:text-white">
+                                      {item.followUpType || 'Interaction'}
+                                    </span>
+                                    {item.reason && (
+                                      <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                                        • {item.reason}
+                                      </span>
+                                    )}
+                                    {item.campaignName && (
+                                      <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
+                                        Campaign: {item.campaignName}
+                                      </span>
+                                    )}
+                                    {item.contactedPerson && (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-[#8B2424] border border-[#F2CACA] dark:bg-red-950/60 dark:text-red-300 dark:border-red-900">
+                                        <User className="w-3 h-3 shrink-0" />
+                                        With: {item.contactedPerson}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {item.nextActionDate && (
+                                <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 px-2.5 py-1 rounded-lg">
+                                  <Clock className="w-3 h-3 shrink-0" />
+                                  <span>Next: {formatDateTime(item.nextActionDate)}</span>
+                                </span>
+                              )}
+                            </div>
+
+                            {(item.remarks || item.note) && (
+                              <div className="mt-3 text-sm text-slate-800 dark:text-slate-200 bg-slate-50/80 dark:bg-slate-800/50 rounded-lg p-3 border border-slate-100 dark:border-slate-800 leading-relaxed">
+                                {item.remarks || item.note}
+                              </div>
+                            )}
+
+                            <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-400 flex-wrap pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                              <div className="flex items-center gap-3 flex-wrap">
+                                {authorName && (
+                                  <span className="inline-flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-300">
+                                    <span className="w-4 h-4 rounded-full bg-[#8B2424] text-white flex items-center justify-center text-[9px] font-bold">
+                                      {authorName.charAt(0).toUpperCase()}
+                                    </span>
+                                    <span>{authorName}</span>
+                                  </span>
+                                )}
+                                {durationText && (
+                                  <span className="text-slate-500">
+                                    Duration: <span className="font-semibold text-slate-700 dark:text-slate-300">{durationText}</span>
+                                  </span>
+                                )}
+                                {item.delayResponsibility && (
+                                  <span className="text-rose-600 font-medium">
+                                    Delay: {item.delayResponsibility}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="font-medium text-slate-400">{formatDateTime(item.timestamp)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Cycle Restart Banner */}
+                      {isCycleRestart && (
+                        <div className="my-2 -ml-6 flex items-center gap-2">
+                          <div className="h-px flex-1 bg-purple-200 dark:bg-purple-900" />
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-50 px-2.5 py-0.5 text-[11px] font-bold text-purple-700 dark:bg-purple-950 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shadow-2xs">
+                            <RotateCw className="w-3 h-3 shrink-0" />
+                            <span>Cycle #{item.cycle || 2}: Re-opened Inquiry</span>
+                          </span>
+                          <div className="h-px flex-1 bg-purple-200 dark:bg-purple-900" />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        );
+      })()}
 
       {/* Tab: Documents */}
       {activeTab === 'documents' && (

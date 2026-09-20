@@ -1137,6 +1137,9 @@ export class LeadsService {
    */
   static async getActivity(id: string, ctx: RequestContext): Promise<{ activities: any[] }> {
     const lead = await LeadsService.getLead(id, ctx);
+    if (lead.populate) {
+      await lead.populate('callLogs.user statusHistory.changedBy managerApproval.approvedBy', 'name email role');
+    }
     const leadObjId = toObjectId(id);
 
     // Fetch linked quotations and campaigns in parallel (with safe fallback for disconnected test environments)
