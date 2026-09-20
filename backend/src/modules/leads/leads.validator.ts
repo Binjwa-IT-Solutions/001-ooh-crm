@@ -48,7 +48,10 @@ export const logFollowUpSchema = z.object({
   remarks: z.string().trim().optional(),
   note: z.string().trim().optional(),
   loggedAt: z.coerce.date().optional(),
-  nextActionDate: z.coerce.date().optional(),
+  nextActionDate: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : val),
+    z.coerce.date().nullable().optional(),
+  ),
   delayResponsibility: z.string().trim().optional(),
   durationSec: z.coerce.number().min(0).optional(),
   budget: z.coerce
@@ -87,7 +90,10 @@ export const createLeadSchema = z.object({
   reason: z.string().trim().optional(),
   remarks: z.string().trim().optional(),
   note: z.string().trim().optional(),
-  nextActionDate: z.coerce.date().optional(),
+  nextActionDate: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : val),
+    z.coerce.date().nullable().optional(),
+  ),
   delayResponsibility: z.string().trim().optional(),
   durationSec: z.coerce.number().min(0).optional(),
 });
@@ -155,7 +161,10 @@ export const changeStatusSchema = z.object({
 export const updateLeadSchema = createLeadSchema.partial().extend({
   status: z.enum(LEAD_STATUSES).optional(),
   lostReason: z.string().trim().optional(),
-  nextActionDate: z.coerce.date().optional(),
+  nextActionDate: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : val),
+    z.coerce.date().nullable().optional(),
+  ),
   assignedTo: z.string().nullable().optional(),
 });
 

@@ -192,6 +192,39 @@ test('logFollowUpLead records followUpType, reason, and nextActionDate', async (
   }
 });
 
+test('logFollowUpLead auto-clears nextActionDate when empty or omitted (Option 1)', async () => {
+  const oldPastDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+  const mockLead: any = {
+    _id: '64b7f9a1c2d3e4f5a6b7c8d9',
+    status: 'Contacted',
+    nextActionDate: oldPastDate,
+    callLogs: [],
+    save: async function () { return this; },
+    populate: async function () { return this; },
+  };
+
+  const origGetLead = LeadsService.getLead;
+  LeadsService.getLead = async () => mockLead;
+  try {
+    const updated = await LeadsService.logFollowUpLead(
+      '64b7f9a1c2d3e4f5a6b7c8d9',
+      {
+        followUpType: 'Call',
+        reason: 'General Follow-up',
+        remarks: 'Client spoke, no immediate next action scheduled',
+        // nextActionDate omitted
+      },
+      FAKE_USER_CTX,
+    );
+
+    assert.equal(updated.callLogs.length, 1);
+    assert.equal(updated.nextActionDate, null);
+    assert.equal(updated.callLogs[0].nextActionDate, null);
+  } finally {
+    LeadsService.getLead = origGetLead;
+  }
+});
+
 test('managerApproveLead records approval and remarks', async () => {
   const mockLead: any = {
     _id: '64b7f9a1c2d3e4f5a6b7c8d9',

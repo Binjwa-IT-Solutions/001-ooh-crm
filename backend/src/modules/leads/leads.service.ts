@@ -805,7 +805,7 @@ export class LeadsService {
       remarks?: string;
       note?: string;
       loggedAt?: Date;
-      nextActionDate?: Date;
+      nextActionDate?: Date | null;
       delayResponsibility?: string;
       durationSec?: number;
       budget?: number;
@@ -843,7 +843,11 @@ export class LeadsService {
       reason: payload.reason ?? '',
       remarks: payload.remarks || payload.note || '',
       note: payload.note || payload.remarks || '',
-      nextActionDate: payload.nextActionDate || undefined,
+      nextActionDate: payload.nextActionDate instanceof Date
+        ? payload.nextActionDate
+        : payload.nextActionDate
+          ? new Date(payload.nextActionDate)
+          : null,
       delayResponsibility: payload.delayResponsibility || undefined,
       durationSec: payload.durationSec ?? undefined,
       createdAt: interactionTime,
@@ -876,9 +880,11 @@ export class LeadsService {
       lead.email = payload.email.toLowerCase().trim();
     }
 
-    if (payload.nextActionDate) {
-      lead.nextActionDate = payload.nextActionDate;
-    }
+    lead.nextActionDate = payload.nextActionDate instanceof Date
+      ? payload.nextActionDate
+      : payload.nextActionDate
+        ? new Date(payload.nextActionDate)
+        : null;
 
     if (followUpEntry.followUpType === 'Call' && !lead.firstCallAt) {
       lead.firstCallAt = interactionTime;
@@ -914,7 +920,7 @@ export class LeadsService {
    */
   static async logCallLead(
     id: string,
-    payload: { note?: string; durationSec?: number; followUpType?: FollowUpType; reason?: string; loggedAt?: Date; nextActionDate?: Date; delayResponsibility?: string },
+    payload: { note?: string; durationSec?: number; followUpType?: FollowUpType; reason?: string; loggedAt?: Date; nextActionDate?: Date | null; delayResponsibility?: string },
     ctx: RequestContext,
   ): Promise<ILead> {
     return LeadsService.logFollowUpLead(id, payload, ctx);

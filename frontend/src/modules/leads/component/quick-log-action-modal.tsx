@@ -227,7 +227,7 @@ export default function QuickLogActionModal({
         remarks: note.trim(),
         note: note.trim(),
         loggedAt: loggedAt ? new Date(loggedAt).toISOString() : undefined,
-        ...(nextActionDate ? { nextActionDate: new Date(nextActionDate).toISOString() } : {}),
+        nextActionDate: nextActionDate ? new Date(nextActionDate).toISOString() : null,
       };
 
       if (followUpType === 'Call' && durationSec.trim()) {
