@@ -218,7 +218,7 @@ export default function NewLeadPage() {
                   className="inline-flex items-center gap-1 text-xs font-semibold text-[#8B2424] hover:text-[#6E1D1D] dark:text-red-400 dark:hover:text-red-300 transition"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>+ Add Secondary Contact</span>
+                  <span>Add Secondary Contact</span>
                 </button>
               )}
             </div>
