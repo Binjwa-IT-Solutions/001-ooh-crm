@@ -10,7 +10,8 @@ import { LeadStatus, LeadSource, Lead, LogCallValues } from '@/modules/leads/typ
 import { Card, Button, Badge, Spinner, Field, SelectField, Alert, Modal, TextAreaField } from '@/shared/ui';
 import LogCallModal from '@/modules/leads/component/log-call-modal';
 import QuickLogActionModal from '@/modules/leads/component/quick-log-action-modal';
-import { Timer, CheckCircle2, AlertCircle, Building2, Phone, Mail, MapPin, Info, Clock, ArrowUpDown, Download, Plus, ChevronDown, X, Check } from 'lucide-react';
+import EditLeadModal from '@/modules/leads/component/edit-lead-modal';
+import { Timer, CheckCircle2, AlertCircle, Building2, Phone, Mail, MapPin, Info, Clock, ArrowUpDown, Download, Plus, ChevronDown, X, Check, Pencil } from 'lucide-react';
 
 const STATUS_STYLES: Record<string, string> = {
   New: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300',
@@ -301,6 +302,9 @@ export default function LeadsPage() {
   // Claim Review Modal State
   const [claimReviewLead, setClaimReviewLead] = useState<Lead | null>(null);
   const [isClaiming, setIsClaiming] = useState(false);
+
+  // Edit Lead Modal State
+  const [editTargetLead, setEditTargetLead] = useState<Lead | null>(null);
 
   const filters = {
     search,
@@ -811,6 +815,14 @@ export default function LeadsPage() {
                             </Link>
                             <Button
                               variant="ghost"
+                              className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                              title="Edit Lead Details"
+                              onClick={() => setEditTargetLead(lead)}
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
                               className="bg-primary-100 text-primary hover:bg-[#F2CACA] border border-primary/20 font-medium shadow-2xs"
                               onClick={() => openLogModal(lead._id || lead.id)}
                             >
@@ -1088,6 +1100,17 @@ export default function LeadsPage() {
           </div>
         )}
       </Modal>
+
+      {/* Edit Lead Modal */}
+      <EditLeadModal
+        isOpen={Boolean(editTargetLead)}
+        lead={editTargetLead}
+        onClose={() => setEditTargetLead(null)}
+        onSuccess={async () => {
+          showToast('Lead updated successfully', 'success');
+          await mutate();
+        }}
+      />
 
       {/* Toasts */}
       <div className="fixed right-6 bottom-6 flex flex-col gap-2">

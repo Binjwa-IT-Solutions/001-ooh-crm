@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, Field, Button, Alert, TextAreaField, SelectField } from '@/shared/ui';
 import { LeadsSelect } from '@/modules/leads/components/leads-select';
 import { leadsApi } from '@/modules/leads/api';
-import { ChevronDown, ChevronUp, User, Users, Building2, MapPin, Phone, Briefcase, Plus, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Users, Building2, Plus, X, Sparkles, Loader2 } from 'lucide-react';
 import {
+  Lead,
   LeadSource,
   FOLLOW_UP_TYPES,
   FOLLOW_UP_REASONS,
@@ -32,8 +33,105 @@ export default function NewLeadPage() {
   const [showFollowUpSection, setShowFollowUpSection] = useState(true);
   const [showSecondaryContact, setShowSecondaryContact] = useState(false);
 
+  // Form State for client profile (enables autocomplete & auto-fill)
+  const [formState, setFormState] = useState({
+    source: 'Manual' as LeadSource,
+    companyName: '',
+    email: '',
+    city: '',
+    companyLocation: '',
+    companyAddress: '',
+    contactPerson: '',
+    designation: '',
+    mobile: '',
+    secondaryContactPerson: '',
+    secondaryDesignation: '',
+    secondaryMobile: '',
+  });
+
+  // Autocomplete / Typeahead State
+  const [companySuggestions, setCompanySuggestions] = useState<Lead[]>([]);
+  const [isSearchingCompany, setIsSearchingCompany] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [autofilledNotice, setAutofilledNotice] = useState<string | null>(null);
+
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const suggestionsContainerRef = useRef<HTMLDivElement | null>(null);
+
   // Field-level validations
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Close suggestions dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (suggestionsContainerRef.current && !suggestionsContainerRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleCompanyNameChange = (val: string) => {
+    setFormState((prev) => ({ ...prev, companyName: val }));
+    if (errors.companyName) setErrors((prev) => ({ ...prev, companyName: '' }));
+
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    if (!val.trim() || val.trim().length < 2) {
+      setCompanySuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    setIsSearchingCompany(true);
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await leadsApi.list({ search: val.trim(), limit: 6 });
+        const seen = new Set<string>();
+        const uniqueLeads: Lead[] = [];
+        for (const l of res.data || []) {
+          const norm = (l.companyName || '').trim().toLowerCase();
+          if (norm && !seen.has(norm)) {
+            seen.add(norm);
+            uniqueLeads.push(l);
+          }
+        }
+        setCompanySuggestions(uniqueLeads);
+        setShowSuggestions(uniqueLeads.length > 0);
+      } catch {
+        setCompanySuggestions([]);
+      } finally {
+        setIsSearchingCompany(false);
+      }
+    }, 300);
+  };
+
+  const handleSelectCompany = (lead: Lead) => {
+    setFormState((prev) => ({
+      ...prev,
+      companyName: lead.companyName || prev.companyName,
+      contactPerson: lead.contactPerson || prev.contactPerson,
+      designation: lead.designation || prev.designation,
+      mobile: lead.mobile || prev.mobile,
+      email: lead.email || prev.email,
+      city: lead.city || prev.city,
+      companyLocation: lead.companyLocation || prev.companyLocation,
+      companyAddress: lead.companyAddress || prev.companyAddress,
+      secondaryContactPerson: lead.secondaryContactPerson || prev.secondaryContactPerson,
+      secondaryDesignation: lead.secondaryDesignation || prev.secondaryDesignation,
+      secondaryMobile: lead.secondaryMobile || prev.secondaryMobile,
+    }));
+
+    if (lead.secondaryContactPerson || lead.secondaryMobile) {
+      setShowSecondaryContact(true);
+    }
+
+    setAutofilledNotice(
+      `Autofilled client details from "${lead.companyName}" (${lead.contactPerson || lead.mobile})`
+    );
+    setShowSuggestions(false);
+    setCompanySuggestions([]);
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -42,22 +140,21 @@ export default function NewLeadPage() {
     setErrors({});
 
     const formData = new FormData(e.currentTarget);
-    const companyName = (formData.get('companyName') as string) || '';
-    const companyAddress = (formData.get('companyAddress') as string) || '';
-    const companyLocation = (formData.get('companyLocation') as string) || '';
-    const city = (formData.get('city') as string) || '';
-    const email = (formData.get('email') as string) || '';
-    const source = (formData.get('source') as LeadSource) || 'Manual';
 
-    // Primary Concern Person (Mandatory)
-    const contactPerson = (formData.get('contactPerson') as string) || '';
-    const designation = (formData.get('designation') as string) || '';
-    const mobile = (formData.get('mobile') as string) || '';
-
-    // Secondary Concern Person (Optional)
-    const secondaryContactPerson = (formData.get('secondaryContactPerson') as string) || '';
-    const secondaryDesignation = (formData.get('secondaryDesignation') as string) || '';
-    const secondaryMobile = (formData.get('secondaryMobile') as string) || '';
+    const {
+      companyName,
+      companyAddress,
+      companyLocation,
+      city,
+      email,
+      source,
+      contactPerson,
+      designation,
+      mobile,
+      secondaryContactPerson,
+      secondaryDesignation,
+      secondaryMobile,
+    } = formState;
 
     // Optional follow-up & ATR fields
     const followUpType = formData.get('followUpType') as FollowUpType;
@@ -110,7 +207,10 @@ export default function NewLeadPage() {
     }
 
     if (nextActionDate) {
-      payload.nextActionDate = new Date(nextActionDate).toISOString();
+      const scheduled = new Date(`${nextActionDate}T11:00:00`);
+      payload.nextActionDate = isNaN(scheduled.getTime())
+        ? new Date(nextActionDate).toISOString()
+        : scheduled.toISOString();
     }
 
     if (budget || locationPreference || campaignDuration) {
@@ -146,6 +246,23 @@ export default function NewLeadPage() {
         </Alert>
       )}
 
+      {autofilledNotice && (
+        <div className="flex items-center justify-between rounded-lg bg-emerald-50 border border-emerald-200 px-3.5 py-2.5 text-xs text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 shadow-xs">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{autofilledNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAutofilledNotice(null)}
+            className="text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 p-0.5 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+            title="Dismiss notice"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       <Card className="p-6">
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Section 1: Company & Office Location Details */}
@@ -164,20 +281,72 @@ export default function NewLeadPage() {
                 placeholder="Select source..."
                 error={errors.source}
                 defaultValue="Manual"
+                value={formState.source}
+                onValueChange={(val) => setFormState((p) => ({ ...p, source: val as LeadSource }))}
               />
 
-              <Field
-                label="Company Name *"
-                name="companyName"
-                placeholder="e.g. Sigma Trade Wings"
-                error={errors.companyName}
-              />
+              {/* Company Name with Autocomplete */}
+              <div ref={suggestionsContainerRef} className="relative">
+                <Field
+                  label="Company Name *"
+                  name="companyName"
+                  placeholder="e.g. Sigma Trade Wings"
+                  value={formState.companyName}
+                  onChange={(e) => handleCompanyNameChange(e.target.value)}
+                  onFocus={() => {
+                    if (companySuggestions.length > 0) setShowSuggestions(true);
+                  }}
+                  autoComplete="off"
+                  error={errors.companyName}
+                />
+                {isSearchingCompany && (
+                  <div className="absolute right-3 top-9 text-slate-400 pointer-events-none">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  </div>
+                )}
+
+                {/* Suggestions Dropdown */}
+                {showSuggestions && companySuggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-800 dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800/60">
+                    <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider bg-slate-50/60 dark:bg-slate-900/60">
+                      Existing Clients (Click to Auto-fill)
+                    </div>
+                    {companySuggestions.map((s) => (
+                      <button
+                        key={s._id || s.id}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleSelectCompany(s);
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-800/70 transition-colors flex flex-col gap-0.5"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-slate-900 dark:text-white">
+                            {s.companyName}
+                          </span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                            {s.source}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 flex-wrap">
+                          <span className="font-medium text-slate-700 dark:text-slate-300">{s.contactPerson}</span>
+                          {s.mobile && <span>• {s.mobile}</span>}
+                          {s.city && <span>• {s.city}</span>}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <Field
                 label="Official Email (Optional)"
                 name="email"
                 type="email"
                 placeholder="contact@company.com"
+                value={formState.email}
+                onChange={(e) => setFormState((p) => ({ ...p, email: e.target.value }))}
                 error={errors.email}
               />
 
@@ -185,6 +354,8 @@ export default function NewLeadPage() {
                 label="City (Optional)"
                 name="city"
                 placeholder="e.g. Mumbai"
+                value={formState.city}
+                onChange={(e) => setFormState((p) => ({ ...p, city: e.target.value }))}
                 error={errors.city}
               />
 
@@ -192,12 +363,16 @@ export default function NewLeadPage() {
                 label="Company Location / Landmark (Optional)"
                 name="companyLocation"
                 placeholder="e.g. BKC / Andheri East / Industrial Area"
+                value={formState.companyLocation}
+                onChange={(e) => setFormState((p) => ({ ...p, companyLocation: e.target.value }))}
               />
 
               <Field
                 label="Company Address (Optional)"
                 name="companyAddress"
                 placeholder="e.g. Suite 402, Trade Tower, Opposite Metro Station"
+                value={formState.companyAddress}
+                onChange={(e) => setFormState((p) => ({ ...p, companyAddress: e.target.value }))}
               />
             </div>
           </div>
@@ -229,6 +404,8 @@ export default function NewLeadPage() {
                 label="Contact Person Name *"
                 name="contactPerson"
                 placeholder="e.g. Rajesh Sharma"
+                value={formState.contactPerson}
+                onChange={(e) => setFormState((p) => ({ ...p, contactPerson: e.target.value }))}
                 error={errors.contactPerson}
               />
 
@@ -236,6 +413,8 @@ export default function NewLeadPage() {
                 label="Designation (Optional)"
                 name="designation"
                 placeholder="e.g. Marketing Director / CMO"
+                value={formState.designation}
+                onChange={(e) => setFormState((p) => ({ ...p, designation: e.target.value }))}
               />
 
               <Field
@@ -243,11 +422,13 @@ export default function NewLeadPage() {
                 name="mobile"
                 type="tel"
                 placeholder="+91 98765 43210"
+                value={formState.mobile}
+                onChange={(e) => setFormState((p) => ({ ...p, mobile: e.target.value }))}
                 error={errors.mobile}
               />
             </div>
 
-            {/* Secondary Contact Row (Smooth toggle) */}
+            {/* Secondary Contact Row */}
             {showSecondaryContact && (
               <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/40 space-y-3">
                 <div className="flex items-center justify-between">
@@ -269,12 +450,16 @@ export default function NewLeadPage() {
                     label="Secondary Person Name"
                     name="secondaryContactPerson"
                     placeholder="e.g. Amit Verma"
+                    value={formState.secondaryContactPerson}
+                    onChange={(e) => setFormState((p) => ({ ...p, secondaryContactPerson: e.target.value }))}
                   />
 
                   <Field
                     label="Secondary Designation"
                     name="secondaryDesignation"
                     placeholder="e.g. Media Planner / Manager"
+                    value={formState.secondaryDesignation}
+                    onChange={(e) => setFormState((p) => ({ ...p, secondaryDesignation: e.target.value }))}
                   />
 
                   <Field
@@ -282,6 +467,8 @@ export default function NewLeadPage() {
                     name="secondaryMobile"
                     type="tel"
                     placeholder="+91 91234 56789"
+                    value={formState.secondaryMobile}
+                    onChange={(e) => setFormState((p) => ({ ...p, secondaryMobile: e.target.value }))}
                   />
                 </div>
               </div>
@@ -345,7 +532,8 @@ export default function NewLeadPage() {
                   <Field
                     label="Scheduled Next Action Date"
                     name="nextActionDate"
-                    type="datetime-local"
+                    type="date"
+                    min={new Date().toISOString().split('T')[0]}
                   />
 
                   <Field

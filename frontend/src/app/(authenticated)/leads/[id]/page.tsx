@@ -19,6 +19,7 @@ import {
 import { Card, Badge, Spinner, Button, Field, Alert, Modal, TextAreaField } from '@/shared/ui';
 import { LeadsSelect } from '@/modules/leads/components/leads-select';
 import LogCallModal from '@/modules/leads/component/log-call-modal';
+import EditLeadModal from '@/modules/leads/component/edit-lead-modal';
 import { useAuth } from '@/shared/auth/auth-context';
 import { sessionStore } from '@/shared/auth/session-store';
 import { appConfig } from '@/shared/config';
@@ -38,6 +39,7 @@ import {
   MapPin,
   FileText,
   Plus,
+  Pencil,
   ArrowRight,
   RotateCw,
   Layers,
@@ -176,6 +178,9 @@ export default function LeadDetailPage() {
 
   // Log Follow-up (ATR) Modal state
   const [logModalOpen, setLogModalOpen] = useState(false);
+
+  // Edit Lead Modal state
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   // Manager Approval Box state
   const [managerRemarks, setManagerRemarks] = useState('');
@@ -559,6 +564,15 @@ export default function LeadDetailPage() {
               </div>
             )
           )}
+
+          <Button
+            variant="secondary"
+            onClick={() => setIsEditModalOpen(true)}
+            className="!h-9 !px-3 inline-flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 !text-xs font-semibold shadow-2xs"
+          >
+            <Pencil className="w-3.5 h-3.5 shrink-0 text-slate-500" />
+            <span>Edit Lead</span>
+          </Button>
 
           <Button
             variant="ghost"
@@ -1703,6 +1717,16 @@ export default function LeadDetailPage() {
           secondaryContactPerson: lead.secondaryContactPerson,
           secondaryDesignation: lead.secondaryDesignation,
           secondaryMobile: lead.secondaryMobile,
+        }}
+      />
+
+      {/* Edit Lead Modal */}
+      <EditLeadModal
+        isOpen={isEditModalOpen}
+        lead={lead}
+        onClose={() => setIsEditModalOpen(false)}
+        onSuccess={async () => {
+          await mutate();
         }}
       />
 
