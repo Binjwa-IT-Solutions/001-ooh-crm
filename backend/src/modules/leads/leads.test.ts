@@ -868,6 +868,33 @@ test('releaseBreachedClaimedLeads does NOT release leads that have call logs or 
   }
 });
 
+test('getLeadStats returns active, overdue, unclaimed, and won metrics', async () => {
+  const origCount = Lead.countDocuments;
+  const origAggregate = Lead.aggregate;
+
+  (Lead as any).countDocuments = async (query: any) => {
+    if (query.nextActionDate) return 3;
+    if (query.status === 'New' && query.assignedTo === null) return 2;
+    return 15;
+  };
+
+  (Lead as any).aggregate = async () => [
+    { _id: null, count: 5, totalRevenue: 15000000 },
+  ];
+
+  try {
+    const stats = await LeadsService.getLeadStats(FAKE_USER_CTX);
+    assert.equal(stats.totalActive, 15);
+    assert.equal(stats.overdueCount, 3);
+    assert.equal(stats.unclaimedCount, 2);
+    assert.equal(stats.wonCount, 5);
+    assert.equal(stats.wonRevenue, 15000000);
+  } finally {
+    Lead.countDocuments = origCount;
+    Lead.aggregate = origAggregate;
+  }
+});
+
 
 
 

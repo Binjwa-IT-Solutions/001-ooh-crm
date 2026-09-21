@@ -36,6 +36,11 @@ export class LeadsController {
     res.status(200).json({ data: cities });
   }
 
+  static async getStats(req: Request, res: Response) {
+    const stats = await LeadsService.getLeadStats(req.ctx!);
+    res.status(200).json(stats);
+  }
+
   static async list(req: Request, res: Response) {
     const filters = listLeadsSchema.parse(req.query);
     const { leads, total } = await LeadsService.listLeads(filters, req.ctx!);

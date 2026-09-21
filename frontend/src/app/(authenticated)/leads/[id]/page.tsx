@@ -143,6 +143,17 @@ function formatDateTime(dateStr?: string | Date | null) {
   });
 }
 
+function formatDate(dateStr?: string | Date | null) {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
 function formatDuration(seconds?: number | null): string {
   if (typeof seconds !== 'number' || seconds <= 0) return '';
   const mins = Math.floor(seconds / 60);
@@ -355,7 +366,11 @@ export default function LeadDetailPage() {
 
   // Check if Next Action is overdue (only applicable for active, unclosed leads)
   const isClosed = lead.status === 'Won' || lead.status === 'Lost' || lead.status === 'Rejected';
-  const isOverdue = !isClosed && Boolean(lead.nextActionDate && new Date(lead.nextActionDate).getTime() < Date.now());
+  const isOverdue = !isClosed && Boolean(lead.nextActionDate && (() => {
+    const d = new Date(lead.nextActionDate);
+    d.setHours(23, 59, 59, 999);
+    return d.getTime() < Date.now();
+  })());
 
   const handleQualify = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -484,7 +499,7 @@ export default function LeadDetailPage() {
                 }`}
               >
                 <Clock className="w-3.5 h-3.5 shrink-0" />
-                <span>Next: {formatDateTime(lead.nextActionDate)}</span>
+                <span>Next: {formatDate(lead.nextActionDate)}</span>
                 {isOverdue && (
                   <span className="ml-0.5 rounded bg-rose-200 px-1 py-0.1 text-[10px] font-bold text-rose-800 dark:bg-rose-900 dark:text-rose-200">
                     Overdue
@@ -710,7 +725,7 @@ export default function LeadDetailPage() {
               <div>
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Scheduled Next Action</h3>
                 <p className="text-base font-semibold text-blue-600 dark:text-blue-400">
-                  {formatDateTime(lead.nextActionDate)}
+                  {formatDate(lead.nextActionDate)}
                 </p>
               </div>
             )}
@@ -726,7 +741,9 @@ export default function LeadDetailPage() {
               (lead.qualification.budget ||
                 lead.qualification.campaignDuration ||
                 lead.qualification.locationPreference ||
-                lead.qualification.city) && (
+                lead.qualification.city ||
+                lead.qualification.notes ||
+                lead.qualification.creativeRequirements) && (
                 <div className="sm:col-span-2 pt-4 border-t border-slate-200 dark:border-slate-800">
                   <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
                     Qualification Overview
@@ -771,6 +788,22 @@ export default function LeadDetailPage() {
                         <p className="text-xs text-slate-400">Target Audience</p>
                         <p className="text-xs font-medium text-slate-700 dark:text-slate-300">
                           {lead.qualification.targetAudience}
+                        </p>
+                      </div>
+                    )}
+                    {lead.qualification.creativeRequirements && (
+                      <div className="col-span-2 sm:col-span-4 pt-2 border-t border-slate-200/80 dark:border-slate-800">
+                        <p className="text-xs text-slate-400 font-medium">Creative Requirements</p>
+                        <p className="text-xs text-slate-700 dark:text-slate-300 mt-0.5">
+                          {lead.qualification.creativeRequirements}
+                        </p>
+                      </div>
+                    )}
+                    {lead.qualification.notes && (
+                      <div className="col-span-2 sm:col-span-4 pt-2 border-t border-slate-200/80 dark:border-slate-800">
+                        <p className="text-xs text-slate-400 mb-1 font-medium">Client Requirements & Notes</p>
+                        <p className="text-xs text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 rounded-lg p-3 border border-slate-200 dark:border-slate-800 whitespace-pre-line leading-relaxed">
+                          {lead.qualification.notes}
                         </p>
                       </div>
                     )}
@@ -916,12 +949,15 @@ export default function LeadDetailPage() {
                 defaultValue={lead.qualification?.creativeRequirements}
                 placeholder="e.g. Dynamic LED billboards, high resolution"
               />
-              <Field
-                label="Notes"
-                name="notes"
-                defaultValue={lead.qualification?.notes}
-                placeholder="Any special notes or client constraints"
-              />
+              <div className="md:col-span-2">
+                <TextAreaField
+                  label="Client Requirements & Special Notes"
+                  name="notes"
+                  rows={4}
+                  defaultValue={lead.qualification?.notes}
+                  placeholder="Enter detailed client requirements, multi-city/area preferences, site specifications, or campaign constraints..."
+                />
+              </div>
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
@@ -1074,7 +1110,11 @@ export default function LeadDetailPage() {
 
         // Check for upcoming / next follow-up
         const nextActionDate = lead.nextActionDate ? new Date(lead.nextActionDate) : null;
-        const isNextActionOverdue = nextActionDate ? nextActionDate.getTime() < Date.now() : false;
+        const isNextActionOverdue = lead.nextActionDate ? (() => {
+          const d = new Date(lead.nextActionDate);
+          d.setHours(23, 59, 59, 999);
+          return d.getTime() < Date.now();
+        })() : false;
 
         return (
           <Card className="p-6">
@@ -1137,7 +1177,7 @@ export default function LeadDetailPage() {
                         )}
                       </div>
                       <p className="text-sm font-semibold text-slate-900 dark:text-white mt-0.5">
-                        {formatDateTime(lead.nextActionDate)}
+                        {formatDate(lead.nextActionDate)}
                       </p>
                     </div>
                   </div>
@@ -1473,7 +1513,7 @@ export default function LeadDetailPage() {
                               {item.nextActionDate && (
                                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 px-2.5 py-1 rounded-lg">
                                   <Clock className="w-3 h-3 shrink-0" />
-                                  <span>Next: {formatDateTime(item.nextActionDate)}</span>
+                                  <span>Next: {formatDate(item.nextActionDate)}</span>
                                 </span>
                               )}
                             </div>

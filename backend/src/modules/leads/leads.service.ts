@@ -1371,5 +1371,43 @@ export class LeadsService {
     }
     return Array.from(cleanSet).sort((a, b) => a.localeCompare(b));
   }
+
+  static async getLeadStats(ctx: RequestContext): Promise<{
+    totalActive: number;
+    overdueCount: number;
+    unclaimedCount: number;
+    wonCount: number;
+    wonRevenue: number;
+  }> {
+    const matchBase: Record<string, any> = { deletedAt: null };
+    if (!['admin', 'manager', 'finance', 'hr', 'ops'].includes(ctx.user.role)) {
+      matchBase.assignedTo = toObjectId(ctx.user.id);
+    }
+
+    const [totalActive, overdueCount, unclaimedCount, wonStats] = await Promise.all([
+      Lead.countDocuments({
+        ...matchBase,
+        status: { $nin: ['Won', 'Lost', 'Rejected', 'Duplicate', 'duplicate'] },
+      }),
+      Lead.countDocuments({
+        ...matchBase,
+        status: { $nin: ['Won', 'Lost', 'Rejected', 'Duplicate', 'duplicate'] },
+        nextActionDate: { $ne: null, $lt: new Date() },
+      }),
+      Lead.countDocuments({ status: 'New', assignedTo: null, claimedBy: null, deletedAt: null }),
+      Lead.aggregate([
+        { $match: { ...matchBase, status: 'Won' } },
+        { $group: { _id: null, count: { $sum: 1 }, totalRevenue: { $sum: '$qualification.budget' } } },
+      ]),
+    ]);
+
+    return {
+      totalActive,
+      overdueCount,
+      unclaimedCount,
+      wonCount: wonStats[0]?.count || 0,
+      wonRevenue: wonStats[0]?.totalRevenue || 0,
+    };
+  }
 }
 

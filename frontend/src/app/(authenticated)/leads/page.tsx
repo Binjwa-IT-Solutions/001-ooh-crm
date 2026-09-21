@@ -53,20 +53,30 @@ function formatDateTime(dateStr?: string | Date | null) {
   });
 }
 
+function formatDate(dateStr?: string | Date | null) {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
 let toastIdCounter = 0;
 
 function getOverdueDetails(dateStr?: string | Date | null, now?: number) {
   if (!dateStr) return null;
   const d = new Date(dateStr);
+  d.setHours(23, 59, 59, 999);
   const currentMs = now ?? Date.now();
   const diffMs = currentMs - d.getTime();
   if (diffMs <= 0) return null;
   const hours = Math.floor(diffMs / (1000 * 60 * 60));
   const days = Math.floor(hours / 24);
   if (days > 0) return `${days}d overdue`;
-  if (hours > 0) return `${hours}h overdue`;
-  const mins = Math.max(1, Math.floor(diffMs / (1000 * 60)));
-  return `${mins}m overdue`;
+  return `1d overdue`;
 }
 
 function SlaCountdown({ end }: { end?: string | null }) {
@@ -306,6 +316,17 @@ export default function LeadsPage() {
   // Edit Lead Modal State
   const [editTargetLead, setEditTargetLead] = useState<Lead | null>(null);
 
+  // Executive Summary & Agent Filter State (For Admin & Manager)
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('');
+  const [agentOptions, setAgentOptions] = useState<{ _id: string; name: string; email: string; role: string }[]>([]);
+  const [stats, setStats] = useState<{
+    totalActive: number;
+    overdueCount: number;
+    unclaimedCount: number;
+    wonCount: number;
+    wonRevenue: number;
+  } | null>(null);
+
   const filters = {
     search,
     status: activeTab === 'rejected' ? ('Rejected' as LeadStatus) : status,
@@ -315,6 +336,7 @@ export default function LeadsPage() {
     limit: 25,
     ...(activeTab === 'unclaimed' ? { unassigned: true } : {}),
     ...(activeTab === 'my-leads' ? { assignedToMe: true } : {}),
+    ...(selectedAgentId && activeTab === 'all' ? { assignedTo: selectedAgentId } : {}),
     ...(overdueOnly && activeTab !== 'unclaimed' && activeTab !== 'rejected' ? { overdueOnly: true } : {}),
     ...(sortBy ? { sortBy, sortDir } : {}),
   };
@@ -325,6 +347,24 @@ export default function LeadsPage() {
 
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [availableCities, setAvailableCities] = useState<string[]>(['Indore', 'Mumbai', 'Bhopal', 'New Delhi']);
+
+  useEffect(() => {
+    if (isManagerOrAdmin) {
+      leadsApi.listAgents()
+        .then((res) => {
+          if (res.agents) setAgentOptions(res.agents);
+        })
+        .catch(() => {});
+    }
+  }, [isManagerOrAdmin]);
+
+  useEffect(() => {
+    if (isManagerOrAdmin && activeTab === 'all') {
+      leadsApi.getStats()
+        .then((res) => setStats(res))
+        .catch(() => {});
+    }
+  }, [isManagerOrAdmin, activeTab, data]);
 
   useEffect(() => {
     leadsApi.getCities()
@@ -532,7 +572,70 @@ export default function LeadsPage() {
         </button>
       </div>
 
-      <Card className="grid grid-cols-1 gap-8 p-6 md:grid-cols-2 xl:grid-cols-4">
+      {/* Executive KPI Summary Cards (All Leads Tab for Admin & Manager) */}
+      {isManagerOrAdmin && activeTab === 'all' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Card 1: Active Pipeline */}
+          <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Pipeline</p>
+              <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
+                {stats ? stats.totalActive : '-'}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Leads in active stages</p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 flex items-center justify-center shrink-0">
+              <Building2 className="w-5 h-5" />
+            </div>
+          </div>
+
+          {/* Card 2: Team Overdue */}
+          <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Team Overdue</p>
+              <p className="text-2xl font-bold text-rose-600 dark:text-rose-400 mt-1">
+                {stats ? stats.overdueCount : '-'}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Missed follow-up schedule</p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 flex items-center justify-center shrink-0">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+          </div>
+
+          {/* Card 3: Unclaimed Pool */}
+          <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Unclaimed Pool</p>
+              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">
+                {stats ? stats.unclaimedCount : '-'}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Live unassigned inquiries</p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Timer className="w-5 h-5" />
+            </div>
+          </div>
+
+          {/* Card 4: Won Deals & Value */}
+          <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Won Deals</p>
+              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                {stats ? stats.wonCount : '-'}
+              </p>
+              <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium mt-0.5">
+                {stats ? `₹${((stats.wonRevenue || 0) / 100).toLocaleString('en-IN')}` : '-'}
+              </p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Card className={`grid grid-cols-1 gap-6 p-6 md:grid-cols-2 ${isManagerOrAdmin && activeTab === 'all' ? 'xl:grid-cols-5' : 'xl:grid-cols-4'}`}>
         <Field
           label="Search"
           placeholder="Company or Mobile"
@@ -578,6 +681,18 @@ export default function LeadsPage() {
           onChange={(newCity) => { setCity(newCity); setPage(1); }}
           placeholder="All Cities"
         />
+        {isManagerOrAdmin && activeTab === 'all' && (
+          <SelectField
+            label="Assigned Agent"
+            options={[
+              { label: 'All Agents', value: '' },
+              ...agentOptions.map((a) => ({ label: `${a.name} (${a.role})`, value: a._id })),
+            ]}
+            value={selectedAgentId}
+            onChange={(e) => { setSelectedAgentId(e.target.value); setPage(1); }}
+            placeholder="All Agents"
+          />
+        )}
       </Card>
 
       {activeTab !== 'unclaimed' && activeTab !== 'rejected' && (
@@ -701,7 +816,11 @@ export default function LeadsPage() {
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                 {displayedLeads.map((lead: Lead) => {
                   const isClosed = lead.status === 'Won' || lead.status === 'Lost' || lead.status === 'Rejected';
-                  const isOverdue = !isClosed && Boolean(lead.nextActionDate && new Date(lead.nextActionDate).getTime() < currentTime);
+                  const isOverdue = !isClosed && Boolean(lead.nextActionDate && (() => {
+                    const d = new Date(lead.nextActionDate);
+                    d.setHours(23, 59, 59, 999);
+                    return d.getTime() < currentTime;
+                  })());
 
                   return (
                     <tr key={lead._id || lead.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
@@ -755,7 +874,7 @@ export default function LeadsPage() {
                                   }`}
                                 >
                                   {isOverdue && <AlertCircle className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />}
-                                  {formatDateTime(lead.nextActionDate)}
+                                  {formatDate(lead.nextActionDate)}
                                 </span>
                                 {overdueText && (
                                   <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 ml-0.5">

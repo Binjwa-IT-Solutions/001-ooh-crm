@@ -436,7 +436,7 @@ export default function QuickLogActionModal({
                   </p>
                   {latestLog.nextActionDate && (
                     <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-1 font-medium">
-                      Next Follow-up set to: {new Date(latestLog.nextActionDate).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      Next Follow-up set to: {new Date(latestLog.nextActionDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </p>
                   )}
                 </div>
