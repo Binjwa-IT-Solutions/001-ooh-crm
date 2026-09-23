@@ -35,6 +35,18 @@ export interface Quotation {
   rejectionReason?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  createdBy?: string | { _id?: string; name?: string; email?: string; role?: string };
+}
+
+export interface QuotationStats {
+  totalQuotedValue: number;
+  totalCount: number;
+  awaitingValue: number;
+  awaitingCount: number;
+  acceptedValue: number;
+  acceptedCount: number;
+  draftValue: number;
+  draftCount: number;
 }
 
 export interface QuotationsListResponse {
@@ -52,6 +64,8 @@ export interface QuotationFilters {
   search?: string;
   status?: string;
   leadId?: string;
+  agentId?: string;
+  createdBy?: string;
 }
 
 export interface CreateQuotationLineInput {

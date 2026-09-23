@@ -152,7 +152,7 @@ export default function NotificationBell() {
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         aria-label="View notifications"
-        className="relative -m-2.5 p-2.5 text-text-secondary hover:text-text-primary rounded-full border border-border-subtle shadow-sm ml-2 h-10 w-10 flex items-center justify-center transition-colors cursor-pointer hover:bg-slate-50 focus:outline-none"
+        className="relative -m-1.5 p-2.5 text-text-secondary hover:text-text-primary rounded-full border border-border-subtle shadow-sm ml-2 h-10 w-10 flex items-center justify-center transition-colors cursor-pointer hover:bg-slate-50 focus:outline-none"
       >
         <Bell className="h-5 w-5 text-gray-700" />
 

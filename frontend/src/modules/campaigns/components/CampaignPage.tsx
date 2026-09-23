@@ -21,10 +21,18 @@ import type {
 export default function CampaignPage() {
   const searchParams = useSearchParams();
   const urlLeadId = searchParams.get("leadId") || "";
-  const shouldCreate = searchParams.get("create") === "true";
+const shouldCreate = searchParams.get("create") === "true";
+const urlSearch = searchParams.get("search") || "";
 
-  const [filters, setFilters] =
-    useState<CampaignFiltersType>({});
+const [filters, setFilters] = useState<CampaignFiltersType>(() => ({
+  search: urlSearch || undefined,
+}));
+
+useEffect(() => {
+  if (urlSearch) {
+    setFilters((prev) => ({ ...prev, search: urlSearch }));
+  }
+}, [urlSearch]);
 
   const {
     campaigns,

@@ -113,9 +113,19 @@ export const leadsApi = {
   getCities: () =>
     api.get<{ data: string[] }>('/api/leads/cities'),
 
+  getStats: () =>
+    api.get<{
+      totalActive: number;
+      overdueCount: number;
+      unclaimedCount: number;
+      wonCount: number;
+      wonRevenue: number;
+    }>('/api/leads/stats'),
+
   uploadDocument: (id: string, formData: FormData) =>
     api.post<Lead>(`/api/leads/${id}/documents`, formData),
 
   deleteDocument: (id: string, docId: string) =>
     api.delete<Lead>(`/api/leads/${id}/documents/${docId}`),
 };
+

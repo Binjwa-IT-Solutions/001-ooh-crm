@@ -11,7 +11,7 @@ export const objectIdSchema = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid obj
 
 export const STATUS_TRANSITIONS: Record<string, string[]> = {
   New: ['Contacted', 'Lost', 'Rejected'],
-  Contacted: ['Interested', 'Lost'],
+  Contacted: ['Interested', 'Lost', 'Rejected'],
   Interested: ['Qualified', 'Lost'],
   Qualified: ['Proposal Sent', 'Negotiation', 'Lost'],
   'Proposal Sent': ['Negotiation', 'Won', 'Lost'],
@@ -48,7 +48,10 @@ export const logFollowUpSchema = z.object({
   remarks: z.string().trim().optional(),
   note: z.string().trim().optional(),
   loggedAt: z.coerce.date().optional(),
-  nextActionDate: z.coerce.date().optional(),
+  nextActionDate: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : val),
+    z.coerce.date().nullable().optional(),
+  ),
   delayResponsibility: z.string().trim().optional(),
   durationSec: z.coerce.number().min(0).optional(),
   budget: z.coerce
@@ -87,7 +90,10 @@ export const createLeadSchema = z.object({
   reason: z.string().trim().optional(),
   remarks: z.string().trim().optional(),
   note: z.string().trim().optional(),
-  nextActionDate: z.coerce.date().optional(),
+  nextActionDate: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : val),
+    z.coerce.date().nullable().optional(),
+  ),
   delayResponsibility: z.string().trim().optional(),
   durationSec: z.coerce.number().min(0).optional(),
 });
@@ -121,6 +127,17 @@ export const intakeLeadSchema = z
     category: z.string().trim().optional(),
     leadid: z.string().trim().optional(),
     lead_type: z.string().trim().optional(),
+    leadtype: z.string().trim().optional(),
+    prefix: z.string().trim().optional(),
+    date: z.string().trim().optional(),
+    time: z.string().trim().optional(),
+    brancharea: z.string().trim().optional(),
+    branchpin: z.string().trim().optional(),
+    dncmobile: z.union([z.string(), z.number()]).optional(),
+    dncphone: z.union([z.string(), z.number()]).optional(),
+    company: z.string().trim().optional(),
+    parentid: z.string().trim().optional(),
+    Area: z.string().trim().optional(),
     // Inbound email fields
     from: z.string().trim().optional(),
     to: z.string().trim().optional(),
@@ -155,7 +172,10 @@ export const changeStatusSchema = z.object({
 export const updateLeadSchema = createLeadSchema.partial().extend({
   status: z.enum(LEAD_STATUSES).optional(),
   lostReason: z.string().trim().optional(),
-  nextActionDate: z.coerce.date().optional(),
+  nextActionDate: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : val),
+    z.coerce.date().nullable().optional(),
+  ),
   assignedTo: z.string().nullable().optional(),
 });
 

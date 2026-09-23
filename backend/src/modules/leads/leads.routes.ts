@@ -12,6 +12,20 @@ leadRoutes.post(
   '/intake',
   asyncHandler(LeadsController.intake),
 );
+leadRoutes.get(
+  '/intake',
+  asyncHandler(LeadsController.intake),
+);
+
+// Dedicated Justdial integration endpoint
+leadRoutes.post(
+  '/justdial',
+  asyncHandler(LeadsController.intake),
+);
+leadRoutes.get(
+  '/justdial',
+  asyncHandler(LeadsController.intake),
+);
 
 // Protected routes
 leadRoutes.use(requireAuth);
@@ -44,6 +58,12 @@ leadRoutes.get(
   '/cities',
   requirePermission('leads.view'),
   asyncHandler(LeadsController.getCities),
+);
+
+leadRoutes.get(
+  '/stats',
+  requirePermission('leads.view'),
+  asyncHandler(LeadsController.getStats),
 );
 
 leadRoutes.get(

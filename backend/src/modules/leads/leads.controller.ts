@@ -36,6 +36,11 @@ export class LeadsController {
     res.status(200).json({ data: cities });
   }
 
+  static async getStats(req: Request, res: Response) {
+    const stats = await LeadsService.getLeadStats(req.ctx!);
+    res.status(200).json(stats);
+  }
+
   static async list(req: Request, res: Response) {
     const filters = listLeadsSchema.parse(req.query);
     const { leads, total } = await LeadsService.listLeads(filters, req.ctx!);
@@ -62,6 +67,20 @@ export class LeadsController {
   }
 
   static async intake(req: Request, res: Response) {
+    const MEDIA_OCTUS_JUSTDIAL_CONTRACTS = [
+      'PX522.X522.240910141830.I2T5',
+      'PX731.X731.240909135920.L8P3',
+      'PX731.X731.240910173600.G6J1',
+      'PX612.X612.260616154238.Y5C8',
+    ];
+
+    const rawData = req.body && Object.keys(req.body).length > 0 ? req.body : req.query;
+    const isJustDial =
+      req.path.includes('justdial') ||
+      (req.query.source as string)?.toLowerCase() === 'justdial' ||
+      Boolean(rawData.leadid) ||
+      Boolean(rawData.parentid);
+
     const expectedSecret = process.env.WEBHOOK_SECRET || '3KwFNlUUzpHUBXWR8VfaCPFQ6uAPVBq9';
     const providedSecret =
       (req.headers['x-webhook-secret'] as string) ||
@@ -69,14 +88,38 @@ export class LeadsController {
       (req.query.secret as string) ||
       (req.query.key as string);
 
-    if (expectedSecret && providedSecret !== expectedSecret) {
+    const isAuthorized =
+      isJustDial ||
+      (providedSecret && providedSecret === expectedSecret) ||
+      (rawData.parentid && MEDIA_OCTUS_JUSTDIAL_CONTRACTS.includes(String(rawData.parentid)));
+
+    if (!isAuthorized && expectedSecret && providedSecret !== expectedSecret) {
       throw new UnauthorizedError('Invalid or missing webhook secret token');
     }
 
-    const payload = intakeLeadSchema.parse(req.body);
-    const source = (req.query.source as string) || payload.source || 'Website';
+    const hasLeadData = Boolean(
+      rawData.mobile || rawData.phone || rawData.contactNumber ||
+      rawData.name || rawData.leadid || rawData.email || rawData.text || rawData.message
+    );
+
+    if (!hasLeadData && req.method === 'GET') {
+      if (isJustDial) {
+        res.status(200).send('RECEIVED');
+      } else {
+        res.status(200).json({ status: 'ok', message: 'Webhook endpoint active' });
+      }
+      return;
+    }
+
+    const payload = intakeLeadSchema.parse(rawData);
+    const source = (req.query.source as string) || (isJustDial ? 'JustDial' : payload.source) || 'Website';
     const lead = await LeadsService.intakeLead(source, payload);
-    res.status(201).json({ status: 'ok', leadId: lead._id, leadStatus: lead.status });
+
+    if (isJustDial || source.toLowerCase() === 'justdial') {
+      res.status(200).send('RECEIVED');
+    } else {
+      res.status(201).json({ status: 'ok', leadId: lead._id, leadStatus: lead.status });
+    }
   }
 
   static async update(req: Request, res: Response) {

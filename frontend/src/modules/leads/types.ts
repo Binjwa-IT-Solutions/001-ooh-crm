@@ -23,7 +23,7 @@ export type LeadStatus =
 
 export const STATUS_TRANSITIONS: Record<string, LeadStatus[]> = {
   New: ['Contacted', 'Lost', 'Rejected'],
-  Contacted: ['Interested', 'Lost'],
+  Contacted: ['Interested', 'Lost', 'Rejected'],
   Interested: ['Qualified', 'Lost'],
   Qualified: ['Proposal Sent', 'Negotiation', 'Lost'],
   'Proposal Sent': ['Negotiation', 'Won', 'Lost'],
@@ -231,7 +231,7 @@ export interface LogCallValues {
   remarks?: string;
   note?: string;
   loggedAt?: string;
-  nextActionDate?: string;
+  nextActionDate?: string | null;
   delayResponsibility?: string;
   durationSec?: number;
   budget?: number;
