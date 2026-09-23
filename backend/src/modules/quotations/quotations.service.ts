@@ -99,6 +99,11 @@ export class QuotationsService {
       filter.$or = scopeConditions;
     }
 
+    const targetAgentId = query.createdBy || query.agentId;
+    if (targetAgentId) {
+      filter.createdBy = toObjectId(targetAgentId);
+    }
+
     const page = query.page ?? 1;
     const limit = query.limit ?? 25;
     const skip = (page - 1) * limit;
@@ -110,6 +115,7 @@ export class QuotationsService {
         .limit(limit)
         .populate('leadId', 'companyName contactPerson mobile email')
         .populate('sites.siteId', 'siteCode city baseCostPerDay type')
+        .populate('createdBy', 'name email role')
         .exec(),
       Quotation.countDocuments(filter).exec(),
     ]);
@@ -627,5 +633,78 @@ export class QuotationsService {
     }
 
     return QuotationsService.getPublicByToken(token);
+  }
+
+  static async getQuotationStats(ctx: RequestContext): Promise<{
+    totalQuotedValue: number;
+    totalCount: number;
+    awaitingValue: number;
+    awaitingCount: number;
+    acceptedValue: number;
+    acceptedCount: number;
+    draftValue: number;
+    draftCount: number;
+  }> {
+    const isUnscoped = ['admin', 'manager', 'finance', 'hr', 'ops'].includes(
+      ctx.user?.role?.toLowerCase() || '',
+    );
+
+    const baseFilter: Record<string, any> = { deletedAt: null };
+
+    if (!isUnscoped) {
+      const myLeads = await Lead.find({
+        $or: [
+          { assignedTo: toObjectId(ctx.user.id) },
+          { createdBy: toObjectId(ctx.user.id) },
+        ],
+        deletedAt: null,
+      }).select('_id').lean();
+      const myLeadIds = myLeads.map((l) => l._id);
+
+      baseFilter.$or = [
+        { createdBy: toObjectId(ctx.user.id) },
+        { leadId: { $in: myLeadIds } },
+      ];
+    }
+
+    const [statsAgg] = await Quotation.aggregate([
+      { $match: baseFilter },
+      {
+        $group: {
+          _id: null,
+          totalQuotedValue: { $sum: '$total' },
+          totalCount: { $sum: 1 },
+          awaitingValue: {
+            $sum: { $cond: [{ $eq: ['$status', 'Sent'] }, '$total', 0] },
+          },
+          awaitingCount: {
+            $sum: { $cond: [{ $eq: ['$status', 'Sent'] }, 1, 0] },
+          },
+          acceptedValue: {
+            $sum: { $cond: [{ $eq: ['$status', 'Accepted'] }, '$total', 0] },
+          },
+          acceptedCount: {
+            $sum: { $cond: [{ $eq: ['$status', 'Accepted'] }, 1, 0] },
+          },
+          draftValue: {
+            $sum: { $cond: [{ $eq: ['$status', 'Draft'] }, '$total', 0] },
+          },
+          draftCount: {
+            $sum: { $cond: [{ $eq: ['$status', 'Draft'] }, 1, 0] },
+          },
+        },
+      },
+    ]);
+
+    return {
+      totalQuotedValue: statsAgg?.totalQuotedValue || 0,
+      totalCount: statsAgg?.totalCount || 0,
+      awaitingValue: statsAgg?.awaitingValue || 0,
+      awaitingCount: statsAgg?.awaitingCount || 0,
+      acceptedValue: statsAgg?.acceptedValue || 0,
+      acceptedCount: statsAgg?.acceptedCount || 0,
+      draftValue: statsAgg?.draftValue || 0,
+      draftCount: statsAgg?.draftCount || 0,
+    };
   }
 }

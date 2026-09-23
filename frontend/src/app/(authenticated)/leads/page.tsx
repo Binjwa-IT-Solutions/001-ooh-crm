@@ -582,7 +582,7 @@ export default function LeadsPage() {
               <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
                 {stats ? stats.totalActive : '-'}
               </p>
-              <p className="text-[11px] text-slate-400 mt-0.5">Leads in active stages</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Assigned & in-progress</p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 flex items-center justify-center shrink-0">
               <Building2 className="w-5 h-5" />

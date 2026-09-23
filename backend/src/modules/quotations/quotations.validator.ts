@@ -27,6 +27,8 @@ export const listQuotationsSchema = z.object({
   search: z.string().trim().optional(),
   status: z.string().trim().optional(),
   leadId: objectId.optional(),
+  createdBy: objectId.optional(),
+  agentId: objectId.optional(),
 });
 
 export const sendQuotationSchema = z.object({

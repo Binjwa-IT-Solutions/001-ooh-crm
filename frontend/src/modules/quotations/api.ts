@@ -5,6 +5,7 @@ import type {
   Quotation,
   QuotationFilters,
   QuotationsListResponse,
+  QuotationStats,
 } from './types';
 
 function buildQuery(query: QuotationFilters): string {
@@ -21,6 +22,9 @@ function buildQuery(query: QuotationFilters): string {
 export const quotationsApi = {
   list: (query: QuotationFilters = {}) =>
     api.get<QuotationsListResponse>(`/api/quotations${buildQuery(query)}`),
+
+  getStats: () =>
+    api.get<QuotationStats>('/api/quotations/stats'),
 
   getById: (id: string) =>
     api.get<{ quotation: Quotation }>(`/api/quotations/${id}`).then((res) => res.quotation),
