@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { Lead } from './leads.model.js';
 import { LeadsService } from './leads.service.js';
+import { LeadsController } from './leads.controller.js';
 import { leadQualificationSchema, listLeadsSchema, uploadLeadDocumentSchema } from './leads.validator.js';
 
 const FAKE_USER_CTX = { user: { id: '64b7f9a1c2d3e4f5a6b7c8d9', role: 'sales' } } as any;
@@ -287,6 +288,100 @@ test('intakeLead parses and sanitizes JustDial payload and starts SLA', async ()
       assert.ok(created.qualification?.notes?.includes('Area: Vijay Nagar'));
       assert.ok(created.slaTimerEnd instanceof Date, '24h SLA timer should be set');
       assert.deepEqual(created.rawPayload, jdPayload);
+    },
+  );
+});
+
+test('intakeLead parses official JustDial email specification payload', async () => {
+  await withPatchedModel(
+    {
+      findOne: () => ({ exec: async () => null }),
+      create: async (payload: any) => payload,
+    },
+    async () => {
+      const officialJdPayload = {
+        leadid: 'JD57154BC2A4E7',
+        leadtype: 'category',
+        prefix: 'Ms',
+        name: 'HIRAL',
+        mobile: '9820097546',
+        phone: '02224100086',
+        email: '',
+        date: '2026-09-23',
+        time: '14:30:00',
+        category: 'Outdoor Hoarding',
+        area: 'Dadar West',
+        city: 'Mumbai',
+        brancharea: 'Andheri East',
+        dncmobile: '1',
+        dncphone: '0',
+        company: 'Hiral Enterprises',
+        pincode: '400028',
+        parentid: 'PX522.X522.240910141830.I2T5',
+      };
+
+      const created: any = await LeadsService.intakeLead('JustDial', officialJdPayload);
+
+      assert.equal(created.status, 'New');
+      assert.equal(created.source, 'JustDial');
+      assert.equal(created.mobile, '9820097546');
+      assert.equal(created.contactPerson, 'Ms HIRAL');
+      assert.equal(created.companyName, 'Hiral Enterprises');
+      assert.equal(created.city, 'Mumbai');
+      assert.ok(created.qualification?.notes?.includes('JD Lead ID: JD57154BC2A4E7'));
+      assert.ok(created.qualification?.notes?.includes('Contract ID: PX522.X522.240910141830.I2T5'));
+      assert.ok(created.qualification?.notes?.includes('Type: category'));
+      assert.ok(created.qualification?.notes?.includes('DND Mobile: Yes'));
+      assert.ok(created.qualification?.notes?.includes('Branch Area: Andheri East'));
+      assert.ok(created.qualification?.notes?.includes('Landline: 02224100086'));
+      assert.ok(created.slaTimerEnd instanceof Date);
+    },
+  );
+});
+
+test('intakeLead parses screenshot 2 sample POST JSON payload with zero pincode and 9XXXXX mobile', async () => {
+  await withPatchedModel(
+    {
+      findOne: () => ({ exec: async () => null }),
+      create: async (payload: any) => payload,
+    },
+    async () => {
+      const screenshot2Payload = {
+        leadid: 'JDF99CB5961B40',
+        leadtype: 'category',
+        prefix: '',
+        name: 'ABHAY SHAH',
+        mobile: '9XXXXX',
+        phone: '',
+        email: '',
+        date: '2020-12-24',
+        category: 'Generator Dealers',
+        area: 'Ghatkopar West',
+        city: 'Mumbai',
+        brancharea: 'Apollo Bunder',
+        dncmobile: 0,
+        dncphone: 0,
+        company: 'Greaves Cotton Ltd',
+        pincode: '0',
+        time: '13:10:11',
+        branchpin: '400001',
+        parentid: 'PXX22.XX22.150705230454.M4B1',
+      };
+
+      const created: any = await LeadsService.intakeLead('JustDial', screenshot2Payload);
+
+      assert.equal(created.status, 'New');
+      assert.equal(created.source, 'JustDial');
+      assert.equal(created.contactPerson, 'ABHAY SHAH');
+      assert.equal(created.companyName, 'Greaves Cotton Ltd');
+      assert.equal(created.city, 'Mumbai');
+      assert.ok(created.qualification?.notes?.includes('JD Lead ID: JDF99CB5961B40'));
+      assert.ok(created.qualification?.notes?.includes('Contract ID: PXX22.XX22.150705230454.M4B1'));
+      assert.ok(created.qualification?.notes?.includes('Category: Generator Dealers'));
+      assert.ok(created.qualification?.notes?.includes('Area: Ghatkopar West'));
+      assert.ok(created.qualification?.notes?.includes('Branch Area: Apollo Bunder'));
+      assert.ok(created.qualification?.notes?.includes('Branch Pin: 400001'));
+      assert.ok(created.qualification?.notes?.includes('DND Mobile: No'));
     },
   );
 });
@@ -892,6 +987,82 @@ test('getLeadStats returns active, overdue, unclaimed, and won metrics', async (
   } finally {
     Lead.countDocuments = origCount;
     Lead.aggregate = origAggregate;
+  }
+});
+
+test('LeadsController.intake returns plain text RECEIVED for Justdial GET and POST', async () => {
+  const origFindOne = Lead.findOne;
+  const origCreate = Lead.create;
+  (Lead as any).findOne = () => ({ exec: async () => null });
+  (Lead as any).create = async (payload: any) => ({ _id: 'mock_1', ...payload });
+
+  try {
+    let sentStatus = 0;
+    let sentBody: any = null;
+    const mockRes: any = {
+      status: (code: number) => {
+        sentStatus = code;
+        return mockRes;
+      },
+      send: (body: any) => {
+        sentBody = body;
+        return mockRes;
+      },
+      json: (body: any) => {
+        sentBody = body;
+        return mockRes;
+      },
+    };
+
+    // 1. Test GET query from Justdial
+    const mockGetReq: any = {
+      method: 'GET',
+      path: '/justdial',
+      query: {
+        leadid: 'JD6960768A8B81',
+        name: 'User',
+        mobile: '9820097546',
+        city: 'Mumbai',
+        parentid: 'PX522.X522.240910141830.I2T5',
+      },
+      body: {},
+      headers: {},
+    };
+    await LeadsController.intake(mockGetReq, mockRes);
+    assert.equal(sentStatus, 200);
+    assert.equal(sentBody, 'RECEIVED');
+
+    // 2. Test Blank GET Ping (Justdial handshake verification)
+    const mockPingReq: any = {
+      method: 'GET',
+      path: '/justdial',
+      query: {},
+      body: {},
+      headers: {},
+    };
+    await LeadsController.intake(mockPingReq, mockRes);
+    assert.equal(sentStatus, 200);
+    assert.equal(sentBody, 'RECEIVED');
+
+    // 3. Test POST JSON from Justdial
+    const mockPostReq: any = {
+      method: 'POST',
+      path: '/justdial',
+      query: {},
+      body: {
+        leadid: 'JDF99CB5961B40',
+        name: 'ABHAY SHAH',
+        mobile: '9826012345',
+        city: 'Mumbai',
+      },
+      headers: {},
+    };
+    await LeadsController.intake(mockPostReq, mockRes);
+    assert.equal(sentStatus, 200);
+    assert.equal(sentBody, 'RECEIVED');
+  } finally {
+    Lead.findOne = origFindOne;
+    Lead.create = origCreate;
   }
 });
 

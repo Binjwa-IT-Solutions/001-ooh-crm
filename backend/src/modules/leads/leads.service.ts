@@ -618,20 +618,33 @@ export class LeadsService {
       payload.lastName || payload.last_name || payload['Last Name'],
     ].filter(Boolean).join(' ').trim();
 
-    const contactPerson = payload.contactPerson || payload.name || combinedName || emailContactPerson || 'Prospective Client';
-    const companyName = payload.company_name || payload.companyName || payload.company || emailCompanyName || contactPerson || 'Web Lead';
+    const rawContact = payload.contactPerson || payload.name || combinedName || emailContactPerson || 'Prospective Client';
+    const prefix = payload.prefix ? `${payload.prefix.trim()} ` : '';
+    const contactPerson = payload.prefix && !rawContact.startsWith(prefix) ? `${prefix}${rawContact}` : rawContact;
+
+    const companyName = payload.company || payload.company_name || payload.companyName || emailCompanyName || contactPerson || 'Web Lead';
     const email = payload.email ? String(payload.email).trim().toLowerCase() : (emailAddress || undefined);
-    const city = payload.city || payload.area || emailCity || undefined;
+    const city = payload.city || payload.Area || payload.area || payload.brancharea || emailCity || undefined;
 
     // Rich contextual note for Justdial / third-party / website leads
     let notes: string | undefined = emailNotes;
-    if (source === 'JustDial' || payload.leadid || payload.category) {
+    if (source === 'JustDial' || payload.leadid || payload.category || payload.parentid) {
       const noteParts: string[] = [];
       if (payload.leadid) noteParts.push(`JD Lead ID: ${payload.leadid}`);
+      if (payload.parentid) noteParts.push(`Contract ID: ${payload.parentid}`);
       if (payload.category) noteParts.push(`Category: ${payload.category}`);
-      if (payload.area) noteParts.push(`Area: ${payload.area}`);
+      if (payload.leadtype || payload.lead_type) noteParts.push(`Type: ${payload.leadtype || payload.lead_type}`);
+      if (payload.area || payload.Area) noteParts.push(`Area: ${payload.area || payload.Area}`);
+      if (payload.brancharea) noteParts.push(`Branch Area: ${payload.brancharea}`);
       if (payload.pincode) noteParts.push(`Pincode: ${payload.pincode}`);
-      if (payload.lead_type) noteParts.push(`Type: ${payload.lead_type}`);
+      if (payload.branchpin) noteParts.push(`Branch Pin: ${payload.branchpin}`);
+      if (payload.phone) noteParts.push(`Landline: ${payload.phone}`);
+      if (payload.dncmobile !== undefined && payload.dncmobile !== '') {
+        noteParts.push(`DND Mobile: ${String(payload.dncmobile) === '1' ? 'Yes' : 'No'}`);
+      }
+      if (payload.date || payload.time) {
+        noteParts.push(`Lead Time: ${payload.date || ''} ${payload.time || ''}`.trim());
+      }
       if (noteParts.length > 0) {
         notes = `[JustDial Lead Details]\n${noteParts.join(' | ')}`;
       }
@@ -1388,6 +1401,11 @@ export class LeadsService {
       Lead.countDocuments({
         ...matchBase,
         status: { $nin: ['Won', 'Lost', 'Rejected', 'Duplicate', 'duplicate'] },
+        $or: [
+          { assignedTo: { $ne: null } },
+          { claimedBy: { $ne: null } },
+          { status: { $ne: 'New' } },
+        ],
       }),
       Lead.countDocuments({
         ...matchBase,
