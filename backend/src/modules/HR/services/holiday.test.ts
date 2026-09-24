@@ -7,10 +7,9 @@ import type { RequestContext } from '../../../core/context.js';
 import Holiday from '../models/holiday.model.js';
 import { holidayService } from './holiday.service.js';
 import * as leaveService from './leave.service.js';
-import { LeaveType } from '../leaveTypes/leaveTypes.model.js';
-import { leaveTypeService } from '../leaveTypes/leaveTypes.service.js';
+import { leaveTypeService } from './leave.service.js';
+import { LeaveType, LeaveRequest } from '../models/leave.model.js';
 import { Employee } from '../../employees/employees.model.js';
-import LeaveRequest from '../models/leave-request.model.js';
 
 let employeeId: string;
 let leaveTypeId: string;

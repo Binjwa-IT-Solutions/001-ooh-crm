@@ -4,12 +4,11 @@ import mongoose, { Types } from 'mongoose';
 
 import { connectDatabase, disconnectDatabase } from '../../../core/db/connect.js';
 import type { RequestContext } from '../../../core/context.js';
-import { LeaveType, LeaveBalance } from '../leaveTypes/leaveTypes.model.js';
+import { LeaveType, LeaveBalance, LeaveRequest } from '../models/leave.model.js';
 import { Employee } from '../../employees/employees.model.js';
-import LeaveRequest from '../models/leave-request.model.js';
 import Attendance from '../models/attendance.model.js';
 import * as leaveService from './leave.service.js';
-import { leaveTypeService } from '../leaveTypes/leaveTypes.service.js';
+import { leaveTypeService } from './leave.service.js';
 
 let hrEmployeeId: string;
 let managerEmployeeId: string;
@@ -165,8 +164,8 @@ test('applyLeave, getMyRequests, and approval flow', async () => {
 
   // Apply for leave (3 days)
   // Ensure we pick dates that are weekdays to avoid "contains no working days" error
-  const fromDate = new Date(`${currentYear}-10-20T00:00:00.000Z`); // Monday
-  const toDate = new Date(`${currentYear}-10-22T00:00:00.000Z`); // Wednesday
+  const fromDate = new Date(`${currentYear}-10-13T00:00:00.000Z`); // Tuesday
+  const toDate = new Date(`${currentYear}-10-15T00:00:00.000Z`); // Thursday
 
   const requestDto = await leaveService.applyLeave(
     {
@@ -210,8 +209,8 @@ test('applyLeave, getMyRequests, and approval flow', async () => {
   const attendanceRecords = await Attendance.find({
     employeeId,
     date: {
-      $gte: new Date(Date.UTC(currentYear, 9, 20)),
-      $lte: new Date(Date.UTC(currentYear, 9, 22)),
+      $gte: new Date(Date.UTC(currentYear, 9, 13)),
+      $lte: new Date(Date.UTC(currentYear, 9, 15)),
     },
   });
   assert.equal(attendanceRecords.length, 3);

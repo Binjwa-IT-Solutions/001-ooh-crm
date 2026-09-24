@@ -106,6 +106,25 @@ function LeaveTabsContent() {
 // SUB-COMPONENTS
 // =================================================================================
 
+function LeaveStatusBadge({ status }: { status: string }) {
+  let colorClasses = 'bg-slate-100 text-slate-700 border-slate-200';
+  if (status === 'Approved') {
+    colorClasses = 'bg-emerald-50 text-emerald-800 border-emerald-300 ring-1 ring-emerald-600/20';
+  } else if (status === 'Pending') {
+    colorClasses = 'bg-amber-50 text-amber-800 border-amber-300 ring-1 ring-amber-600/20';
+  } else if (status === 'Rejected') {
+    colorClasses = 'bg-rose-50 text-rose-800 border-rose-300 ring-1 ring-rose-600/20';
+  } else if (status === 'Cancelled') {
+    colorClasses = 'bg-slate-100 text-slate-500 border-slate-300';
+  }
+
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${colorClasses}`}>
+      {status}
+    </span>
+  );
+}
+
 // ------------------------------------------------------------------ My Leaves Tab
 interface MyLeavesTabProps {
   showApplyForm: boolean;
@@ -113,12 +132,18 @@ interface MyLeavesTabProps {
 }
 
 function MyLeavesTab({ showApplyForm, setShowApplyForm }: MyLeavesTabProps) {
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected' | 'Cancelled'>('All');
   const { data: balance, isLoading: balanceLoading, mutate: mutateBalance } = useLeaveBalance();
-  const { data: requests, isLoading: requestsLoading, mutate: mutateRequests } = useMyLeaveRequests();
+  const { data: requests, isLoading: requestsLoading, mutate: mutateRequests } = useMyLeaveRequests(
+    statusFilter === 'All' ? undefined : statusFilter
+  );
   const { data: leaveTypes } = useLeaveTypes();
 
   const [submitting, setSubmitting] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<File | null>(null);
 
   const [formData, setFormData] = useState({
@@ -154,6 +179,8 @@ function MyLeavesTab({ showApplyForm, setShowApplyForm }: MyLeavesTabProps) {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
+    setActionError(null);
+    setActionSuccess(null);
     try {
       if (attachment) {
         const body = new FormData();
@@ -176,12 +203,31 @@ function MyLeavesTab({ showApplyForm, setShowApplyForm }: MyLeavesTabProps) {
       });
       setAttachment(null);
       setShowApplyForm(false);
+      setActionSuccess('Leave request submitted successfully.');
       void mutateBalance();
       void mutateRequests();
     } catch (err: any) {
       setError(toErrorMessage(err));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleCancelLeave = async (id: string) => {
+    if (!confirm('Are you sure you want to cancel this leave request? If approved, balance will be restored.')) {
+      return;
+    }
+    setCancellingId(id);
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      await leaveApi.cancelLeave(id);
+      setActionSuccess('Leave request cancelled successfully.');
+      await Promise.all([mutateRequests(), mutateBalance()]);
+    } catch (err: unknown) {
+      setActionError(toErrorMessage(err));
+    } finally {
+      setCancellingId(null);
     }
   };
 
@@ -204,6 +250,9 @@ function MyLeavesTab({ showApplyForm, setShowApplyForm }: MyLeavesTabProps) {
           {showApplyForm ? 'View Balances' : 'Apply Leave'}
         </Button>
       </div>
+
+      {actionSuccess && <Alert tone="success">{actionSuccess}</Alert>}
+      {actionError && <Alert tone="error">{actionError}</Alert>}
 
       {showApplyForm ? (
         <Card className="p-6 max-w-2xl">
@@ -344,7 +393,26 @@ function MyLeavesTab({ showApplyForm, setShowApplyForm }: MyLeavesTabProps) {
 
       {/* History */}
       <div>
-        <h2 className="text-xl font-semibold text-slate-800 mb-4">Leave Requests</h2>
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+          <h2 className="text-xl font-semibold text-slate-800">Leave Requests</h2>
+          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg">
+            {(['All', 'Pending', 'Approved', 'Rejected', 'Cancelled'] as const).map((filter) => (
+              <button
+                key={filter}
+                type="button"
+                onClick={() => setStatusFilter(filter)}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  statusFilter === filter
+                    ? 'bg-white text-slate-900 shadow-sm font-semibold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {filter}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -356,6 +424,7 @@ function MyLeavesTab({ showApplyForm, setShowApplyForm }: MyLeavesTabProps) {
                   <th className="px-4 py-3 font-medium text-slate-600">Days</th>
                   <th className="px-4 py-3 font-medium text-slate-600">Status</th>
                   <th className="px-4 py-3 font-medium text-slate-600">Reason</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -366,10 +435,10 @@ function MyLeavesTab({ showApplyForm, setShowApplyForm }: MyLeavesTabProps) {
                     <td className="px-4 py-3 text-slate-600">{new Date(req.toDate).toLocaleDateString()}</td>
                     <td className="px-4 py-3 font-medium text-slate-800">{req.days}</td>
                     <td className="px-4 py-3">
-                      <Badge>{req.status}</Badge>
+                      <LeaveStatusBadge status={req.status} />
                       {req.status === 'Rejected' && req.rejectionReason && (
-                        <div className="text-xs text-red-600 mt-1 max-w-[150px] break-words" title={req.rejectionReason}>
-                          Reason: {req.rejectionReason}
+                        <div className="mt-1 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded p-1.5 max-w-[200px] break-words">
+                          <span className="font-semibold">Reason:</span> {req.rejectionReason}
                         </div>
                       )}
                     </td>
@@ -386,11 +455,25 @@ function MyLeavesTab({ showApplyForm, setShowApplyForm }: MyLeavesTabProps) {
                         </a>
                       )}
                     </td>
+                    <td className="px-4 py-3">
+                      {(req.status === 'Pending' || req.status === 'Approved') ? (
+                        <Button
+                          variant="secondary"
+                          className="!h-8 !px-2.5 !text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200"
+                          onClick={() => handleCancelLeave(req.id)}
+                          isLoading={cancellingId === req.id}
+                        >
+                          Cancel
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {(!requests || requests.length === 0) && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                    <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                       No leave requests found.
                     </td>
                   </tr>
@@ -406,18 +489,23 @@ function MyLeavesTab({ showApplyForm, setShowApplyForm }: MyLeavesTabProps) {
 
 // ------------------------------------------------------------- Leave Approvals Tab
 function LeaveApprovalsTab() {
-  const { data: requests, isLoading, mutate } = useTeamLeaveRequests();
+  const [statusFilter, setStatusFilter] = useState<'Pending' | 'Approved' | 'Rejected' | 'Cancelled' | 'All'>('Pending');
+  const { data: requests, isLoading, mutate } = useTeamLeaveRequests(statusFilter === 'All' ? undefined : statusFilter);
 
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
 
   const handleApprove = async (id: string) => {
     setProcessingId(id);
     setError(null);
+    setActionSuccess(null);
     try {
       await leaveApi.approveLeave(id);
+      setActionSuccess('Leave request approved successfully.');
       await mutate();
     } catch (err: any) {
       setError(toErrorMessage(err));
@@ -433,10 +521,12 @@ function LeaveApprovalsTab() {
     }
     setProcessingId(id);
     setError(null);
+    setActionSuccess(null);
     try {
-      await leaveApi.rejectLeave(id, rejectionReason);
+      await leaveApi.rejectLeave(id, rejectionReason.trim());
       setRejectingId(null);
       setRejectionReason('');
+      setActionSuccess('Leave request rejected.');
       await mutate();
     } catch (err: any) {
       setError(toErrorMessage(err));
@@ -453,13 +543,40 @@ function LeaveApprovalsTab() {
     );
   }
 
+  const selectedReviewReq = requests?.find((r) => r.id === selectedReviewId);
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-medium text-slate-800">Team Leave Requests</h2>
-        <p className="text-sm text-slate-500">Review and approve team leave requests.</p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-medium text-slate-800">Team Leave Requests</h2>
+          <p className="text-sm text-slate-500">Review and approve team leave requests.</p>
+        </div>
+
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg">
+          {(['Pending', 'Approved', 'Rejected', 'Cancelled', 'All'] as const).map((filter) => (
+            <button
+              key={filter}
+              type="button"
+              onClick={() => {
+                setStatusFilter(filter);
+                setRejectingId(null);
+                setError(null);
+                setActionSuccess(null);
+              }}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                statusFilter === filter
+                  ? 'bg-white text-slate-900 shadow-sm font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {filter}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {actionSuccess && <Alert tone="success">{actionSuccess}</Alert>}
       {error && <Alert tone="error">{error}</Alert>}
 
       <Card className="overflow-hidden">
@@ -472,6 +589,7 @@ function LeaveApprovalsTab() {
                 <th className="px-4 py-3 font-medium text-slate-600">Dates</th>
                 <th className="px-4 py-3 font-medium text-slate-600">Days</th>
                 <th className="px-4 py-3 font-medium text-slate-600">Reason</th>
+                <th className="px-4 py-3 font-medium text-slate-600">Status</th>
                 <th className="px-4 py-3 font-medium text-slate-600">Actions</th>
               </tr>
             </thead>
@@ -483,6 +601,15 @@ function LeaveApprovalsTab() {
                     <span className="block text-xs text-slate-500">
                       {req.employeeCode} · {req.department}
                     </span>
+                    {(req.attendance && req.attendance.length > 0) && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedReviewId(selectedReviewId === req.id ? null : req.id)}
+                        className="text-[11px] text-blue-600 hover:text-blue-800 underline mt-1"
+                      >
+                        {selectedReviewId === req.id ? '▲ Hide Details' : `▼ Review Records (${req.attendance.length})`}
+                      </button>
+                    )}
                   </td>
                   <td className="px-4 py-3 font-medium text-slate-800">
                     {req.leaveTypeName || (typeof req.leaveTypeId === 'object' ? (req.leaveTypeId as any)?.name || (req.leaveTypeId as any)?._id : req.leaveTypeId)}
@@ -505,58 +632,78 @@ function LeaveApprovalsTab() {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    {rejectingId === req.id ? (
-                      <div className="flex flex-col gap-2 min-w-[200px]">
-                        <input
-                          type="text"
-                          className="w-full px-2 py-1 border rounded text-xs"
-                          placeholder="Rejection reason..."
-                          value={rejectionReason}
-                          onChange={(e) => setRejectionReason(e.target.value)}
-                          autoFocus
-                        />
+                    <LeaveStatusBadge status={req.status} />
+                    {req.status === 'Rejected' && req.rejectionReason && (
+                      <div className="mt-1 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded p-1.5 max-w-[200px] break-words">
+                        <span className="font-semibold">Reason:</span> {req.rejectionReason}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {req.status === 'Pending' ? (
+                      rejectingId === req.id ? (
+                        <div className="flex flex-col gap-2 min-w-[200px]">
+                          <input
+                            type="text"
+                            className="w-full px-2 py-1 border rounded text-xs"
+                            placeholder="Rejection reason..."
+                            value={rejectionReason}
+                            onChange={(e) => setRejectionReason(e.target.value)}
+                            autoFocus
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              variant="secondary"
+                              className="!h-8 !px-2.5 !text-xs text-rose-600 hover:bg-rose-50"
+                              onClick={() => handleReject(req.id)}
+                              isLoading={processingId === req.id}
+                            >
+                              Confirm Reject
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              className="!h-8 !px-2.5 !text-xs"
+                              onClick={() => { setRejectingId(null); setRejectionReason(''); }}
+                              disabled={processingId === req.id}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
                         <div className="flex gap-2">
                           <Button
-                            variant="secondary"
-                            onClick={() => handleReject(req.id)}
+                            variant="primary"
+                            className="!h-8 !px-2.5 !text-xs"
+                            onClick={() => handleApprove(req.id)}
                             isLoading={processingId === req.id}
                           >
-                            Confirm Reject
+                            Approve
                           </Button>
                           <Button
                             variant="secondary"
-                            onClick={() => setRejectingId(null)}
+                            className="!h-8 !px-2.5 !text-xs text-rose-600 hover:bg-rose-50"
+                            onClick={() => { setRejectingId(req.id); setRejectionReason(''); }}
                             disabled={processingId === req.id}
                           >
-                            Cancel
+                            Reject
                           </Button>
                         </div>
-                      </div>
+                      )
+                    ) : req.status === 'Approved' ? (
+                      <span className="text-xs font-medium text-emerald-700">Approved</span>
+                    ) : req.status === 'Rejected' ? (
+                      <span className="text-xs font-medium text-rose-700">Rejected</span>
                     ) : (
-                      <div className="flex gap-2">
-                        <Button
-                          variant="primary"
-                          onClick={() => handleApprove(req.id)}
-                          isLoading={processingId === req.id}
-                        >
-                          Approve
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          onClick={() => setRejectingId(req.id)}
-                          disabled={processingId === req.id}
-                        >
-                          Reject
-                        </Button>
-                      </div>
+                      <span className="text-xs text-slate-400 italic">Cancelled</span>
                     )}
                   </td>
                 </tr>
               ))}
               {(!requests || requests.length === 0) && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
-                    No pending leave requests to review.
+                  <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                    No {statusFilter !== 'All' ? statusFilter.toLowerCase() : ''} leave requests found.
                   </td>
                 </tr>
               )}
@@ -564,43 +711,60 @@ function LeaveApprovalsTab() {
           </table>
         </div>
       </Card>
-      {requests?.map((req) => (
-        <Card key={`${req.id}-review`} className="mt-4">
-          <div className="grid gap-4 text-sm sm:grid-cols-4">
+
+      {/* Review details for selected request */}
+      {selectedReviewReq && (
+        <Card className="p-5 border-blue-200 bg-blue-50/20">
+          <div className="flex items-center justify-between border-b pb-3 mb-4">
             <div>
-              <span className="text-slate-500">Allocated</span>
-              <p className="font-semibold">{req.allocated ?? 0}</p>
+              <h3 className="font-semibold text-slate-800">
+                Attendance & Quota Context: {String(selectedReviewReq.employeeName || (typeof selectedReviewReq.employeeId === 'object' ? (selectedReviewReq.employeeId as any)?.name || (selectedReviewReq.employeeId as any)?._id : selectedReviewReq.employeeId))}
+              </h3>
+              <p className="text-xs text-slate-500">
+                Leave Type: {selectedReviewReq.leaveTypeName} · Period: {new Date(selectedReviewReq.fromDate).toLocaleDateString()} to {new Date(selectedReviewReq.toDate).toLocaleDateString()} ({selectedReviewReq.days} days)
+              </p>
             </div>
-            <div>
-              <span className="text-slate-500">Used</span>
-              <p className="font-semibold">{req.used ?? 0}</p>
+            <Button variant="ghost" className="h-8 w-8 !p-0" onClick={() => setSelectedReviewId(null)}>
+              ✕
+            </Button>
+          </div>
+
+          <div className="grid gap-4 text-sm sm:grid-cols-4 mb-4">
+            <div className="p-3 bg-white rounded-lg border border-slate-200">
+              <span className="text-xs text-slate-500 block">Allocated Quota</span>
+              <p className="text-lg font-bold text-slate-800">{selectedReviewReq.allocated ?? 0} days</p>
             </div>
-            <div>
-              <span className="text-slate-500">Remaining</span>
-              <p className="font-semibold">{req.remaining ?? 0}</p>
+            <div className="p-3 bg-white rounded-lg border border-slate-200">
+              <span className="text-xs text-slate-500 block">Used So Far</span>
+              <p className="text-lg font-bold text-slate-800">{selectedReviewReq.used ?? 0} days</p>
             </div>
-            <div>
-              <span className="text-slate-500">Attendance records</span>
-              <p className="font-semibold">{req.attendance?.length ?? 0}</p>
+            <div className="p-3 bg-white rounded-lg border border-slate-200">
+              <span className="text-xs text-slate-500 block">Remaining Quota</span>
+              <p className="text-lg font-bold text-emerald-600">{selectedReviewReq.remaining ?? 0} days</p>
+            </div>
+            <div className="p-3 bg-white rounded-lg border border-slate-200">
+              <span className="text-xs text-slate-500 block">Attendance Records</span>
+              <p className="text-lg font-bold text-slate-800">{selectedReviewReq.attendance?.length ?? 0}</p>
             </div>
           </div>
-          {req.attendance && req.attendance.length > 0 && (
-            <div className="mt-4 overflow-x-auto">
+
+          {selectedReviewReq.attendance && selectedReviewReq.attendance.length > 0 && (
+            <div className="overflow-x-auto bg-white rounded-lg border border-slate-200">
               <table className="w-full text-left text-xs">
-                <thead className="border-b border-slate-200">
+                <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="py-2 pr-3">Date</th>
-                    <th className="py-2 pr-3">Check-in</th>
-                    <th className="py-2 pr-3">Check-out</th>
-                    <th className="py-2 pr-3">Hours</th>
-                    <th className="py-2">Status / Work type</th>
+                    <th className="py-2.5 px-3 font-medium text-slate-600">Date</th>
+                    <th className="py-2.5 px-3 font-medium text-slate-600">Check-in</th>
+                    <th className="py-2.5 px-3 font-medium text-slate-600">Check-out</th>
+                    <th className="py-2.5 px-3 font-medium text-slate-600">Hours</th>
+                    <th className="py-2.5 px-3 font-medium text-slate-600">Status / Work type</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {req.attendance.map((record) => (
-                    <tr key={record.id} className="border-b border-slate-100">
-                      <td className="py-2 pr-3">{new Date(record.date).toLocaleDateString()}</td>
-                      <td className="py-2 pr-3">
+                <tbody className="divide-y divide-slate-100">
+                  {selectedReviewReq.attendance.map((record) => (
+                    <tr key={record.id} className="hover:bg-slate-50">
+                      <td className="py-2 px-3 font-medium">{new Date(record.date).toLocaleDateString()}</td>
+                      <td className="py-2 px-3">
                         {record.checkInTime
                           ? new Date(record.checkInTime).toLocaleTimeString([], {
                               hour: '2-digit',
@@ -608,7 +772,7 @@ function LeaveApprovalsTab() {
                             })
                           : '-'}
                       </td>
-                      <td className="py-2 pr-3">
+                      <td className="py-2 px-3">
                         {record.checkOutTime
                           ? new Date(record.checkOutTime).toLocaleTimeString([], {
                               hour: '2-digit',
@@ -616,9 +780,11 @@ function LeaveApprovalsTab() {
                             })
                           : '-'}
                       </td>
-                      <td className="py-2 pr-3">{record.totalHours ?? 0}</td>
-                      <td className="py-2">
-                        {record.status} / {record.workType}
+                      <td className="py-2 px-3">{record.totalHours ?? 0}</td>
+                      <td className="py-2 px-3">
+                        <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] bg-slate-100 font-medium">
+                          {record.status} / {record.workType}
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -627,7 +793,7 @@ function LeaveApprovalsTab() {
             </div>
           )}
         </Card>
-      ))}
+      )}
     </div>
   );
 }

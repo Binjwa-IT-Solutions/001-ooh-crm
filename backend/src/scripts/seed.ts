@@ -303,7 +303,7 @@ async function seedHolidays() {
 
 async function seedLeaveTypesAndBalances(): Promise<void> {
   console.log('\nLeave Types & Balances');
-  const { LeaveType, LeaveBalance } = await import('../modules/HR/leaveTypes/leaveTypes.model.js');
+  const { LeaveType, LeaveBalance } = await import('../modules/HR/models/leave.model.js');
   const { Employee } = await import('../modules/employees/employees.model.js');
 
   const defaultTypes = [

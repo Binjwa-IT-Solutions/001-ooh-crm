@@ -1,6 +1,10 @@
 import mongoose, { Schema, model, Types } from 'mongoose';
 import { basePlugin, type BaseDocument } from '../../../core/db/basePlugin.js';
 
+// ---------------------------------------------------------------------------
+// 1. LeaveType
+// ---------------------------------------------------------------------------
+
 export interface ILeaveType extends BaseDocument {
   name: string;
   code: string;
@@ -30,7 +34,7 @@ export const LeaveType =
   model<ILeaveType>('LeaveType', leaveTypeSchema);
 
 // ---------------------------------------------------------------------------
-// LeaveBalance
+// 2. LeaveBalance
 // ---------------------------------------------------------------------------
 
 export interface ILeaveBalance extends BaseDocument {
@@ -51,12 +55,58 @@ const leaveBalanceSchema = new Schema<ILeaveBalance>({
   carriedForward: { type: Number, required: true, default: 0, min: 0 },
 });
 
-// One balance row per employee, per leave type, per year — the whole
-// allocation mechanism depends on this being unique.
 leaveBalanceSchema.index({ employeeId: 1, leaveTypeId: 1, year: 1 }, { unique: true });
-
 leaveBalanceSchema.plugin(basePlugin);
 
 export const LeaveBalance =
   (mongoose.models.LeaveBalance as mongoose.Model<ILeaveBalance>) ??
   model<ILeaveBalance>('LeaveBalance', leaveBalanceSchema);
+
+// ---------------------------------------------------------------------------
+// 3. LeaveRequest
+// ---------------------------------------------------------------------------
+
+export interface ILeaveRequest extends BaseDocument {
+  employeeId: Types.ObjectId;
+  leaveTypeId: Types.ObjectId;
+  fromDate: Date;
+  toDate: Date;
+  days: number;
+  reason: string;
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
+  documentUrl?: string;
+  approverId?: Types.ObjectId;
+  approvedAt?: Date | null;
+  rejectionReason?: string;
+}
+
+const leaveRequestSchema = new Schema<ILeaveRequest>(
+  {
+    employeeId: { type: Schema.Types.ObjectId, ref: 'Employee', required: true, index: true },
+    leaveTypeId: { type: Schema.Types.ObjectId, ref: 'LeaveType', required: true },
+    fromDate: { type: Date, required: true },
+    toDate: { type: Date, required: true },
+    days: { type: Number, required: true, min: 0.5 },
+    reason: { type: String, required: true, trim: true },
+    status: {
+      type: String,
+      enum: ['Pending', 'Approved', 'Rejected', 'Cancelled'],
+      default: 'Pending',
+      index: true,
+    },
+    documentUrl: { type: String },
+    approverId: { type: Schema.Types.ObjectId, ref: 'Employee' },
+    approvedAt: { type: Date, default: null },
+    rejectionReason: { type: String, trim: true },
+  },
+  { timestamps: true }
+);
+
+leaveRequestSchema.index({ employeeId: 1, fromDate: 1, toDate: 1 });
+leaveRequestSchema.plugin(basePlugin);
+
+export const LeaveRequest =
+  (mongoose.models.LeaveRequest as mongoose.Model<ILeaveRequest>) ??
+  model<ILeaveRequest>('LeaveRequest', leaveRequestSchema);
+
+export default LeaveRequest;
