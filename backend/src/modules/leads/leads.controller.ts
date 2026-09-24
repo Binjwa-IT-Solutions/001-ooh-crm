@@ -72,6 +72,9 @@ export class LeadsController {
       'PX731.X731.240909135920.L8P3',
       'PX731.X731.240910173600.G6J1',
       'PX612.X612.260616154238.Y5C8',
+      'PX755.X755.240910174536.S5Q8',
+      'PXX22.XX22.250823181454.W5P8',
+      'PXX80.XX80.260916190228.S4J9',
     ];
 
     const rawData = req.body && Object.keys(req.body).length > 0 ? req.body : req.query;
