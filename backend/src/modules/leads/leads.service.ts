@@ -1003,10 +1003,29 @@ export class LeadsService {
   ): Promise<ILead> {
     const lead = await LeadsService.getLead(id, ctx);
 
-    lead.qualification = {
-      ...lead.qualification,
+    const currentQual = lead.qualification
+      ? typeof (lead.qualification as any).toObject === 'function'
+        ? (lead.qualification as any).toObject()
+        : lead.qualification
+      : {};
+    const mergedQualification = {
+      ...currentQual,
       ...qualificationData,
     };
+
+    if (
+      mergedQualification.startDate &&
+      mergedQualification.endDate &&
+      !mergedQualification.campaignDuration
+    ) {
+      const diffMs =
+        new Date(mergedQualification.endDate).getTime() -
+        new Date(mergedQualification.startDate).getTime();
+      const days = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+      mergedQualification.campaignDuration = `${days} days`;
+    }
+
+    lead.qualification = mergedQualification;
 
     if (qualificationData.city) {
       lead.city = qualificationData.city;
@@ -1054,11 +1073,20 @@ export class LeadsService {
       const q = lead.qualification || {};
       const city = q.city || lead.city;
       const budget = q.budget;
-      const duration = q.campaignDuration;
+      const duration =
+        q.campaignDuration ||
+        (q.startDate && q.endDate
+          ? `${Math.max(1, Math.round((new Date(q.endDate).getTime() - new Date(q.startDate).getTime()) / (1000 * 60 * 60 * 24)))} days`
+          : undefined);
+
+      if (!q.campaignDuration && duration) {
+        lead.qualification = lead.qualification || {};
+        lead.qualification.campaignDuration = duration;
+      }
 
       if (!city || budget === undefined || budget === null || !duration) {
         throw new ValidationError(
-          'Moving to Qualified requires budget, city and duration to be filled.',
+          'Moving to Qualified requires budget, city and duration/dates to be filled.',
         );
       }
       lead.qualifiedAt = new Date();
@@ -1168,6 +1196,19 @@ export class LeadsService {
         lead.status = 'New';
       }
       delete data.assignedTo;
+    }
+
+    if (data.qualification) {
+      const currentQual = lead.qualification
+        ? typeof (lead.qualification as any).toObject === 'function'
+          ? (lead.qualification as any).toObject()
+          : lead.qualification
+        : {};
+      lead.qualification = {
+        ...currentQual,
+        ...data.qualification,
+      };
+      delete data.qualification;
     }
 
     Object.assign(lead, data);

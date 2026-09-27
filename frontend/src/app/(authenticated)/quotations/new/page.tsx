@@ -75,6 +75,14 @@ export default function NewQuotationPage() {
         setClientName(targetLead.companyName || '');
         setClientEmail(targetLead.email || '');
         setClientPhone(targetLead.mobile || '');
+
+        if (targetLead.qualification?.startDate && targetLead.qualification?.endDate) {
+          const startStr = new Date(targetLead.qualification.startDate).toISOString().slice(0, 10);
+          const endStr = new Date(targetLead.qualification.endDate).toISOString().slice(0, 10);
+          setLineItems((prev) =>
+            prev.map((item) => ({ ...item, startDate: startStr, endDate: endStr }))
+          );
+        }
       }
 
       const loadedSites: SiteOption[] = (sitesRes as any).data || sitesRes.sites || [];
@@ -96,6 +104,14 @@ export default function NewQuotationPage() {
       setClientName(found.companyName || '');
       setClientEmail(found.email || '');
       setClientPhone(found.mobile || '');
+
+      if (found.qualification?.startDate && found.qualification?.endDate) {
+        const startStr = new Date(found.qualification.startDate).toISOString().slice(0, 10);
+        const endStr = new Date(found.qualification.endDate).toISOString().slice(0, 10);
+        setLineItems((prev) =>
+          prev.map((item) => ({ ...item, startDate: startStr, endDate: endStr }))
+        );
+      }
     }
   }
 

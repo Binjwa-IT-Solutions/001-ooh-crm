@@ -78,6 +78,10 @@ export interface ILeadQualification {
   city?: string;
   locationPreference?: LocationPreference;
   campaignDuration?: string;
+  startDate?: Date | null;
+  endDate?: Date | null;
+  numberOfSites?: number;
+  preferredLocations?: string;
   budget?: number; // Integer paise
   targetAudience?: string;
   campaignObjective?: string;
@@ -190,6 +194,10 @@ const qualificationSchema = new Schema<ILeadQualification>(
     city: { type: String, trim: true },
     locationPreference: { type: String, enum: LOCATION_PREFERENCES },
     campaignDuration: { type: String, trim: true },
+    startDate: { type: Date, default: null },
+    endDate: { type: Date, default: null },
+    numberOfSites: { type: Number, min: 0 },
+    preferredLocations: { type: String, trim: true },
     budget: { type: Number, min: 0 }, // Integer paise
     targetAudience: { type: String, trim: true },
     campaignObjective: { type: String, trim: true },
