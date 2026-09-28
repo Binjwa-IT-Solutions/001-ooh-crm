@@ -55,6 +55,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/leads', label: 'Leads', icon: Users, permission: 'leads.view' },
       { href: '/quotations', label: 'Quotations', icon: FileText, permission: 'quotations.view' },
+      { href: '/my-campaigns', label: 'My Campaigns', icon: Megaphone, permission: 'campaigns.view' },
     ],
   },
   {

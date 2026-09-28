@@ -1,7 +1,8 @@
 import { holidayService } from './holiday.service.js';
-import { LeaveType } from '../leaveTypes/leaveTypes.model.js';
+// import { LeaveType } from '../leaveTypes/leaveTypes.model.js';
 import ShiftConfig from '../models/shift-config.model.js';
 import { DEPARTMENTS } from '../../employees/employees.model.js';
+import { LeaveType } from '../models/leave.model.js';
 
 export async function initializeHRDefaults(): Promise<void> {
   try {

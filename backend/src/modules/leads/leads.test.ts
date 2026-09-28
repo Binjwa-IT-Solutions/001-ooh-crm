@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { Lead } from './leads.model.js';
 import { LeadsService } from './leads.service.js';
+import { LeadsController } from './leads.controller.js';
 import { leadQualificationSchema, listLeadsSchema, uploadLeadDocumentSchema } from './leads.validator.js';
 
 const FAKE_USER_CTX = { user: { id: '64b7f9a1c2d3e4f5a6b7c8d9', role: 'sales' } } as any;
@@ -192,6 +193,39 @@ test('logFollowUpLead records followUpType, reason, and nextActionDate', async (
   }
 });
 
+test('logFollowUpLead auto-clears nextActionDate when empty or omitted (Option 1)', async () => {
+  const oldPastDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+  const mockLead: any = {
+    _id: '64b7f9a1c2d3e4f5a6b7c8d9',
+    status: 'Contacted',
+    nextActionDate: oldPastDate,
+    callLogs: [],
+    save: async function () { return this; },
+    populate: async function () { return this; },
+  };
+
+  const origGetLead = LeadsService.getLead;
+  LeadsService.getLead = async () => mockLead;
+  try {
+    const updated = await LeadsService.logFollowUpLead(
+      '64b7f9a1c2d3e4f5a6b7c8d9',
+      {
+        followUpType: 'Call',
+        reason: 'General Follow-up',
+        remarks: 'Client spoke, no immediate next action scheduled',
+        // nextActionDate omitted
+      },
+      FAKE_USER_CTX,
+    );
+
+    assert.equal(updated.callLogs.length, 1);
+    assert.equal(updated.nextActionDate, null);
+    assert.equal(updated.callLogs[0].nextActionDate, null);
+  } finally {
+    LeadsService.getLead = origGetLead;
+  }
+});
+
 test('managerApproveLead records approval and remarks', async () => {
   const mockLead: any = {
     _id: '64b7f9a1c2d3e4f5a6b7c8d9',
@@ -254,6 +288,100 @@ test('intakeLead parses and sanitizes JustDial payload and starts SLA', async ()
       assert.ok(created.qualification?.notes?.includes('Area: Vijay Nagar'));
       assert.ok(created.slaTimerEnd instanceof Date, '24h SLA timer should be set');
       assert.deepEqual(created.rawPayload, jdPayload);
+    },
+  );
+});
+
+test('intakeLead parses official JustDial email specification payload', async () => {
+  await withPatchedModel(
+    {
+      findOne: () => ({ exec: async () => null }),
+      create: async (payload: any) => payload,
+    },
+    async () => {
+      const officialJdPayload = {
+        leadid: 'JD57154BC2A4E7',
+        leadtype: 'category',
+        prefix: 'Ms',
+        name: 'HIRAL',
+        mobile: '9820097546',
+        phone: '02224100086',
+        email: '',
+        date: '2026-09-23',
+        time: '14:30:00',
+        category: 'Outdoor Hoarding',
+        area: 'Dadar West',
+        city: 'Mumbai',
+        brancharea: 'Andheri East',
+        dncmobile: '1',
+        dncphone: '0',
+        company: 'Hiral Enterprises',
+        pincode: '400028',
+        parentid: 'PX522.X522.240910141830.I2T5',
+      };
+
+      const created: any = await LeadsService.intakeLead('JustDial', officialJdPayload);
+
+      assert.equal(created.status, 'New');
+      assert.equal(created.source, 'JustDial');
+      assert.equal(created.mobile, '9820097546');
+      assert.equal(created.contactPerson, 'Ms HIRAL');
+      assert.equal(created.companyName, 'Hiral Enterprises');
+      assert.equal(created.city, 'Mumbai');
+      assert.ok(created.qualification?.notes?.includes('JD Lead ID: JD57154BC2A4E7'));
+      assert.ok(created.qualification?.notes?.includes('Contract ID: PX522.X522.240910141830.I2T5'));
+      assert.ok(created.qualification?.notes?.includes('Type: category'));
+      assert.ok(created.qualification?.notes?.includes('DND Mobile: Yes'));
+      assert.ok(created.qualification?.notes?.includes('Branch Area: Andheri East'));
+      assert.ok(created.qualification?.notes?.includes('Landline: 02224100086'));
+      assert.ok(created.slaTimerEnd instanceof Date);
+    },
+  );
+});
+
+test('intakeLead parses screenshot 2 sample POST JSON payload with zero pincode and 9XXXXX mobile', async () => {
+  await withPatchedModel(
+    {
+      findOne: () => ({ exec: async () => null }),
+      create: async (payload: any) => payload,
+    },
+    async () => {
+      const screenshot2Payload = {
+        leadid: 'JDF99CB5961B40',
+        leadtype: 'category',
+        prefix: '',
+        name: 'ABHAY SHAH',
+        mobile: '9XXXXX',
+        phone: '',
+        email: '',
+        date: '2020-12-24',
+        category: 'Generator Dealers',
+        area: 'Ghatkopar West',
+        city: 'Mumbai',
+        brancharea: 'Apollo Bunder',
+        dncmobile: 0,
+        dncphone: 0,
+        company: 'Greaves Cotton Ltd',
+        pincode: '0',
+        time: '13:10:11',
+        branchpin: '400001',
+        parentid: 'PXX22.XX22.150705230454.M4B1',
+      };
+
+      const created: any = await LeadsService.intakeLead('JustDial', screenshot2Payload);
+
+      assert.equal(created.status, 'New');
+      assert.equal(created.source, 'JustDial');
+      assert.equal(created.contactPerson, 'ABHAY SHAH');
+      assert.equal(created.companyName, 'Greaves Cotton Ltd');
+      assert.equal(created.city, 'Mumbai');
+      assert.ok(created.qualification?.notes?.includes('JD Lead ID: JDF99CB5961B40'));
+      assert.ok(created.qualification?.notes?.includes('Contract ID: PXX22.XX22.150705230454.M4B1'));
+      assert.ok(created.qualification?.notes?.includes('Category: Generator Dealers'));
+      assert.ok(created.qualification?.notes?.includes('Area: Ghatkopar West'));
+      assert.ok(created.qualification?.notes?.includes('Branch Area: Apollo Bunder'));
+      assert.ok(created.qualification?.notes?.includes('Branch Pin: 400001'));
+      assert.ok(created.qualification?.notes?.includes('DND Mobile: No'));
     },
   );
 });
@@ -434,6 +562,104 @@ test('changeStatus allows restoring Rejected lead back to New and clears assigne
   } finally {
     LeadsService.getLead = origGetLead;
   }
+});
+
+test('changeStatus auto-clears nextActionDate when transitioning to terminal status (Won, Lost, Rejected)', async () => {
+  const fakeLead: any = {
+    _id: '6a87e4b4c93947ba317108aa',
+    status: 'Negotiation',
+    nextActionDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+    statusHistory: [],
+    save: async () => fakeLead,
+    populate: async () => fakeLead,
+  };
+
+  const origGetLead = LeadsService.getLead;
+  LeadsService.getLead = async () => fakeLead;
+
+  try {
+    const resWon = await LeadsService.changeStatus(
+      '6a87e4b4c93947ba317108aa',
+      { status: 'Won' },
+      { user: { id: '6a87e4b4c93947ba31710801', role: 'admin' } } as any,
+    );
+    assert.equal(resWon.status, 'Won');
+    assert.equal(resWon.nextActionDate, null);
+
+    fakeLead.status = 'Interested';
+    fakeLead.nextActionDate = new Date();
+    const resLost = await LeadsService.changeStatus(
+      '6a87e4b4c93947ba317108aa',
+      { status: 'Lost', lostReason: 'Budget mismatch' },
+      { user: { id: '6a87e4b4c93947ba31710801', role: 'admin' } } as any,
+    );
+    assert.equal(resLost.status, 'Lost');
+    assert.equal(resLost.nextActionDate, null);
+  } finally {
+    LeadsService.getLead = origGetLead;
+  }
+});
+
+test('changeStatus allows Contacted -> Rejected and records firstResponseAt on Contacted', async () => {
+  const fakeLead: any = {
+    _id: '6a87e4b4c93947ba317108aa',
+    status: 'New',
+    firstResponseAt: null,
+    statusHistory: [],
+    save: async () => fakeLead,
+    populate: async () => fakeLead,
+  };
+
+  const origGetLead = LeadsService.getLead;
+  LeadsService.getLead = async () => fakeLead;
+
+  try {
+    const resContacted = await LeadsService.changeStatus(
+      '6a87e4b4c93947ba317108aa',
+      { status: 'Contacted' },
+      { user: { id: '6a87e4b4c93947ba31710801', role: 'sales_agent' } } as any,
+    );
+    assert.equal(resContacted.status, 'Contacted');
+    assert.ok(resContacted.firstResponseAt instanceof Date, 'firstResponseAt should be set on Contacted');
+
+    const resRejected = await LeadsService.changeStatus(
+      '6a87e4b4c93947ba317108aa',
+      { status: 'Rejected', lostReason: 'Wrong number/junk inquiry' },
+      { user: { id: '6a87e4b4c93947ba31710801', role: 'sales_agent' } } as any,
+    );
+    assert.equal(resRejected.status, 'Rejected');
+    assert.equal(resRejected.qualification?.lostReason, 'Wrong number/junk inquiry');
+  } finally {
+    LeadsService.getLead = origGetLead;
+  }
+});
+
+test('createLead normalizes formatted mobile number to clean 10-digits for duplicate detection', async () => {
+  const now = new Date();
+  const previous = { mobile: '9876543210', source: 'Manual', createdAt: new Date(now.getTime() - 2 * 60 * 60 * 1000) };
+
+  await withPatchedModel(
+    {
+      findOne: (query: any) => {
+        if (query.mobile === '9876543210' && query.source === 'Manual') {
+          return { exec: async () => previous };
+        }
+        return { exec: async () => null };
+      },
+      create: async (payload: any) => payload,
+    },
+    async () => {
+      const data = {
+        companyName: 'New Brand',
+        contactPerson: 'Varun',
+        mobile: '+91 98765 43210', // formatted with country code and spaces
+        source: 'Manual',
+      };
+      const created = await LeadsService.createLead(data, FAKE_USER_CTX);
+      assert.equal(created.status, 'Duplicate');
+      assert.equal(data.mobile, '9876543210', 'mobile should be normalized to 10 digits');
+    },
+  );
 });
 
 test('getActivity returns combined chronological activities with follow-up logs', async () => {
@@ -734,6 +960,109 @@ test('releaseBreachedClaimedLeads does NOT release leads that have call logs or 
     assert.ok(mockActiveLead.claimedBy !== null);
   } finally {
     Lead.find = origFind;
+  }
+});
+
+test('getLeadStats returns active, overdue, unclaimed, and won metrics', async () => {
+  const origCount = Lead.countDocuments;
+  const origAggregate = Lead.aggregate;
+
+  (Lead as any).countDocuments = async (query: any) => {
+    if (query.nextActionDate) return 3;
+    if (query.status === 'New' && query.assignedTo === null) return 2;
+    return 15;
+  };
+
+  (Lead as any).aggregate = async () => [
+    { _id: null, count: 5, totalRevenue: 15000000 },
+  ];
+
+  try {
+    const stats = await LeadsService.getLeadStats(FAKE_USER_CTX);
+    assert.equal(stats.totalActive, 15);
+    assert.equal(stats.overdueCount, 3);
+    assert.equal(stats.unclaimedCount, 2);
+    assert.equal(stats.wonCount, 5);
+    assert.equal(stats.wonRevenue, 15000000);
+  } finally {
+    Lead.countDocuments = origCount;
+    Lead.aggregate = origAggregate;
+  }
+});
+
+test('LeadsController.intake returns plain text RECEIVED for Justdial GET and POST', async () => {
+  const origFindOne = Lead.findOne;
+  const origCreate = Lead.create;
+  (Lead as any).findOne = () => ({ exec: async () => null });
+  (Lead as any).create = async (payload: any) => ({ _id: 'mock_1', ...payload });
+
+  try {
+    let sentStatus = 0;
+    let sentBody: any = null;
+    const mockRes: any = {
+      status: (code: number) => {
+        sentStatus = code;
+        return mockRes;
+      },
+      send: (body: any) => {
+        sentBody = body;
+        return mockRes;
+      },
+      json: (body: any) => {
+        sentBody = body;
+        return mockRes;
+      },
+    };
+
+    // 1. Test GET query from Justdial
+    const mockGetReq: any = {
+      method: 'GET',
+      path: '/justdial',
+      query: {
+        leadid: 'JD6960768A8B81',
+        name: 'User',
+        mobile: '9820097546',
+        city: 'Mumbai',
+        parentid: 'PX522.X522.240910141830.I2T5',
+      },
+      body: {},
+      headers: {},
+    };
+    await LeadsController.intake(mockGetReq, mockRes);
+    assert.equal(sentStatus, 200);
+    assert.equal(sentBody, 'RECEIVED');
+
+    // 2. Test Blank GET Ping (Justdial handshake verification)
+    const mockPingReq: any = {
+      method: 'GET',
+      path: '/justdial',
+      query: {},
+      body: {},
+      headers: {},
+    };
+    await LeadsController.intake(mockPingReq, mockRes);
+    assert.equal(sentStatus, 200);
+    assert.equal(sentBody, 'RECEIVED');
+
+    // 3. Test POST JSON from Justdial
+    const mockPostReq: any = {
+      method: 'POST',
+      path: '/justdial',
+      query: {},
+      body: {
+        leadid: 'JDF99CB5961B40',
+        name: 'ABHAY SHAH',
+        mobile: '9826012345',
+        city: 'Mumbai',
+      },
+      headers: {},
+    };
+    await LeadsController.intake(mockPostReq, mockRes);
+    assert.equal(sentStatus, 200);
+    assert.equal(sentBody, 'RECEIVED');
+  } finally {
+    Lead.findOne = origFindOne;
+    Lead.create = origCreate;
   }
 });
 

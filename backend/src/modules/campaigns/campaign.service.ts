@@ -44,6 +44,9 @@ type CampaignFilters = {
   startDate?: Date;
   endDate?: Date;
   search?: string;
+  myCampaigns?: boolean;
+  agentId?: string;
+  tab?: "all" | "live" | "closed" | "renewals";
 };
 
 /* -------------------------------------------------------------------------- */
@@ -623,12 +626,55 @@ export async function listCampaigns(
 ) {
   const query: Record<string, any> = {};
 
-  if (filters.status) {
-    query.status = filters.status;
+  /* --------------------------- Agent / My Campaigns Scoping ----------------- */
+  const targetAgentId =
+    filters.agentId || (filters.myCampaigns ? ctx.userId : undefined);
+
+  if (targetAgentId && Types.ObjectId.isValid(targetAgentId)) {
+    const agentLeads = await Lead.find({
+      $or: [
+        { assignedTo: new Types.ObjectId(targetAgentId) },
+        { createdBy: new Types.ObjectId(targetAgentId) },
+      ],
+    })
+      .select("_id")
+      .lean();
+
+    const agentLeadIds = agentLeads.map((l) => l._id);
+    if (agentLeadIds.length === 0) {
+      return [];
+    }
+
+    if (filters.leadId && Types.ObjectId.isValid(filters.leadId)) {
+      const requestedId = new Types.ObjectId(filters.leadId);
+      const isOwned = agentLeadIds.some((id) => id.equals(requestedId));
+      if (!isOwned) {
+        return [];
+      }
+      query.leadId = requestedId;
+    } else {
+      query.leadId = { $in: agentLeadIds };
+    }
+  } else if (filters.leadId && Types.ObjectId.isValid(filters.leadId)) {
+    query.leadId = new Types.ObjectId(filters.leadId);
   }
 
-  if (filters.leadId && Types.ObjectId.isValid(filters.leadId)) {
-    query.leadId = new Types.ObjectId(filters.leadId);
+  /* --------------------------- Tab Filters (Live / Closed / Renewals) -------- */
+  if (filters.tab === "live") {
+    query.status = CampaignStatus.IN_PROGRESS;
+  } else if (filters.tab === "closed") {
+    query.status = {
+      $in: [CampaignStatus.COMPLETED, CampaignStatus.CANCELLED],
+    };
+  } else if (filters.tab === "renewals") {
+    const now = new Date();
+    const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    query.status = {
+      $nin: [CampaignStatus.COMPLETED, CampaignStatus.CANCELLED],
+    };
+    query.endDate = { $gte: now, $lte: in7Days };
+  } else if (filters.status) {
+    query.status = filters.status;
   }
 
   if (filters.city?.trim()) {
@@ -746,10 +792,11 @@ export async function listCampaigns(
   }
 
   return Campaign.find(query)
-    .populate(
-      "leadId",
-      "companyName contactPerson email mobile city",
-    )
+    .populate({
+      path: "leadId",
+      select: "companyName contactPerson email mobile city assignedTo",
+      populate: { path: "assignedTo", select: "name email role" },
+    })
     .populate(
       "siteIds",
       "name code city type size baseCostPerDay",

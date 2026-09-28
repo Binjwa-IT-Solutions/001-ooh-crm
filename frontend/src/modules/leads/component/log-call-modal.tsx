@@ -29,7 +29,7 @@ export interface LogFollowUpPayload {
   remarks?: string;
   note?: string;
   loggedAt?: string;
-  nextActionDate?: string;
+  nextActionDate?: string | null;
   delayResponsibility?: string;
   durationSec?: number;
   // Quick profile updates
@@ -342,7 +342,7 @@ function LogCallModalContent({
                   remarks: remarks.trim(),
                   note: remarks.trim(),
                   loggedAt: loggedAt ? new Date(loggedAt).toISOString() : undefined,
-                  nextActionDate: nextActionDate ? new Date(nextActionDate).toISOString() : undefined,
+                  nextActionDate: nextActionDate ? new Date(nextActionDate).toISOString() : null,
                   delayResponsibility: delayResponsibility || undefined,
                   durationSec: durationSec ? Number(durationSec) : undefined,
                 };

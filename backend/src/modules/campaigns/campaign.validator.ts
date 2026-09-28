@@ -72,6 +72,19 @@ export const campaignListQuerySchema = z.object({
 
   endDate: z.coerce.date().optional(),
 
+  myCampaigns: z
+    .preprocess((val) => {
+      if (typeof val === "string") return val.toLowerCase() === "true";
+      return Boolean(val);
+    }, z.boolean())
+    .optional(),
+
+  agentId: objectId.optional(),
+
+  tab: z
+    .enum(["all", "live", "closed", "renewals"])
+    .optional(),
+
   page: z.coerce
     .number()
     .int()

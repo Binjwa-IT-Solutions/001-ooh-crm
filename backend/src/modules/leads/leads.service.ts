@@ -109,8 +109,15 @@ export class LeadsService {
     const query: Record<string, any> = {};
 
     if (filters.search) {
-      const searchRegex = { $regex: filters.search, $options: 'i' };
-      query.$or = [{ companyName: searchRegex }, { mobile: searchRegex }];
+      const cleanSearch = escapeRegex(filters.search.trim());
+      const searchRegex = { $regex: cleanSearch, $options: 'i' };
+      query.$or = [
+        { companyName: searchRegex },
+        { contactPerson: searchRegex },
+        { mobile: searchRegex },
+        { email: searchRegex },
+        { city: searchRegex },
+      ];
     }
 
     if (filters.status) query.status = filters.status;
@@ -437,8 +444,20 @@ export class LeadsService {
     const now = new Date();
     const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
+    const rawMobile = String(data.mobile || '').trim();
+    const digitsOnly = rawMobile.replace(/\D/g, '');
+    const cleanMobile = digitsOnly.length >= 10 ? digitsOnly.slice(-10) : (digitsOnly || rawMobile);
+    data.mobile = cleanMobile;
+
+    if (data.secondaryMobile) {
+      const secDigits = String(data.secondaryMobile).replace(/\D/g, '');
+      if (secDigits.length >= 10) {
+        data.secondaryMobile = secDigits.slice(-10);
+      }
+    }
+
     const existing = await Lead.findOne({
-      mobile: data.mobile,
+      mobile: cleanMobile,
       source: data.source,
       createdAt: { $gte: windowStart },
       deletedAt: null,
@@ -624,20 +643,33 @@ export class LeadsService {
       payload.lastName || payload.last_name || payload['Last Name'],
     ].filter(Boolean).join(' ').trim();
 
-    const contactPerson = payload.contactPerson || payload.name || combinedName || emailContactPerson || 'Prospective Client';
-    const companyName = payload.company_name || payload.companyName || payload.company || emailCompanyName || contactPerson || 'Web Lead';
+    const rawContact = payload.contactPerson || payload.name || combinedName || emailContactPerson || 'Prospective Client';
+    const prefix = payload.prefix ? `${payload.prefix.trim()} ` : '';
+    const contactPerson = payload.prefix && !rawContact.startsWith(prefix) ? `${prefix}${rawContact}` : rawContact;
+
+    const companyName = payload.company || payload.company_name || payload.companyName || emailCompanyName || contactPerson || 'Web Lead';
     const email = payload.email ? String(payload.email).trim().toLowerCase() : (emailAddress || undefined);
-    const city = payload.city || payload.area || emailCity || undefined;
+    const city = payload.city || payload.Area || payload.area || payload.brancharea || emailCity || undefined;
 
     // Rich contextual note for Justdial / third-party / website leads
     let notes: string | undefined = emailNotes;
-    if (source === 'JustDial' || payload.leadid || payload.category) {
+    if (source === 'JustDial' || payload.leadid || payload.category || payload.parentid) {
       const noteParts: string[] = [];
       if (payload.leadid) noteParts.push(`JD Lead ID: ${payload.leadid}`);
+      if (payload.parentid) noteParts.push(`Contract ID: ${payload.parentid}`);
       if (payload.category) noteParts.push(`Category: ${payload.category}`);
-      if (payload.area) noteParts.push(`Area: ${payload.area}`);
+      if (payload.leadtype || payload.lead_type) noteParts.push(`Type: ${payload.leadtype || payload.lead_type}`);
+      if (payload.area || payload.Area) noteParts.push(`Area: ${payload.area || payload.Area}`);
+      if (payload.brancharea) noteParts.push(`Branch Area: ${payload.brancharea}`);
       if (payload.pincode) noteParts.push(`Pincode: ${payload.pincode}`);
-      if (payload.lead_type) noteParts.push(`Type: ${payload.lead_type}`);
+      if (payload.branchpin) noteParts.push(`Branch Pin: ${payload.branchpin}`);
+      if (payload.phone) noteParts.push(`Landline: ${payload.phone}`);
+      if (payload.dncmobile !== undefined && payload.dncmobile !== '') {
+        noteParts.push(`DND Mobile: ${String(payload.dncmobile) === '1' ? 'Yes' : 'No'}`);
+      }
+      if (payload.date || payload.time) {
+        noteParts.push(`Lead Time: ${payload.date || ''} ${payload.time || ''}`.trim());
+      }
       if (noteParts.length > 0) {
         notes = `[JustDial Lead Details]\n${noteParts.join(' | ')}`;
       }
@@ -830,7 +862,7 @@ export class LeadsService {
       remarks?: string;
       note?: string;
       loggedAt?: Date;
-      nextActionDate?: Date;
+      nextActionDate?: Date | null;
       delayResponsibility?: string;
       durationSec?: number;
       budget?: number;
@@ -868,7 +900,11 @@ export class LeadsService {
       reason: payload.reason ?? '',
       remarks: payload.remarks || payload.note || '',
       note: payload.note || payload.remarks || '',
-      nextActionDate: payload.nextActionDate || undefined,
+      nextActionDate: payload.nextActionDate instanceof Date
+        ? payload.nextActionDate
+        : payload.nextActionDate
+          ? new Date(payload.nextActionDate)
+          : null,
       delayResponsibility: payload.delayResponsibility || undefined,
       durationSec: payload.durationSec ?? undefined,
       createdAt: interactionTime,
@@ -901,9 +937,11 @@ export class LeadsService {
       lead.email = payload.email.toLowerCase().trim();
     }
 
-    if (payload.nextActionDate) {
-      lead.nextActionDate = payload.nextActionDate;
-    }
+    lead.nextActionDate = payload.nextActionDate instanceof Date
+      ? payload.nextActionDate
+      : payload.nextActionDate
+        ? new Date(payload.nextActionDate)
+        : null;
 
     if (followUpEntry.followUpType === 'Call' && !lead.firstCallAt) {
       lead.firstCallAt = interactionTime;
@@ -939,7 +977,7 @@ export class LeadsService {
    */
   static async logCallLead(
     id: string,
-    payload: { note?: string; durationSec?: number; followUpType?: FollowUpType; reason?: string; loggedAt?: Date; nextActionDate?: Date; delayResponsibility?: string },
+    payload: { note?: string; durationSec?: number; followUpType?: FollowUpType; reason?: string; loggedAt?: Date; nextActionDate?: Date | null; delayResponsibility?: string },
     ctx: RequestContext,
   ): Promise<ILead> {
     return LeadsService.logFollowUpLead(id, payload, ctx);
@@ -990,10 +1028,29 @@ export class LeadsService {
   ): Promise<ILead> {
     const lead = await LeadsService.getLead(id, ctx);
 
-    lead.qualification = {
-      ...lead.qualification,
+    const currentQual = lead.qualification
+      ? typeof (lead.qualification as any).toObject === 'function'
+        ? (lead.qualification as any).toObject()
+        : lead.qualification
+      : {};
+    const mergedQualification = {
+      ...currentQual,
       ...qualificationData,
     };
+
+    if (
+      mergedQualification.startDate &&
+      mergedQualification.endDate &&
+      !mergedQualification.campaignDuration
+    ) {
+      const diffMs =
+        new Date(mergedQualification.endDate).getTime() -
+        new Date(mergedQualification.startDate).getTime();
+      const days = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+      mergedQualification.campaignDuration = `${days} days`;
+    }
+
+    lead.qualification = mergedQualification;
 
     if (qualificationData.city) {
       lead.city = qualificationData.city;
@@ -1041,11 +1098,20 @@ export class LeadsService {
       const q = lead.qualification || {};
       const city = q.city || lead.city;
       const budget = q.budget;
-      const duration = q.campaignDuration;
+      const duration =
+        q.campaignDuration ||
+        (q.startDate && q.endDate
+          ? `${Math.max(1, Math.round((new Date(q.endDate).getTime() - new Date(q.startDate).getTime()) / (1000 * 60 * 60 * 24)))} days`
+          : undefined);
+
+      if (!q.campaignDuration && duration) {
+        lead.qualification = lead.qualification || {};
+        lead.qualification.campaignDuration = duration;
+      }
 
       if (!city || budget === undefined || budget === null || !duration) {
         throw new ValidationError(
-          'Moving to Qualified requires budget, city and duration to be filled.',
+          'Moving to Qualified requires budget, city and duration/dates to be filled.',
         );
       }
       lead.qualifiedAt = new Date();
@@ -1057,17 +1123,15 @@ export class LeadsService {
       if (!reason || reason.trim().length === 0) {
         throw new ValidationError('Lost status requires a reason.');
       }
-      if (lead.qualification) {
-        lead.qualification.lostReason = reason.trim();
-      }
+      lead.qualification = lead.qualification || {};
+      lead.qualification.lostReason = reason.trim();
     }
 
     // 4b. Rejected Gate: moving to Rejected records reason and tracks who rejected
     if (toStatus === 'Rejected') {
       const reason = payload.lostReason || lead.qualification?.lostReason || 'Junk / Irrelevant inquiry';
-      if (lead.qualification) {
-        lead.qualification.lostReason = reason.trim();
-      }
+      lead.qualification = lead.qualification || {};
+      lead.qualification.lostReason = reason.trim();
       lead.rejectedBy = toObjectId(ctx.user.id);
     }
 
@@ -1089,6 +1153,15 @@ export class LeadsService {
 
     const now = new Date();
     lead.status = toStatus;
+    if (toStatus === 'Contacted' && !lead.firstResponseAt) {
+      lead.firstResponseAt = now;
+      if (!lead.firstCallAt) {
+        lead.firstCallAt = now;
+      }
+    }
+    if (toStatus === 'Won' || toStatus === 'Lost' || toStatus === 'Rejected') {
+      lead.nextActionDate = null;
+    }
     lead.updatedBy = toObjectId(ctx.user.id);
 
     lead.statusHistory = lead.statusHistory || [];
@@ -1150,6 +1223,19 @@ export class LeadsService {
       delete data.assignedTo;
     }
 
+    if (data.qualification) {
+      const currentQual = lead.qualification
+        ? typeof (lead.qualification as any).toObject === 'function'
+          ? (lead.qualification as any).toObject()
+          : lead.qualification
+        : {};
+      lead.qualification = {
+        ...currentQual,
+        ...data.qualification,
+      };
+      delete data.qualification;
+    }
+
     Object.assign(lead, data);
     lead.updatedBy = toObjectId(ctx.user.id);
     await lead.save();
@@ -1162,6 +1248,9 @@ export class LeadsService {
    */
   static async getActivity(id: string, ctx: RequestContext): Promise<{ activities: any[] }> {
     const lead = await LeadsService.getLead(id, ctx);
+    if (lead.populate) {
+      await lead.populate('callLogs.user statusHistory.changedBy managerApproval.approvedBy', 'name email role');
+    }
     const leadObjId = toObjectId(id);
 
     // Fetch linked quotations and campaigns in parallel (with safe fallback for disconnected test environments)
@@ -1360,6 +1449,49 @@ export class LeadsService {
       if (clean) cleanSet.add(clean);
     }
     return Array.from(cleanSet).sort((a, b) => a.localeCompare(b));
+  }
+
+  static async getLeadStats(ctx: RequestContext): Promise<{
+    totalActive: number;
+    overdueCount: number;
+    unclaimedCount: number;
+    wonCount: number;
+    wonRevenue: number;
+  }> {
+    const matchBase: Record<string, any> = { deletedAt: null };
+    if (!['admin', 'manager', 'finance', 'hr', 'ops'].includes(ctx.user.role)) {
+      matchBase.assignedTo = toObjectId(ctx.user.id);
+    }
+
+    const [totalActive, overdueCount, unclaimedCount, wonStats] = await Promise.all([
+      Lead.countDocuments({
+        ...matchBase,
+        status: { $nin: ['Won', 'Lost', 'Rejected', 'Duplicate', 'duplicate'] },
+        $or: [
+          { assignedTo: { $ne: null } },
+          { claimedBy: { $ne: null } },
+          { status: { $ne: 'New' } },
+        ],
+      }),
+      Lead.countDocuments({
+        ...matchBase,
+        status: { $nin: ['Won', 'Lost', 'Rejected', 'Duplicate', 'duplicate'] },
+        nextActionDate: { $ne: null, $lt: new Date() },
+      }),
+      Lead.countDocuments({ status: 'New', assignedTo: null, claimedBy: null, deletedAt: null }),
+      Lead.aggregate([
+        { $match: { ...matchBase, status: 'Won' } },
+        { $group: { _id: null, count: { $sum: 1 }, totalRevenue: { $sum: '$qualification.budget' } } },
+      ]),
+    ]);
+
+    return {
+      totalActive,
+      overdueCount,
+      unclaimedCount,
+      wonCount: wonStats[0]?.count || 0,
+      wonRevenue: wonStats[0]?.totalRevenue || 0,
+    };
   }
 }
 

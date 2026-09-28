@@ -17,40 +17,47 @@ export async function withOptionalTransaction<T>(
 
   try {
     session = await mongoose.startSession();
+  } catch {
+    return fn(undefined);
+  }
+
+  try {
     try {
       session.startTransaction();
       const result = await fn(session);
       await session.commitTransaction();
       return result;
-    } catch (txErr) {
-      // If transaction fails, retry without session
-      const errMsg = (txErr as Error).message ?? '';
-      if (
+    } catch (txErr: any) {
+      const errMsg = txErr?.message ?? '';
+      const errCode = txErr?.code;
+      const isTxUnsupported =
+        errCode === 20 ||
+        txErr?.codeName === 'IllegalOperation' ||
         errMsg.includes('Transaction numbers are only allowed') ||
         errMsg.includes('does not support transactions') ||
         errMsg.includes('not supported') ||
+        errMsg.includes('replica set') ||
         errMsg.includes('MongoServerError') ||
         errMsg.includes('retryable writes') ||
         errMsg.includes('retryWrites') ||
         errMsg.includes('transactions are only') ||
-        errMsg.includes('not replica set')
-      ) {
+        errMsg.includes('not replica set') ||
+        errMsg.includes('Cannot start a transaction');
+
+      if (isTxUnsupported) {
         try { await session.abortTransaction(); } catch { /* ignore */ }
-        session.endSession();
+        try { await session.endSession(); } catch { /* ignore */ }
+        session = undefined;
         // Retry without a transaction
-        return fn(undefined);
+        return await fn(undefined);
       }
+
       try { await session.abortTransaction(); } catch { /* ignore */ }
       throw txErr;
     }
-  } catch (err) {
-    if (session) {
-      try { session.endSession(); } catch { /* ignore */ }
-    }
-    throw err;
   } finally {
     if (session) {
-      try { session.endSession(); } catch { /* ignore */ }
+      try { await session.endSession(); } catch { /* ignore */ }
     }
   }
 }

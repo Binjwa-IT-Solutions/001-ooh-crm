@@ -672,7 +672,7 @@ export default function QuotationDetailPage() {
                     rel="noreferrer"
                     className="mt-2 inline-block font-semibold underline"
                   >
-                    Test Client View $\rightarrow$
+                    Test Client View →
                   </a>
                 </div>
               )}

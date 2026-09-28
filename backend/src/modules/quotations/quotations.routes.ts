@@ -9,6 +9,7 @@ export const quotationsRoutes = Router();
 
 // --- Protected Internal Routes (/api/quotations) ---
 quotationsRoutes.get('/', requireAuth, requirePermission('quotations.view'), asyncHandler(QuotationsController.list));
+quotationsRoutes.get('/stats', requireAuth, requirePermission('quotations.view'), asyncHandler(QuotationsController.getStats));
 quotationsRoutes.post('/', requireAuth, requirePermission('quotations.create'), asyncHandler(QuotationsController.create));
 quotationsRoutes.get('/:id', requireAuth, requirePermission('quotations.view'), asyncHandler(QuotationsController.get));
 quotationsRoutes.patch('/:id', requireAuth, requirePermission('quotations.update'), asyncHandler(QuotationsController.update));

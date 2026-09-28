@@ -15,6 +15,7 @@ export interface CampaignLead {
   phone?: string;
   mobile?: string;
   city?: string;
+  assignedTo?: string | { _id: string; name?: string; email?: string; role?: string };
 }
 
 export interface CampaignQuotation {
@@ -93,6 +94,9 @@ export interface CampaignFilters {
   manager?: string;
   startDate?: string;
   endDate?: string;
+  myCampaigns?: boolean;
+  agentId?: string;
+  tab?: "all" | "live" | "closed" | "renewals";
 }
 
 export interface LeadOption {

@@ -18,6 +18,11 @@ export class QuotationsController {
     });
   }
 
+  static async getStats(req: Request, res: Response): Promise<void> {
+    const stats = await QuotationsService.getQuotationStats(req.ctx!);
+    res.status(200).json(stats);
+  }
+
   static async get(req: Request, res: Response): Promise<void> {
     const quotation = await QuotationsService.get(req.params.id as string, req.ctx!);
     res.status(200).json({ quotation });
