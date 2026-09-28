@@ -55,13 +55,13 @@ export const quotationsApi = {
 
   // --- Public Unauthenticated API Methods ---
   getPublic: (token: string) =>
-    api.get<{ proposal: PublicProposalView }>(`/q/${token}`).then((res) => res.proposal),
+    api.get<{ proposal: PublicProposalView }>(`/api/q/${token}`).then((res) => res.proposal),
 
   acceptPublic: (token: string) =>
-    api.post<{ proposal: PublicProposalView }>(`/q/${token}/accept`, {}).then((res) => res.proposal),
+    api.post<{ proposal: PublicProposalView }>(`/api/q/${token}/accept`, {}).then((res) => res.proposal),
 
   rejectPublic: (token: string, rejectionReason: string) =>
     api
-      .post<{ proposal: PublicProposalView }>(`/q/${token}/reject`, { rejectionReason })
+      .post<{ proposal: PublicProposalView }>(`/api/q/${token}/reject`, { rejectionReason })
       .then((res) => res.proposal),
 };

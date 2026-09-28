@@ -80,6 +80,10 @@ import purchaseOrderRoutes from "./modules/purchase-orders/purchase-order.routes
 
 import quotationsRoutes, { publicQuotationsRoutes } from './modules/quotations/quotations.routes.js';
 
+// Public unauthenticated proposal routes
+app.use('/api/q', publicQuotationsRoutes);
+app.use('/q', publicQuotationsRoutes);
+
 // --- Modules ------------------------------------------------------------------
 // G1 — the reference module. Copy its structure.
 app.use('/api/employees', employeeRoutes);
@@ -94,7 +98,6 @@ app.use('/api', escalationRoutes);
 app.use('/api/purchase-orders', purchaseOrderRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/quotations', quotationsRoutes);
-app.use('/q', publicQuotationsRoutes);
 
 //attendance
 app.use('/api/attendance', attendanceRoutes);

@@ -472,7 +472,7 @@ export default function MyCampaignsPage() {
 
                       {/* Name */}
                       <td className="px-4 py-3">
-                        <div className="font-medium text-slate-900 dark:text-white max-w-[200px] truncate">
+                        <div className="font-medium text-slate-900 dark:text-white max-w-50 truncate">
                           {c.name}
                         </div>
                       </td>
