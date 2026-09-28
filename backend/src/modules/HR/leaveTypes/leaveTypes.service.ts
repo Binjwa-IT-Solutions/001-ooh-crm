@@ -310,7 +310,7 @@ export const leaveTypeService = {
     // Calculate pro-rated quota if not explicitly passed
     let allocatedDays = input.proratedDays;
     if (allocatedDays === undefined) {
-      const joinDate = new Date(employee.dateOfJoining);
+      const joinDate = employee.dateOfJoining ? new Date(employee.dateOfJoining) : new Date();
       const joinYear = joinDate.getFullYear();
 
       if (joinYear === input.year) {

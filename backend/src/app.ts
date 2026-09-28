@@ -96,8 +96,11 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/quotations', quotationsRoutes);
 app.use('/q', publicQuotationsRoutes);
 
-//attendance
+//attendance & shift configs
 app.use('/api/attendance', attendanceRoutes);
+
+import { shiftConfigRoutes } from './modules/HR/routes/shift-config.routes.js';
+app.use('/api/shift-configs', shiftConfigRoutes);
 
 import { reportsRoutes } from './modules/HR/routes/reports.routes.js';
 app.use('/api/reports', reportsRoutes);

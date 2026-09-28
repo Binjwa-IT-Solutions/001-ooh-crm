@@ -17,9 +17,44 @@ router.post('/refresh', asyncHandler(AuthController.refresh));
 router.post('/logout', requireAuth, asyncHandler(AuthController.logout));
 router.get('/me', requireAuth, asyncHandler(AuthController.me));
 
-// --- Admin --------------------------------------------------------------------
-// Users are created by an administrator, not by self-signup. `npm run seed`
-// bootstraps the first accounts.
+// --- User Management (RBAC-protected) ----------------------------------------
+// Users are created and managed by authorized roles, not self-signup.
+router.get(
+  '/users',
+  requireAuth,
+  requirePermission('users.view'),
+  asyncHandler(AuthController.listUsers),
+);
+
+router.post(
+  '/users',
+  requireAuth,
+  requirePermission('users.create'),
+  asyncHandler(AuthController.register),
+);
+
+router.get(
+  '/users/:id',
+  requireAuth,
+  requirePermission('users.view'),
+  asyncHandler(AuthController.getUserById),
+);
+
+router.patch(
+  '/users/:id',
+  requireAuth,
+  requirePermission('users.update'),
+  asyncHandler(AuthController.updateUser),
+);
+
+router.delete(
+  '/users/:id',
+  requireAuth,
+  requirePermission('users.update'),
+  asyncHandler(AuthController.deleteUser),
+);
+
+// Backward compatibility alias for user creation
 router.post(
   '/register',
   requireAuth,
@@ -28,3 +63,4 @@ router.post(
 );
 
 export default router;
+

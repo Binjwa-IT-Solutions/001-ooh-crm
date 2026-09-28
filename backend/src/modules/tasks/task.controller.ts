@@ -74,7 +74,8 @@ export async function getTasksController(
       filter.status = status;
     }
 
-    const tasks = await getTasks(filter);
+    const ctx = (req as any).ctx || ((req as any).user ? { user: (req as any).user } : undefined);
+    const tasks = await getTasks(filter, ctx);
 
     const result =
       status === "Overdue"

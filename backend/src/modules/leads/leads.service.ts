@@ -1,7 +1,8 @@
 import mongoose, { Types } from 'mongoose';
 import { RequestContext } from '../../core/context.js';
-import { ConflictError, NotFoundError, ValidationError } from '../../core/errors/index.js';
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../core/errors/index.js';
 import { scopedFind, scopedFindOne, scopedCount } from '../../core/scoping/index.js';
+import { employeeService } from '../employees/employees.service.js';
 import {
   Lead,
   type ILead,
@@ -149,17 +150,22 @@ export class LeadsService {
       sortObj = { nextActionDate: 1, createdAt: -1 };
     }
 
+    const page = Math.max(1, Number(filters.page) || 1);
+    const limit = Math.max(1, Math.min(100, Number(filters.limit || filters.pageSize) || 20));
+    const skip = (page - 1) * limit;
+
+    const scopedUserIds = await employeeService.getScopedUserIds(ctx);
+
     if (filters.unassigned) {
       query.status = 'New';
       query.assignedTo = null;
       query.claimedBy = null;
 
-      const skip = (filters.page - 1) * filters.limit;
       const [leads, total] = await Promise.all([
         Lead.find(query)
           .sort(sortObj)
           .skip(skip)
-          .limit(filters.limit)
+          .limit(limit)
           .populate('assignedTo claimedBy', 'name email role')
           .exec(),
         Lead.countDocuments(query).exec(),
@@ -169,36 +175,46 @@ export class LeadsService {
 
     if (filters.status === 'Rejected') {
       query.status = 'Rejected';
-      const skip = (filters.page - 1) * filters.limit;
+      if (scopedUserIds) {
+        query.rejectedBy = { $in: scopedUserIds };
+      }
       const [leads, total] = await Promise.all([
-        scopedFind(Lead, query, ctx, { ownerField: 'rejectedBy' })
+        Lead.find(query)
           .sort({ updatedAt: -1, createdAt: -1 })
           .skip(skip)
-          .limit(filters.limit)
+          .limit(limit)
           .populate('assignedTo claimedBy rejectedBy', 'name email role')
           .exec(),
-        scopedCount(Lead, query, ctx, { ownerField: 'rejectedBy' }),
+        Lead.countDocuments(query),
       ]);
       return { leads, total };
     }
 
     // Scoped retrieval for sales agents and managers
-    const skip = (filters.page - 1) * filters.limit;
-
     if (filters.assignedTo) {
-      query.assignedTo = toObjectId(filters.assignedTo);
+      const targetUserId = toObjectId(filters.assignedTo);
+      if (scopedUserIds && !scopedUserIds.some((id) => id.equals(targetUserId))) {
+        return { leads: [], total: 0 };
+      }
+      query.assignedTo = targetUserId;
     } else if (filters.assignedToMe) {
       query.assignedTo = toObjectId(ctx.user.id);
+    } else if (scopedUserIds) {
+      query.$or = [
+        { assignedTo: { $in: scopedUserIds } },
+        { claimedBy: { $in: scopedUserIds } },
+        { createdBy: { $in: scopedUserIds } },
+      ];
     }
 
     const [leads, total] = await Promise.all([
-      scopedFind(Lead, query, ctx, { ownerField: 'assignedTo' })
+      Lead.find(query)
         .sort(sortObj)
         .skip(skip)
-        .limit(filters.limit)
+        .limit(limit)
         .populate('assignedTo claimedBy', 'name email role')
         .exec(),
-      scopedCount(Lead, query, ctx, { ownerField: 'assignedTo' }),
+      Lead.countDocuments(query),
     ]);
 
     return { leads, total };
@@ -230,14 +246,25 @@ export class LeadsService {
       query.source = filters.source;
     }
 
+    const scopedUserIds = await employeeService.getScopedUserIds(ctx);
     if (filters.unassigned) {
       query.status = 'New';
       query.assignedTo = null;
       query.claimedBy = null;
     } else if (filters.assignedTo) {
-      query.assignedTo = toObjectId(filters.assignedTo);
+      const targetUserId = toObjectId(filters.assignedTo);
+      if (scopedUserIds && !scopedUserIds.some((id) => id.equals(targetUserId))) {
+        return '';
+      }
+      query.assignedTo = targetUserId;
     } else if (filters.assignedToMe) {
       query.assignedTo = toObjectId(ctx.user.id);
+    } else if (scopedUserIds) {
+      query.$or = [
+        { assignedTo: { $in: scopedUserIds } },
+        { claimedBy: { $in: scopedUserIds } },
+        { createdBy: { $in: scopedUserIds } },
+      ];
     }
 
     if (filters.overdueOnly) {
@@ -369,24 +396,22 @@ export class LeadsService {
       }
     }
 
-    let lead = await scopedFindOne(Lead, { _id: toObjectId(id) }, ctx, {
-      ownerField: 'assignedTo',
-    });
-
-    if (!lead) {
-      // Fallback for: creator, unassigned New leads, or leads the user personally rejected
-      lead = await Lead.findOne({
-        _id: toObjectId(id),
-        deletedAt: null,
-        $or: [
-          { createdBy: toObjectId(ctx.user.id) },
-          { assignedTo: null, status: 'New' },
-          { rejectedBy: toObjectId(ctx.user.id), status: 'Rejected' },
-        ],
-      }).exec();
-    }
+    const scopedUserIds = await employeeService.getScopedUserIds(ctx);
+    let lead = await Lead.findOne({ _id: toObjectId(id), deletedAt: null }).exec();
 
     if (!lead) throw new NotFoundError('Lead not found');
+
+    if (scopedUserIds) {
+      const isAssigned = lead.assignedTo && scopedUserIds.some((uid) => uid.equals(lead.assignedTo as any));
+      const isClaimed = lead.claimedBy && scopedUserIds.some((uid) => uid.equals(lead.claimedBy as any));
+      const isCreator = lead.createdBy && scopedUserIds.some((uid) => uid.equals(lead.createdBy as any));
+      const isRejectedBy = lead.rejectedBy && scopedUserIds.some((uid) => uid.equals(lead.rejectedBy as any));
+      const isUnassignedNew = !lead.assignedTo && lead.status === 'New';
+
+      if (!isAssigned && !isClaimed && !isCreator && !isRejectedBy && !isUnassignedNew) {
+        throw new ForbiddenError('You do not have permission to view this lead');
+      }
+    }
 
     if (lead.populate) {
       await lead.populate('assignedTo claimedBy rejectedBy documents.uploadedBy', 'name email role');

@@ -4,11 +4,14 @@ import { config } from '../../config/index.js';
 import { UnauthorizedError } from '../errors/index.js';
 import { AuthService } from './auth-service.js';
 import {
+  listUsersSchema,
   loginSchema,
   logoutSchema,
   refreshSchema,
   registerSchema,
   resendOtpSchema,
+  updateUserSchema,
+  userIdParamSchema,
   verifyOtpSchema,
 } from './auth-validator.js';
 import { auditService } from '../audit/index.js';
@@ -19,7 +22,7 @@ import { auditService } from '../audit/index.js';
  * forwards rejections to the central error handler.
  */
 export class AuthController {
-  /** POST /api/auth/register — admin only. */
+  /** POST /api/auth/register (or /api/auth/users) — authorized roles with users.create. */
   static async register(req: Request, res: Response) {
     const input = registerSchema.parse(req.body);
 
@@ -28,9 +31,48 @@ export class AuthController {
       email: input.email,
       passwordPlain: input.password,
       role: input.role,
+      status: input.status,
+      reportingManagerId: input.reportingManagerId || undefined,
     });
 
     res.status(201).json({ message: 'User created', user });
+  }
+
+  /** GET /api/auth/users — list users with pagination, filters & search. */
+  static async listUsers(req: Request, res: Response) {
+    const query = listUsersSchema.parse(req.query);
+    const result = await AuthService.listUsers(query);
+    res.status(200).json(result);
+  }
+
+  /** GET /api/auth/users/:id — get user by id. */
+  static async getUserById(req: Request, res: Response) {
+    const { id } = userIdParamSchema.parse(req.params);
+    const user = await AuthService.getUserById(id);
+    res.status(200).json({ user });
+  }
+
+  /** PATCH /api/auth/users/:id — update user role/status/name/password. */
+  static async updateUser(req: Request, res: Response) {
+    const { id } = userIdParamSchema.parse(req.params);
+    const input = updateUserSchema.parse(req.body);
+
+    const user = await AuthService.updateUser(id, {
+      name: input.name,
+      role: input.role,
+      status: input.status,
+      passwordPlain: input.password,
+      reportingManagerId: input.reportingManagerId !== undefined ? input.reportingManagerId : undefined,
+    });
+
+    res.status(200).json({ message: 'User updated', user });
+  }
+
+  /** DELETE /api/auth/users/:id — soft delete / deactivate user. */
+  static async deleteUser(req: Request, res: Response) {
+    const { id } = userIdParamSchema.parse(req.params);
+    const result = await AuthService.deleteUser(id);
+    res.status(200).json({ message: 'User deactivated', ...result });
   }
 
   /** POST /api/auth/login — step 1: password check, then OTP is issued. */
@@ -106,3 +148,4 @@ export class AuthController {
     res.status(200).json({ user });
   }
 }
+

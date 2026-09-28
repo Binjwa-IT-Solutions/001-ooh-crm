@@ -49,6 +49,7 @@ const baseEmployeeShape = {
   dateOfJoining: isoDate,
   dateOfExit: isoDate.optional().nullable(),
   reportingManagerId: objectId.optional().nullable(),
+  teamName: z.string().trim().max(100).optional().or(z.literal('')),
   workLocation: z.string().trim().min(2, 'Work location is required').max(120),
   status: z.enum(EMPLOYEE_STATUSES).default('Active'),
 
@@ -121,6 +122,44 @@ export const listEmployeesSchema = z.object({
 
 export const employeeIdSchema = z.object({ id: objectId });
 
+export const createTeamSchema = z.object({
+  name: z.string().trim().min(1, 'Team name is required').max(100, 'Team name cannot exceed 100 characters'),
+  description: z.string().trim().max(500).optional().default(''),
+  managerId: objectId.optional(),
+});
+
+export const updateTeamSchema = z.object({
+  name: z.string().trim().min(1, 'Team name is required').max(100, 'Team name cannot exceed 100 characters').optional(),
+  description: z.string().trim().max(500).optional(),
+});
+
+export const addTeamMemberSchema = z.object({
+  employeeId: objectId,
+});
+
+export const reassignTeamMemberSchema = z.object({
+  employeeId: objectId,
+  sourceTeamId: objectId,
+  targetTeamId: objectId,
+});
+
+export const updateTeamNameSchema = z.object({
+  managerId: objectId.optional(),
+  teamName: z.string().trim().min(1, 'Team name is required').max(100, 'Team name is too long'),
+});
+
+export const assignTeamMemberSchema = z.object({
+  employeeId: objectId,
+  managerId: objectId.nullable().optional(),
+});
+
 export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
 export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;
 export type ListEmployeesQuery = z.infer<typeof listEmployeesSchema>;
+export type CreateTeamInput = z.infer<typeof createTeamSchema>;
+export type UpdateTeamInput = z.infer<typeof updateTeamSchema>;
+export type AddTeamMemberInput = z.infer<typeof addTeamMemberSchema>;
+export type ReassignTeamMemberInput = z.infer<typeof reassignTeamMemberSchema>;
+export type UpdateTeamNameInput = z.infer<typeof updateTeamNameSchema>;
+export type AssignTeamMemberInput = z.infer<typeof assignTeamMemberSchema>;
+

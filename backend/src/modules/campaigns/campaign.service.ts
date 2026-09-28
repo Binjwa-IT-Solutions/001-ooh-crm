@@ -13,6 +13,7 @@ import { AuthUser } from "../../core/auth/auth-model.js";
 import { createBooking, releaseCampaignBookings } from "../bookings/booking.service.js";
 import { checkSitesExist } from "../sites/site.service.js";
 import { generateForCampaign } from "../tasks/task.service.js";
+import { employeeService } from "../employees/employees.service.js";
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
@@ -712,6 +713,36 @@ export async function listCampaigns(
     }
 
     query.$or = searchConditions;
+  }
+
+  if (ctx.role === "manager") {
+    const scopedUserIds = await employeeService.getScopedUserIds({
+      user: { id: String(ctx.userId), role: ctx.role },
+    } as any);
+    if (scopedUserIds) {
+      const teamLeads = await Lead.find({
+        deletedAt: null,
+        $or: [
+          { assignedTo: { $in: scopedUserIds } },
+          { claimedBy: { $in: scopedUserIds } },
+          { createdBy: { $in: scopedUserIds } },
+        ],
+      }).select("_id");
+
+      const teamScope = {
+        $or: [
+          { assignedManager: { $in: scopedUserIds } },
+          { leadId: { $in: teamLeads.map((l) => l._id) } },
+        ],
+      };
+
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, teamScope];
+        delete query.$or;
+      } else {
+        query.$or = teamScope.$or;
+      }
+    }
   }
 
   return Campaign.find(query)

@@ -23,7 +23,8 @@ export const attendanceApi = {
   },
 
   getMyAttendance: async (params?: Record<string, string | number | boolean>) => {
-    const res = await api.get<Attendance[]>('/api/attendance/me', { skipAuth: false });
+    const qs = params ? new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString() : '';
+    const res = await api.get<Attendance[]>(`/api/attendance/me${qs ? `?${qs}` : ''}`, { skipAuth: false });
     return res;
   },
   getMyAttendanceSummary: async (month: number, year: number) => {
@@ -34,7 +35,8 @@ export const attendanceApi = {
     return res;
   },
   getTeamAttendance: async (params?: Record<string, string | number | boolean>) => {
-    const res = await api.get<Attendance[]>('/api/attendance/team', { skipAuth: false });
+    const qs = params ? new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString() : '';
+    const res = await api.get<Attendance[]>(`/api/attendance/team${qs ? `?${qs}` : ''}`, { skipAuth: false });
     return res;
   },
 };
@@ -134,6 +136,35 @@ export const reportsApi = {
   },
   getAbsenceReport: async (fromDate: string, toDate: string) => {
     return await api.get<unknown[]>(`/api/reports/attendance/absence?fromDate=${fromDate}&toDate=${toDate}`);
+  },
+  exportReportUrl: (params: Record<string, string | number | undefined>) => {
+    const clean: Record<string, string> = {};
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== '') clean[k] = String(v);
+    }
+    const qs = new URLSearchParams(clean).toString();
+    return `/api/reports/attendance/export${qs ? `?${qs}` : ''}`;
+  },
+};
+
+export interface ShiftConfig {
+  _id?: string;
+  department: string;
+  startTime: string;
+  endTime: string;
+  graceMinutes: number;
+  halfDayThresholdHours: number;
+}
+
+export const shiftConfigsApi = {
+  list: async () => {
+    return await api.get<ShiftConfig[]>('/api/shift-configs');
+  },
+  getByDepartment: async (dept: string) => {
+    return await api.get<ShiftConfig>(`/api/shift-configs/${dept}`);
+  },
+  update: async (data: Partial<ShiftConfig> & { department: string }) => {
+    return await api.post<ShiftConfig>('/api/shift-configs', data);
   },
 };
 

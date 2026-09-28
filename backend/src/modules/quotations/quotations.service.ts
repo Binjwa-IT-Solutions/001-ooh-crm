@@ -12,6 +12,7 @@ import { formattedSequence } from '../../core/db/sequence.js';
 import { renderPdf, lineItemsTable, formatPaise } from '../../core/pdf/index.js';
 import { fileService } from '../../core/files/index.js';
 import { notify } from '../../core/notifications/index.js';
+import { employeeService } from '../employees/employees.service.js';
 import type {
   CreateQuotationInput,
   ListQuotationsQuery,
@@ -49,21 +50,22 @@ export class QuotationsService {
       filter.leadId = toObjectId(query.leadId);
     }
 
-    // Role-based Scoping: Sales agents only see their own quotations or quotations for their assigned/created leads
-    const isUnscoped = ['admin', 'manager', 'finance', 'hr', 'ops'].includes(ctx.user?.role?.toLowerCase() || '');
+    // Role-based Scoping: Manager and sales agents only see quotations for their team/leads
+    const scopedUserIds = await employeeService.getScopedUserIds(ctx);
     let scopeConditions: any = null;
-    if (!isUnscoped) {
+    if (scopedUserIds) {
       const myLeads = await Lead.find({
         $or: [
-          { assignedTo: toObjectId(ctx.user.id) },
-          { createdBy: toObjectId(ctx.user.id) },
+          { assignedTo: { $in: scopedUserIds } },
+          { claimedBy: { $in: scopedUserIds } },
+          { createdBy: { $in: scopedUserIds } },
         ],
         deletedAt: null,
       }).select('_id').lean();
       const myLeadIds = myLeads.map((l) => l._id);
 
       scopeConditions = [
-        { createdBy: toObjectId(ctx.user.id) },
+        { createdBy: { $in: scopedUserIds } },
         { leadId: { $in: myLeadIds } },
       ];
     }
@@ -120,27 +122,28 @@ export class QuotationsService {
   static async get(id: string, ctx: RequestContext): Promise<IQuotation> {
     if (!Types.ObjectId.isValid(id)) throw new NotFoundError('Quotation not found');
 
-    const isUnscoped = ['admin', 'manager', 'finance', 'hr', 'ops'].includes(ctx.user?.role?.toLowerCase() || '');
+    const scopedUserIds = await employeeService.getScopedUserIds(ctx);
     let quotation: IQuotation | null = null;
 
-    if (isUnscoped) {
+    if (!scopedUserIds) {
       quotation = await Quotation.findOne({ _id: toObjectId(id), deletedAt: null });
     } else {
-      // 1. Allow if created by agent
+      // 1. Allow if created by user/team member
       quotation = await Quotation.findOne({
         _id: toObjectId(id),
-        createdBy: toObjectId(ctx.user.id),
+        createdBy: { $in: scopedUserIds },
         deletedAt: null,
       });
 
-      // 2. Or allow if agent is assigned to the lead (or created the lead)
+      // 2. Or allow if team member is assigned to the lead (or created/claimed the lead)
       if (!quotation) {
         const candidate = await Quotation.findOne({ _id: toObjectId(id), deletedAt: null }).populate('leadId');
         if (candidate && candidate.leadId) {
           const lead = candidate.leadId as any;
           const isOwner =
-            lead.assignedTo?.toString() === ctx.user.id ||
-            lead.createdBy?.toString() === ctx.user.id;
+            (lead.assignedTo && scopedUserIds.some((uid) => uid.equals(lead.assignedTo))) ||
+            (lead.claimedBy && scopedUserIds.some((uid) => uid.equals(lead.claimedBy))) ||
+            (lead.createdBy && scopedUserIds.some((uid) => uid.equals(lead.createdBy)));
           if (isOwner) {
             quotation = candidate;
           }

@@ -28,6 +28,90 @@ export const BRAND_TOKENS = {
 } as const;
 
 /**
+ * Single source of truth for Monthly Attendance Registry & Heatmap status colors:
+ * 1. Present (Full Day) -> Green (#A3D9A1)
+ * 2. Half-Day / Late    -> Yellow (#F7DD72)
+ * 3. Absent             -> Red (#E74C3C)
+ * 4. Leave              -> Orange (#F5C177)
+ * 5. Sunday (Off)       -> Light Grey (slate-100)
+ */
+export const ATTENDANCE_STATUS_TOKENS = {
+  PRESENT: {
+    label: 'Present (Full Day)',
+    cellBg: 'bg-[#A3D9A1] hover:bg-[#8ED08B] shadow-xs',
+    legendBg: 'bg-[#A3D9A1]',
+    gridTextBg: 'text-emerald-950 bg-[#A3D9A1]',
+    tooltipBadge: 'bg-emerald-950 text-emerald-300 border border-emerald-800',
+  },
+  HALF_DAY_LATE: {
+    label: 'Half-Day / Late',
+    cellBg: 'bg-[#F7DD72] hover:bg-[#F5D54F] shadow-xs',
+    legendBg: 'bg-[#F7DD72]',
+    gridTextBg: 'text-amber-950 bg-[#F7DD72]',
+    tooltipBadge: 'bg-amber-950 text-amber-300 border border-amber-800',
+  },
+  ABSENT: {
+    label: 'Absent',
+    cellBg: 'bg-[#E74C3C] hover:bg-[#D63031] shadow-xs',
+    legendBg: 'bg-[#E74C3C]',
+    gridTextBg: 'text-white bg-[#E74C3C]',
+    tooltipBadge: 'bg-rose-950 text-rose-300 border border-rose-800',
+  },
+  LEAVE: {
+    label: 'Leave',
+    cellBg: 'bg-[#F5C177] hover:bg-[#F2B258] shadow-xs',
+    legendBg: 'bg-[#F5C177]',
+    gridTextBg: 'text-amber-950 bg-[#F5C177]',
+    tooltipBadge: 'bg-orange-950 text-orange-300 border border-orange-800',
+  },
+  SUNDAY: {
+    label: 'Sunday (Off)',
+    cellBg: 'bg-slate-100 text-slate-400 border border-slate-200/60',
+    legendBg: 'bg-slate-100 border border-slate-200',
+    gridTextBg: 'text-slate-400 bg-slate-100',
+    tooltipBadge: 'bg-slate-800 text-slate-400',
+  },
+  UNRECORDED: {
+    label: 'Unrecorded',
+    cellBg: 'bg-slate-100/50 border border-slate-100 text-slate-300',
+    legendBg: '',
+    gridTextBg: 'text-slate-300',
+    tooltipBadge: 'bg-slate-800 text-slate-400',
+  },
+} as const;
+
+export function getHeatmapCellColor(status: string | undefined, isSunday: boolean): string {
+  if (isSunday || status === 'Weekend' || status === 'Sunday' || status === 'Off') {
+    return ATTENDANCE_STATUS_TOKENS.SUNDAY.cellBg;
+  }
+  if (!status || status === 'Unrecorded') {
+    return ATTENDANCE_STATUS_TOKENS.UNRECORDED.cellBg;
+  }
+  const s = status.trim();
+  switch (s) {
+    case 'Present':
+    case 'P':
+      return ATTENDANCE_STATUS_TOKENS.PRESENT.cellBg;
+    case 'Half-Day':
+    case 'Late':
+    case 'Break':
+    case 'H':
+    case 'L':
+    case 'B':
+      return ATTENDANCE_STATUS_TOKENS.HALF_DAY_LATE.cellBg;
+    case 'Absent':
+    case 'A':
+      return ATTENDANCE_STATUS_TOKENS.ABSENT.cellBg;
+    case 'Leave':
+    case 'Holiday':
+    case 'LV':
+      return ATTENDANCE_STATUS_TOKENS.LEAVE.cellBg;
+    default:
+      return ATTENDANCE_STATUS_TOKENS.UNRECORDED.cellBg;
+  }
+}
+
+/**
  * Performance Tiers for Circular Progress Rings:
  * Tier 1: >= 90% -> Brand Maroon (#6E1D1D)
  * Tier 2: 70% - 89% -> Amber Warning (#F39C12)
@@ -404,23 +488,23 @@ export function AttendanceOverviewWidget({
               {/* Legend with exact company tokens */}
               <div className="flex flex-wrap items-center gap-3 text-xs">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-3.5 h-3.5 rounded-[4px] bg-[#A3D9A1] shadow-xs" />
+                  <span className={cx('w-3.5 h-3.5 rounded-[4px] shadow-xs', ATTENDANCE_STATUS_TOKENS.PRESENT.legendBg)} />
                   <span className="text-slate-700 font-medium">Present (Full Day)</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-3.5 h-3.5 rounded-[4px]  bg-[#F7DD72] shadow-xs" />
+                  <span className={cx('w-3.5 h-3.5 rounded-[4px] shadow-xs', ATTENDANCE_STATUS_TOKENS.HALF_DAY_LATE.legendBg)} />
                   <span className="text-slate-700 font-medium">Half-Day / Late</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-3.5 h-3.5 rounded-[4px] bg-[#E74C3C] shadow-xs" />
+                  <span className={cx('w-3.5 h-3.5 rounded-[4px] shadow-xs', ATTENDANCE_STATUS_TOKENS.ABSENT.legendBg)} />
                   <span className="text-slate-700 font-medium">Absent</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-3.5 h-3.5 rounded-[4px] bg-[#F5C177]  shadow-xs" />
+                  <span className={cx('w-3.5 h-3.5 rounded-[4px] shadow-xs', ATTENDANCE_STATUS_TOKENS.LEAVE.legendBg)} />
                   <span className="text-slate-700 font-medium">Leave</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-3.5 h-3.5 rounded-[4px] bg-slate-100 border border-slate-200" />
+                  <span className={cx('w-3.5 h-3.5 rounded-[4px]', ATTENDANCE_STATUS_TOKENS.SUNDAY.legendBg)} />
                   <span className="text-slate-500 font-medium">Sunday (Off)</span>
                 </div>
               </div>
@@ -513,24 +597,8 @@ export function AttendanceOverviewWidget({
                             row.attendance?.[dayInfo.dateStr] ||
                             row.attendance?.[dayInfo.dayNumber];
 
-                          // Cell color matching brand tokens
-                          let cellBg = 'bg-slate-100 text-slate-300';
-
-                          if (dayInfo.isSunday) {
-                            cellBg = 'bg-slate-100/90 text-slate-400';
-                          } else if (status === 'Present') {
-                            cellBg = 'bg-[#6E1D1D] hover:bg-[#882424] shadow-xs';
-                          } else if (status === 'Half-Day') {
-                            cellBg = 'bg-[#F39C12] hover:bg-[#D68910] shadow-xs';
-                          } else if (status === 'Late' || status === 'Break') {
-                            cellBg = 'bg-[#F5B041] hover:bg-[#EB984E] shadow-xs';
-                          } else if (status === 'Absent') {
-                            cellBg = 'bg-[#E74C3C] hover:bg-[#C0392B] shadow-xs';
-                          } else if (status === 'Leave') {
-                            cellBg = 'bg-sky-500 hover:bg-sky-600 shadow-xs';
-                          } else if (status) {
-                            cellBg = 'bg-[#6E1D1D]';
-                          }
+                          // Cell color strictly matching the highlighted legend single source of truth
+                          const cellBg = getHeatmapCellColor(status, dayInfo.isSunday);
 
                           return (
                             <td
@@ -572,7 +640,7 @@ export function AttendanceOverviewWidget({
                               <div
                                 className={cx(
                                   'w-5 h-5 sm:w-5.5 sm:h-5.5 mx-auto rounded-[3px] transition-all transform hover:scale-125 cursor-pointer flex items-center justify-center',
-                                  cellBg
+                                  cellBg,
                                 )}
                               >
                                 {dayInfo.isSunday && <span className="text-[8px] font-bold text-slate-400">·</span>}
@@ -710,11 +778,12 @@ export function AttendanceOverviewWidget({
               <span
                 className={cx(
                   'font-medium px-1.5 py-0.5 rounded text-[11px]',
-                  tooltip.status === 'Present' && 'bg-[#6E1D1D]/30 text-[#F8E6E6] border border-[#6E1D1D]',
-                  tooltip.status === 'Half-Day' && 'bg-amber-950 text-amber-300 border border-amber-800',
-                  tooltip.status === 'Absent' && 'bg-rose-950 text-rose-300 border border-rose-800',
-                  tooltip.status === 'Leave' && 'bg-sky-950 text-sky-300 border border-sky-800',
-                  tooltip.isSunday && 'bg-slate-800 text-slate-400'
+                  tooltip.isSunday && ATTENDANCE_STATUS_TOKENS.SUNDAY.tooltipBadge,
+                  !tooltip.isSunday && tooltip.status === 'Present' && ATTENDANCE_STATUS_TOKENS.PRESENT.tooltipBadge,
+                  !tooltip.isSunday && (tooltip.status === 'Half-Day' || tooltip.status === 'Late' || tooltip.status === 'Break') && ATTENDANCE_STATUS_TOKENS.HALF_DAY_LATE.tooltipBadge,
+                  !tooltip.isSunday && tooltip.status === 'Absent' && ATTENDANCE_STATUS_TOKENS.ABSENT.tooltipBadge,
+                  !tooltip.isSunday && tooltip.status === 'Leave' && ATTENDANCE_STATUS_TOKENS.LEAVE.tooltipBadge,
+                  !tooltip.isSunday && !['Present', 'Half-Day', 'Late', 'Break', 'Absent', 'Leave'].includes(tooltip.status || '') && ATTENDANCE_STATUS_TOKENS.UNRECORDED.tooltipBadge
                 )}
               >
                 {tooltip.status}

@@ -24,6 +24,72 @@ router.get(
   asyncHandler(EmployeesController.managerOptions),
 );
 
+router.get(
+  '/teams',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.teams),
+);
+
+router.post(
+  '/teams',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.createTeam),
+);
+
+router.post(
+  '/teams/reassign',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.reassignTeamMember),
+);
+
+router.patch(
+  '/teams/name',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.updateTeamName),
+);
+
+router.post(
+  '/teams/members',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.assignTeamMember),
+);
+
+router.delete(
+  '/teams/members/:id',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.removeTeamMember),
+);
+
+router.patch(
+  '/teams/:id',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.updateTeam),
+);
+
+router.delete(
+  '/teams/:id',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.deleteTeam),
+);
+
+router.post(
+  '/teams/:id/members',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.addMemberToTeam),
+);
+
+router.delete(
+  '/teams/:id/members/:employeeId',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.removeMemberFromTeam),
+);
+
+router.get(
+  '/:id/crm-summary',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.memberCrmSummary),
+);
+
 router.get('/', requirePermission('employees.view'), asyncHandler(EmployeesController.list));
 
 router.post('/', requirePermission('employees.manage'), asyncHandler(EmployeesController.create));
@@ -49,3 +115,4 @@ router.delete(
 );
 
 export default router;
+

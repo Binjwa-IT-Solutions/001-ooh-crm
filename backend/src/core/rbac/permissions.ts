@@ -192,6 +192,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   hr: [
     ...BASE,
     'users.view',
+    'users.create',
+    'users.update',
     'employees.view',
     'employees.manage',
     'employees.sensitive',
