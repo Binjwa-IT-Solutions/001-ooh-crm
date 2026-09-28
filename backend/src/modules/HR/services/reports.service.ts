@@ -1,7 +1,7 @@
 import type { RequestContext } from '../../../core/context.js';
 import { scopedFind } from '../../../core/scoping/index.js';
 import Attendance from '../models/attendance.model.js';
-import LeaveRequest from '../models/leave-request.model.js';
+import { LeaveRequest } from '../models/leave.model.js';
 import Holiday from '../models/holiday.model.js';
 import { employeeService } from '../../employees/employees.service.js';
 
@@ -91,14 +91,14 @@ export async function getMonthlyRegister(
   ]);
 
   const holidayDateSet = new Set(
-    holidays.map((h) => formatLocalDate(h.date)),
+    holidays.map((h: any) => formatLocalDate(h.date)),
   );
 
   const todayStr = formatLocalDate(new Date());
 
-  const report = allEmployees.map((emp) => {
-    const empRecords = records.filter((r) => r.employeeId.toString() === emp.id);
-    const empLeaves = approvedLeaves.filter((l) => l.employeeId.toString() === emp.id);
+  const report = allEmployees.map((emp: any) => {
+    const empRecords = records.filter((r: any) => r.employeeId.toString() === emp.id);
+    const empLeaves = approvedLeaves.filter((l: any) => l.employeeId.toString() === emp.id);
 
     const days: Record<string, string> = {};
     const details: Record<string, {
@@ -112,7 +112,7 @@ export async function getMonthlyRegister(
     }> = {};
 
     // 1. Fill from explicit attendance records
-    empRecords.forEach((r) => {
+    empRecords.forEach((r: any) => {
       const dObj = new Date(r.date);
       const day = dObj.getDate();
       const dateKey = formatLocalDate(dObj);
@@ -146,7 +146,7 @@ export async function getMonthlyRegister(
       if (!days[dateStr]) {
         const isWeekend = d.getDay() === 0; // Sunday only
         const isHoliday = holidayDateSet.has(dateStr);
-        const isOnLeave = empLeaves.some((l) => {
+        const isOnLeave = empLeaves.some((l: any) => {
           const fStr = formatLocalDate(l.fromDate);
           const tStr = formatLocalDate(l.toDate);
           return fStr <= dateStr && tStr >= dateStr;
@@ -206,7 +206,7 @@ export async function getAbsenceReport(fromDate: string, toDate: string, ctx: Re
   ]);
 
   const holidayDateSet = new Set(
-    holidays.map((h) => formatLocalDate(h.date)),
+    holidays.map((h: any) => formatLocalDate(h.date)),
   );
 
   const absences = [];
@@ -223,10 +223,10 @@ export async function getAbsenceReport(fromDate: string, toDate: string, ctx: Re
 
     for (const emp of allEmployees) {
       const hasAttendance = records.some(
-        (r) => r.employeeId.toString() === emp.id && formatLocalDate(r.date) === dateStr,
+        (r: any) => r.employeeId.toString() === emp.id && formatLocalDate(r.date) === dateStr,
       );
 
-      const hasLeave = approvedLeaves.some((l) => {
+      const hasLeave = approvedLeaves.some((l: any) => {
         const fStr = formatLocalDate(l.fromDate);
         const tStr = formatLocalDate(l.toDate);
         return l.employeeId.toString() === emp.id && fStr <= dateStr && tStr >= dateStr;
@@ -380,6 +380,6 @@ export async function exportAttendanceCsv(
     ];
   });
 
-  const csv = [headers.map(escapeCsv).join(','), ...rows.map((r) => r.map(escapeCsv).join(','))].join('\n');
+  const csv = [headers.map(escapeCsv).join(','), ...rows.map((r: any) => r.map(escapeCsv).join(','))].join('\n');
   return { filename: `monthly-register-${fromYear}_${fromMonth}_to_${toYear}_${toMonth}.csv`, csv };
 }

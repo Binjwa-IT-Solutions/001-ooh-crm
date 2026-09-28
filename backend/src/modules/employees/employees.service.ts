@@ -13,9 +13,8 @@ import { Task } from '../tasks/task.model.js';
 import { Quotation } from '../quotations/quotations.model.js';
 import Campaign from '../campaigns/campaign.model.js';
 import Attendance from '../HR/models/attendance.model.js';
-import LeaveRequest from '../HR/models/leave-request.model.js';
-import { LeaveType } from '../HR/leaveTypes/leaveTypes.model.js';
-import { leaveTypeService } from '../HR/leaveTypes/leaveTypes.service.js';
+import { LeaveRequest, LeaveType } from '../HR/models/leave.model.js';
+import { leaveTypeService } from '../HR/services/leave.service.js';
 import type {
   CreateEmployeeInput,
   ListEmployeesQuery,
