@@ -64,7 +64,12 @@ export const leaveApi = {
     const res = await api.delete<{ message: string; leaveType: LeaveType }>(`/api/leave-types/${id}`);
     return res.leaveType;
   },
-  getBalance: async (employeeId: string, year = new Date().getFullYear()) => {
+  getBalance: async (employeeId?: string, year = new Date().getFullYear()) => {
+    if (!employeeId) {
+      const res = await api.get<{ balances: LeaveBalance[] } | LeaveBalance[]>('/api/leave-requests/balance');
+      if (Array.isArray(res)) return res;
+      return res.balances ?? [];
+    }
     const res = await api.get<{ balances: LeaveBalance[] }>(`/api/employees/${employeeId}/leave-balance?year=${year}`);
     return res.balances;
   },
@@ -73,12 +78,26 @@ export const leaveApi = {
     const res = await api.post<LeaveRequest>('/api/leave-requests', data);
     return res;
   },
-  getMyRequests: async () => {
-    const res = await api.get<LeaveRequest[]>('/api/leave-requests/me');
+  getMyRequests: async (status?: string) => {
+    const qs = status && status !== 'All' ? `?status=${encodeURIComponent(status)}` : '';
+    const res = await api.get<LeaveRequest[]>(`/api/leave-requests/me${qs}`);
     return res;
   },
-  getTeamRequests: async () => {
-    const res = await api.get<LeaveRequest[]>('/api/leave-requests/team');
+  getTeamRequests: async (status?: string) => {
+    const qs = status && status !== 'All' ? `?status=${encodeURIComponent(status)}` : '';
+    const res = await api.get<LeaveRequest[]>(`/api/leave-requests/team${qs}`);
+    return res;
+  },
+  getLeaveById: async (id: string) => {
+    const res = await api.get<{ leaveRequest: LeaveRequest }>(`/api/leave-requests/${id}`);
+    return res.leaveRequest;
+  },
+  updateLeave: async (id: string, data: any) => {
+    const res = await api.patch<{ message: string; leaveRequest: LeaveRequest }>(`/api/leave-requests/${id}`, data);
+    return res.leaveRequest;
+  },
+  deleteLeave: async (id: string) => {
+    const res = await api.delete<{ message: string; leaveRequest: LeaveRequest }>(`/api/leave-requests/${id}`);
     return res;
   },
   approveLeave: async (id: string) => {
@@ -87,6 +106,10 @@ export const leaveApi = {
   },
   rejectLeave: async (id: string, rejectionReason: string) => {
     const res = await api.post<LeaveRequest>(`/api/leave-requests/${id}/reject`, { status: 'Rejected', rejectionReason });
+    return res;
+  },
+  cancelLeave: async (id: string) => {
+    const res = await api.patch<LeaveRequest>(`/api/leave-requests/${id}/cancel`);
     return res;
   },
   getCalendarLeaves: async (year?: number, month?: number) => {

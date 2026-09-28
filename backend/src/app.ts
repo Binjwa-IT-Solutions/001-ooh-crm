@@ -12,8 +12,8 @@ import { attendanceRoutes } from './modules/HR/routes/attendance.routes.js';
 import leaveTypeRoutes, {
   employeeLeaveBalanceRouter,
   leaveBalancesRouter,
-} from './modules/HR/leaveTypes/leaveTypes.routes.js';
-import { leaveRoutes } from './modules/HR/routes/leave.routes.js';
+  leaveRoutes,
+} from './modules/HR/routes/leave.routes.js';
 import { holidayRoutes } from './modules/HR/routes/holiday.routes.js';
 
 

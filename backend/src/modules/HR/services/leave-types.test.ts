@@ -5,13 +5,13 @@ import { Types } from 'mongoose';
 import { connectDatabase, disconnectDatabase } from '../../../core/db/connect.js';
 import type { RequestContext } from '../../../core/context.js';
 import { permissionsForRole } from '../../../core/rbac/permissions.js';
-import { LeaveType, LeaveBalance } from './leaveTypes.model.js';
+import { LeaveType, LeaveBalance } from '../models/leave.model.js';
 import { Employee } from '../../employees/employees.model.js';
-import { leaveTypeService } from './leaveTypes.service.js';
+import { leaveTypeService } from './leave.service.js';
 import {
   createLeaveTypeSchema,
   allocateBalanceSchema,
-} from './leaveTypes.validator.js';
+} from '../validators/leave.validator.js';
 
 // ============================================================================
 // PURE LOGIC TESTS (No DB required)
@@ -60,8 +60,8 @@ test('invalid parameters are rejected by schemas', () => {
   // Invalid year in allocate schema
   assert.throws(() =>
     allocateBalanceSchema.parse({
-      employeeId: 'emp123',
-      leaveTypeId: 'lt123',
+      employeeId: '507f1f77bcf86cd799439011',
+      leaveTypeId: '507f1f77bcf86cd799439012',
       year: 1999, // Min is 2000
     })
   );
@@ -81,8 +81,6 @@ test('permissions matrix has leave permissions mapped correctly', () => {
 // ============================================================================
 // DATABASE TESTS (Mongo required)
 // ============================================================================
-
-
 
 let hrUserEmployeeId: string;
 let managerEmployeeId: string;
@@ -220,7 +218,9 @@ after(async () => {
   // Clean up
   await LeaveType.deleteMany({ code: { $in: ['TEST_CL', 'TEST_PL', 'TEST_LWP'] } });
   await Employee.deleteMany({ workEmail: { $regex: /@test-leave-module\.test$/ } });
-  await LeaveBalance.deleteMany({ employeeId: { $in: [hrUserEmployeeId, managerEmployeeId, reportEmployeeId, otherEmployeeId] } });
+  await LeaveBalance.deleteMany({
+    employeeId: { $in: [hrUserEmployeeId, managerEmployeeId, reportEmployeeId, otherEmployeeId] },
+  });
   await disconnectDatabase();
 });
 
@@ -236,6 +236,7 @@ test('non-HR/Admin users cannot create or modify leave types', async () => {
           maxCarryForward: 0,
           encashable: false,
           requiresDocument: false,
+          status: 'Active',
         },
         reportCtx
       );
@@ -258,10 +259,6 @@ test('non-HR/Admin users cannot create or modify leave types', async () => {
 });
 
 test('leave balance allocation pro-rates mid-year joiners', async () => {
-  // Report agent joined on 2026-06-01.
-  // Pro-rating for TEST_CL (annualQuota = 12) for 2026:
-  // Days from 2026-06-01 to 2026-12-31 is 214 days.
-  // 12 * (214/365) = 7.035 -> Math.round gives 7.
   const balanceDto = await leaveTypeService.allocate(
     {
       employeeId: reportEmployeeId,
@@ -276,8 +273,6 @@ test('leave balance allocation pro-rates mid-year joiners', async () => {
 });
 
 test('leave balance allocation assigns full quota for prior joiners', async () => {
-  // manager joined in 2025. Target year is 2026.
-  // Should get full quota of 12.
   const balanceDto = await leaveTypeService.allocate(
     {
       employeeId: managerEmployeeId,
@@ -291,10 +286,6 @@ test('leave balance allocation assigns full quota for prior joiners', async () =
 });
 
 test('carry forward limit limits transfer and lapses overflow', async () => {
-  // Let's seed a previous year balance (2025) for manager
-  // TEST_PL: annualQuota 15, carryForward: true, maxCarryForward: 10.
-  // In 2025: allocated: 15, used: 3. Remaining = 12.
-  // When allocating for 2026: maxCarryForward is 10. 12 remaining -> 10 carried forward. 2 lapses.
   await LeaveBalance.create({
     employeeId: managerEmployeeId,
     leaveTypeId: carryForwardLeaveTypeId,
@@ -321,7 +312,6 @@ test('carry forward limit limits transfer and lapses overflow', async () => {
 });
 
 test('Leave Without Pay does not block due to balance and deduction is bypassed', async () => {
-  // Create LWP leave type (annualQuota: null)
   const lwpType = await LeaveType.create({
     name: 'Test LWP',
     code: 'TEST_LWP',
@@ -330,33 +320,30 @@ test('Leave Without Pay does not block due to balance and deduction is bypassed'
     maxCarryForward: 0,
     encashable: false,
     requiresDocument: false,
+    status: 'Active',
     createdBy: new Types.ObjectId(hrCtx.user.id),
     updatedBy: new Types.ObjectId(hrCtx.user.id),
   });
 
-  // Getting balance for LWP should return 0 allocated/used/carriedForward
   const balance = await leaveTypeService.getBalance(reportEmployeeId, String(lwpType._id), 2026);
   assert.equal(balance.balance, 0);
 
-  // Deducting balance on LWP must NOT throw or deduct anything
   await assert.doesNotReject(async () => {
     await leaveTypeService.deductBalance(
       reportEmployeeId,
       String(lwpType._id),
       2026,
-      10, // Try to deduct 10 days
+      10,
       hrCtx
     );
   });
 });
 
 test('employees can access only their own leave balance', async () => {
-  // reportCtx can access reportEmployeeId (Self)
   await assert.doesNotReject(async () => {
     await leaveTypeService.getBalanceForEmployee(reportEmployeeId, 2026, reportCtx);
   });
 
-  // reportCtx cannot access otherEmployeeId (Forbidden)
   await assert.rejects(
     async () => {
       await leaveTypeService.getBalanceForEmployee(otherEmployeeId, 2026, reportCtx);
@@ -366,12 +353,10 @@ test('employees can access only their own leave balance', async () => {
 });
 
 test('managers can access their direct reports but not independent employees', async () => {
-  // managerCtx can access reportEmployeeId (reports to manager)
   await assert.doesNotReject(async () => {
     await leaveTypeService.getBalanceForEmployee(reportEmployeeId, 2026, managerCtx);
   });
 
-  // managerCtx cannot access otherEmployeeId (does not report to manager)
   await assert.rejects(
     async () => {
       await leaveTypeService.getBalanceForEmployee(otherEmployeeId, 2026, managerCtx);
@@ -381,7 +366,6 @@ test('managers can access their direct reports but not independent employees', a
 });
 
 test('HR and Admin can access any employee balances', async () => {
-  // hrCtx can access otherEmployeeId
   await assert.doesNotReject(async () => {
     await leaveTypeService.getBalanceForEmployee(otherEmployeeId, 2026, hrCtx);
   });
@@ -393,12 +377,13 @@ test('duplicate leave type code is prevented', async () => {
       await leaveTypeService.create(
         {
           name: 'Duplicate Casual Leave',
-          code: 'TEST_CL', // already exists
+          code: 'TEST_CL',
           annualQuota: 12,
           carryForward: false,
           maxCarryForward: 0,
           encashable: false,
           requiresDocument: false,
+          status: 'Active',
         },
         hrCtx
       );
