@@ -13,11 +13,12 @@ import {
   ValidationError,
 } from '../errors/index.js';
 import { auditService } from '../audit/index.js';
-import { sendOtpEmail } from '../notifications/index.js';
+import { notifyMany, sendOtpEmail } from '../notifications/index.js';
 import { permissionsForRole, type Role } from '../rbac/permissions.js';
 import { AuthUser, type IUser } from './auth-model.js';
 import { OtpChallenge } from './otp-model.js';
 import { RefreshToken } from './refresh-token-model.js';
+import { employeeService } from '../../modules/employees/employees.service.js';
 
 /**
  * LOGIN IS TWO STEPS.
@@ -41,6 +42,9 @@ export interface PublicUser {
   status: 'Active' | 'Inactive';
   permissions: readonly string[];
   lastLoginAt: Date | null;
+  createdAt?: Date | null;
+  reportingManager?: { id: string; fullName: string; designation: string } | null;
+  reportingManagerId?: string | null;
 }
 
 export interface LoginChallenge {
@@ -87,7 +91,25 @@ export class AuthService {
     return code;
   }
 
-  static toPublicUser(user: IUser): PublicUser {
+  static toPublicUser(user: IUser, employeeDoc?: any): PublicUser {
+    let reportingManager: { id: string; fullName: string; designation: string } | null = null;
+    let reportingManagerId: string | null = null;
+
+    if (employeeDoc) {
+      if (employeeDoc.reportingManagerId) {
+        if (typeof employeeDoc.reportingManagerId === 'object' && 'fullName' in employeeDoc.reportingManagerId) {
+          reportingManager = {
+            id: String(employeeDoc.reportingManagerId._id),
+            fullName: employeeDoc.reportingManagerId.fullName,
+            designation: employeeDoc.reportingManagerId.designation,
+          };
+          reportingManagerId = String(employeeDoc.reportingManagerId._id);
+        } else {
+          reportingManagerId = String(employeeDoc.reportingManagerId);
+        }
+      }
+    }
+
     return {
       id: String(user._id),
       name: user.name,
@@ -96,6 +118,9 @@ export class AuthService {
       status: user.status,
       permissions: permissionsForRole(user.role),
       lastLoginAt: user.lastLoginAt ?? null,
+      createdAt: user.createdAt ?? null,
+      reportingManager,
+      reportingManagerId,
     };
   }
 
@@ -182,6 +207,8 @@ export class AuthService {
     email: string;
     passwordPlain: string;
     role?: Role;
+    status?: 'Active' | 'Inactive';
+    reportingManagerId?: string;
   }): Promise<PublicUser> {
     const email = userData.email.trim().toLowerCase();
 
@@ -193,14 +220,47 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(userData.passwordPlain, 10);
 
     const newUser = await AuthUser.create({
-      name: userData.name,
+      name: userData.name.trim(),
       email,
       passwordHash,
       role: userData.role ?? 'employee',
-      status: 'Active',
+      status: userData.status ?? 'Active',
     });
 
-    return AuthService.toPublicUser(newUser);
+    // Ensure linked Employee record is created/synchronized
+    const employee = await employeeService.ensureEmployeeForUser({
+      id: newUser._id,
+      name: newUser.name,
+      email: newUser.email,
+      role: newUser.role,
+      status: newUser.status,
+      reportingManagerId: userData.reportingManagerId,
+    });
+
+    // Notify HR and Admin users that employee profile requires completion
+    try {
+      const hrAdminUsers = await AuthUser.find({
+        role: { $in: ['hr', 'admin'] },
+        status: 'Active',
+        deletedAt: null,
+      }).select('_id');
+
+      if (hrAdminUsers.length > 0) {
+        await notifyMany(
+          hrAdminUsers.map((u) => u._id),
+          {
+            type: 'employee.profile_incomplete',
+            title: 'New User Added',
+            body: `${newUser.name} (${newUser.email}) has been added to the CRM. Employee profile information is incomplete and requires HR review.`,
+            link: `/employees/${employee._id}/edit`,
+          },
+        );
+      }
+    } catch (err) {
+      console.error('[registerUser] failed to notify HR/Admin users', err);
+    }
+
+    return AuthService.toPublicUser(newUser, employee);
   }
 
   // ------------------------------------------------------------- login flow
@@ -374,6 +434,148 @@ export class AuthService {
     }
   }
 
+  static async listUsers(query: {
+    search?: string;
+    role?: Role;
+    status?: 'Active' | 'Inactive';
+    page?: number;
+    pageSize?: number;
+  }): Promise<{
+    users: PublicUser[];
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  }> {
+    const page = Math.max(1, query.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 10));
+    const skip = (page - 1) * pageSize;
+
+    const filter: Record<string, unknown> = { deletedAt: null };
+
+    if (query.role) {
+      filter.role = query.role;
+    }
+
+    if (query.status) {
+      filter.status = query.status;
+    }
+
+    if (query.search?.trim()) {
+      const searchRegex = new RegExp(
+        query.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+        'i',
+      );
+      filter.$or = [{ name: searchRegex }, { email: searchRegex }];
+    }
+
+    const [users, total] = await Promise.all([
+      AuthUser.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(pageSize),
+      AuthUser.countDocuments(filter),
+    ]);
+
+    const { Employee } = await import('../../modules/employees/employees.model.js');
+    const userIds = users.map((u) => u._id);
+    const employees = await Employee.find({ userId: { $in: userIds }, deletedAt: null }).populate(
+      'reportingManagerId',
+      'fullName designation',
+    );
+    const empByUser = new Map(employees.map((e) => [String(e.userId), e]));
+
+    return {
+      users: users.map((u) => AuthService.toPublicUser(u, empByUser.get(String(u._id)))),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    };
+  }
+
+  static async updateUser(
+    userId: string,
+    updates: {
+      name?: string;
+      role?: Role;
+      status?: 'Active' | 'Inactive';
+      passwordPlain?: string;
+      reportingManagerId?: string | null;
+    },
+  ): Promise<PublicUser> {
+    if (!Types.ObjectId.isValid(userId)) {
+      throw new NotFoundError('User not found');
+    }
+
+    const user = await AuthUser.findOne({ _id: userId, deletedAt: null });
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    if (updates.name !== undefined) {
+      user.name = updates.name.trim();
+    }
+    if (updates.role !== undefined) {
+      user.role = updates.role;
+    }
+    if (updates.status !== undefined) {
+      user.status = updates.status;
+      if (updates.status === 'Inactive') {
+        // Revoke active sessions for deactivated user
+        await AuthService.logout(undefined, userId);
+      }
+    }
+    if (updates.passwordPlain) {
+      user.passwordHash = await bcrypt.hash(updates.passwordPlain, 10);
+      // Revoke active sessions to enforce sign in with new password
+      await AuthService.logout(undefined, userId);
+    }
+
+    await user.save();
+
+    // Sync updates to linked Employee record
+    const employee = await employeeService.ensureEmployeeForUser({
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      reportingManagerId: updates.reportingManagerId,
+    });
+
+    return AuthService.toPublicUser(user, employee);
+  }
+
+  static async deleteUser(userId: string): Promise<{ id: string }> {
+    if (!Types.ObjectId.isValid(userId)) {
+      throw new NotFoundError('User not found');
+    }
+
+    const user = await AuthUser.findOne({ _id: userId, deletedAt: null });
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    user.deletedAt = new Date();
+    user.status = 'Inactive';
+    await user.save();
+
+    // Deactivate linked employee record
+    await employeeService.ensureEmployeeForUser({
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      status: 'Inactive',
+    });
+
+    // Revoke all active sessions for this user
+    await AuthService.logout(undefined, userId);
+
+    return { id: userId };
+  }
+
   static async getUserById(userId: string): Promise<PublicUser> {
     if (!Types.ObjectId.isValid(userId)) {
       throw new NotFoundError('User not found');
@@ -384,6 +586,13 @@ export class AuthService {
       throw new NotFoundError('User not found');
     }
 
-    return AuthService.toPublicUser(user);
+    const { Employee } = await import('../../modules/employees/employees.model.js');
+    const employee = await Employee.findOne({ userId: user._id, deletedAt: null }).populate(
+      'reportingManagerId',
+      'fullName designation',
+    );
+
+    return AuthService.toPublicUser(user, employee);
   }
 }
+

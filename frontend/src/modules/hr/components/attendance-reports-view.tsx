@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { LayoutGrid, Table } from 'lucide-react';
+import { LayoutGrid, Table, Download } from 'lucide-react';
 import { useDailySummary, useLateReport, useMonthlyRegister, useAbsenceReport } from '@/modules/hr/hooks/use-reports';
 import { MonthlyRegisterGrid } from '@/modules/hr/components/monthly-register-grid';
 import { TeamAttendanceTable } from '@/modules/hr/components/team-attendance-table';
 import { AttendanceOverviewWidget } from '@/modules/hr/components/attendance-overview-widget';
 import { DEPARTMENTS } from '@/modules/employees/types';
 import { cx } from '@/shared/ui';
+import { reportsApi } from '@/modules/hr/api';
 
 type ReportType = 'monthly' | 'daily' | 'late' | 'absence';
 
@@ -41,6 +42,28 @@ export function AttendanceReportsView() {
   const late = useLateReport();
   const monthly = useMonthlyRegister();
   const absence = useAbsenceReport();
+
+  const handleExport = () => {
+    const exportParams: Record<string, string | number | undefined> = {
+      reportType,
+      department: department || undefined,
+    };
+
+    if (reportType === 'daily') {
+      exportParams.date = date;
+    } else if (reportType === 'late' || reportType === 'absence') {
+      exportParams.fromDate = fromDate;
+      exportParams.toDate = toDate;
+    } else if (reportType === 'monthly') {
+      exportParams.fromMonth = fromMonth;
+      exportParams.fromYear = fromYear;
+      exportParams.toMonth = toMonth;
+      exportParams.toYear = toYear;
+    }
+
+    const url = reportsApi.exportReportUrl(exportParams);
+    window.open(url, '_blank');
+  };
 
   const handlePresetChange = (preset: MonthPreset) => {
     setMonthPreset(preset);
@@ -106,7 +129,18 @@ export function AttendanceReportsView() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-slate-800">Attendance Reports</h2>
+        <div>
+          <h2 className="text-xl font-semibold text-slate-800">Attendance Reports</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Daily, monthly registers, lateness, and absence summaries</p>
+        </div>
+        <button
+          type="button"
+          onClick={handleExport}
+          className="flex items-center gap-2 h-9 px-3.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
+        >
+          <Download className="h-4 w-4 text-[#6E1D1D]" />
+          Export CSV
+        </button>
       </div>
 
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-end">

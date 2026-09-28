@@ -497,7 +497,7 @@ export async function allocateBalance(
 
   let allocatedDays = input.proratedDays;
   if (allocatedDays === undefined) {
-    const joinDate = new Date(employee.dateOfJoining);
+    const joinDate = employee.dateOfJoining ? new Date(employee.dateOfJoining) : new Date(input.year, 0, 1);
     const joinYear = joinDate.getFullYear();
 
     if (joinYear === input.year) {

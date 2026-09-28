@@ -31,14 +31,16 @@ export interface Employee {
   personalEmail?: string;
   mobile: string;
   dateOfBirth: string | null;
-  department: Department;
+  department: Department | string;
   designation: string;
-  employmentType: EmploymentType;
-  dateOfJoining: string;
+  employmentType: EmploymentType | string;
+  dateOfJoining: string | null;
   dateOfExit: string | null;
   reportingManager: { id: string; fullName: string; designation: string } | null;
+  teamName?: string;
   workLocation: string;
   status: EmployeeStatus;
+  isProfileComplete?: boolean;
   emergencyContact?: { name?: string; relationship?: string; mobile?: string };
   address?: string;
   createdAt: string;
@@ -80,6 +82,119 @@ export interface ManagerOption {
   designation: string;
   employeeCode: string;
 }
+
+export interface TeamMember extends Employee {
+  leadsCount?: { total: number; open: number; qualified: number; won: number };
+  tasksCount?: { total: number; pending: number; completed: number; overdue: number };
+  activeCampaignsCount?: number;
+  attendanceToday?: string;
+  leaveBalance?: { available: number; used: number };
+}
+
+export interface TeamDto {
+  id: string;
+  name: string;
+  description?: string;
+  managerId: string;
+  manager?: Employee;
+  members: TeamMember[];
+  memberCount: number;
+  summary?: TeamGroup['summary'];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ManagerTeamsGroup {
+  manager: Employee & {
+    id: string;
+    employeeCode: string;
+    fullName: string;
+    designation: string;
+    department: string;
+    workEmail: string;
+    teamName?: string;
+  };
+  teams: TeamDto[];
+}
+
+export interface TeamGroup {
+  id?: string;
+  manager: Employee & {
+    id: string;
+    employeeCode: string;
+    fullName: string;
+    designation: string;
+    department: string;
+    workEmail: string;
+    teamName?: string;
+  };
+  teamName: string;
+  description?: string;
+  members: TeamMember[];
+  summary?: {
+    totalMembers: number;
+    activeMembers: number;
+    totalLeads: number;
+    openLeads: number;
+    qualifiedLeads: number;
+    wonLeads: number;
+    quotationsCount: number;
+    activeCampaignsCount: number;
+    pendingTasksCount: number;
+  };
+}
+
+export interface TeamHierarchyResponse {
+  teams: TeamGroup[];
+  managers?: ManagerTeamsGroup[];
+  unassigned: Employee[];
+}
+
+export interface MemberCrmSummaryResponse {
+  employee: Employee;
+  leads: {
+    total: number;
+    byStatus: Record<string, number>;
+    recent: Array<{
+      id: string;
+      companyName: string;
+      contactPerson: string;
+      mobile: string;
+      email?: string;
+      status: string;
+      city?: string;
+      budget?: number;
+      campaignDuration?: string;
+      createdAt: string;
+    }>;
+  };
+  tasks: {
+    total: number;
+    pending: number;
+    completed: number;
+    overdue: number;
+    recent: Array<{
+      id: string;
+      title: string;
+      type: string;
+      status: string;
+      deadline: string;
+      campaignName?: string;
+    }>;
+  };
+  attendance: {
+    today: string;
+    thisMonthPresent: number;
+    thisMonthLate: number;
+    thisMonthHalfDay: number;
+  };
+  leave: {
+    allocated: number;
+    used: number;
+    balance: number;
+  };
+}
+
 
 /** The shape the form produces. Money is in **rupees** here — the API converts. */
 export interface EmployeeFormValues {

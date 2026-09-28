@@ -13,8 +13,10 @@ import {
   DEPARTMENTS,
   EMPLOYEE_STATUSES,
   EMPLOYMENT_TYPES,
+  type Department,
   type Employee,
   type EmployeeFormValues,
+  type EmploymentType,
 } from '../types';
 import { paiseToRupeeInput, toDateInput } from '../format';
 
@@ -58,13 +60,13 @@ function fromEmployee(employee: Employee): EmployeeFormValues {
     personalEmail: employee.personalEmail ?? '',
     mobile: employee.mobile,
     dateOfBirth: toDateInput(employee.dateOfBirth),
-    department: employee.department,
-    designation: employee.designation,
-    employmentType: employee.employmentType,
+    department: (employee.department as Department) || '',
+    designation: employee.designation || '',
+    employmentType: (employee.employmentType as EmploymentType) || 'Full-time',
     dateOfJoining: toDateInput(employee.dateOfJoining),
     dateOfExit: toDateInput(employee.dateOfExit),
     reportingManagerId: employee.reportingManager?.id ?? '',
-    workLocation: employee.workLocation,
+    workLocation: employee.workLocation || '',
     status: employee.status,
     panNumber: employee.panNumber ?? '',
     aadhaarNumber: employee.aadhaarNumber ?? '',

@@ -1,4 +1,7 @@
 import { holidayService } from './holiday.service.js';
+// import { LeaveType } from '../leaveTypes/leaveTypes.model.js';
+import ShiftConfig from '../models/shift-config.model.js';
+import { DEPARTMENTS } from '../../employees/employees.model.js';
 import { LeaveType } from '../models/leave.model.js';
 
 export async function initializeHRDefaults(): Promise<void> {
@@ -27,7 +30,25 @@ export async function initializeHRDefaults(): Promise<void> {
         }
       }
     }
+
+    // 3. Seed default Shift Configurations for all departments
+    for (const department of DEPARTMENTS) {
+      const existing = await ShiftConfig.findOne({ department });
+      if (!existing) {
+        try {
+          await ShiftConfig.create({
+            department,
+            startTime: '09:30',
+            endTime: '18:30',
+            graceMinutes: 15,
+            halfDayThresholdHours: 4,
+          });
+        } catch {
+          // Ignore unique collision
+        }
+      }
+    }
   } catch (err) {
-    console.error('[hr-init] Error initializing default HR leave types and holidays:', err);
+    console.error('[hr-init] Error initializing default HR defaults:', err);
   }
 }

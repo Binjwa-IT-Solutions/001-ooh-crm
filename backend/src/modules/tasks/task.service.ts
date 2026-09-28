@@ -1,10 +1,15 @@
 import { Types } from "mongoose";
+import type { RequestContext } from "../../core/context.js";
+import { toObjectId } from "../../core/db/basePlugin.js";
+import { employeeService } from "../employees/employees.service.js";
 import {
   Task,
   TaskStatus,
   TaskType,
 } from "./task.model.js";
 import { TaskTemplate } from "./task-template.model.js";
+import "../sites/site.model.js";
+import "../campaigns/campaign.model.js";
 
 interface TaskContext {
   userId?: string;
@@ -97,8 +102,26 @@ export async function generateForCampaign(
 
 export async function getTasks(
   filter: Record<string, unknown> = {},
+  ctx?: RequestContext,
 ) {
-  const tasks = await Task.find(filter)
+  const queryFilter: Record<string, unknown> = { ...filter, deletedAt: null };
+
+  if (ctx) {
+    const scopedEmpIds = await employeeService.getScopedEmployeeIds(ctx);
+    if (scopedEmpIds) {
+      if (queryFilter.assignedTo) {
+        const targetId = toObjectId(String(queryFilter.assignedTo));
+        if (!scopedEmpIds.some((id) => id.equals(targetId))) {
+          return [];
+        }
+        queryFilter.assignedTo = targetId;
+      } else {
+        queryFilter.assignedTo = { $in: scopedEmpIds };
+      }
+    }
+  }
+
+  const tasks = await Task.find(queryFilter)
     .populate(
       "campaignId",
       "campaignCode name city startDate endDate",
@@ -109,7 +132,7 @@ export async function getTasks(
     )
     .populate(
       "assignedTo",
-      "name email",
+      "fullName designation employeeCode email",
     )
     .sort({
       deadline: 1,

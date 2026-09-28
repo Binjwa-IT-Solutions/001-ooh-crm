@@ -1,6 +1,7 @@
 import Attendance from '../models/attendance.model.js';
 import ShiftConfig from '../models/shift-config.model.js';
 import type { RequestContext } from '../../../core/context.js';
+import { ValidationError } from '../../../core/errors/index.js';
 import { employeeService } from '../../employees/employees.service.js';
 
 import { scopedFind } from '../../../core/scoping/index.js';
@@ -119,13 +120,7 @@ export async function checkOut(
   });
 
   if (!record || !record.checkInTime) {
-    const err: any = new Error(
-      "Cannot check out — no check-in found for today",
-    );
-    err.status = 400;
-    err.publicMessage =
-      "Please check in first before checking out.";
-    throw err;
+    throw new ValidationError('Please check in first before checking out.');
   }
 
   record.checkOutTime = new Date();
@@ -187,7 +182,37 @@ export async function getMyAttendance(ctx: RequestContext, filters: Record<strin
 }
 
 export async function getTeamAttendance(ctx: RequestContext, filters: Record<string, any> = {}) {
-  const records = await scopedFind(Attendance, filters, ctx, { ownerField: 'employeeId' })
+  const queryFilters: Record<string, any> = { ...filters };
+  if (queryFilters.date && typeof queryFilters.date === 'string') {
+    const targetDate = new Date(queryFilters.date);
+    targetDate.setHours(0, 0, 0, 0);
+    const nextDate = new Date(targetDate);
+    nextDate.setDate(targetDate.getDate() + 1);
+    queryFilters.date = { $gte: targetDate, $lt: nextDate };
+  }
+
+  // Manager scoping: only direct reports + self are returned to a manager
+  if (ctx.user.role === 'manager') {
+    const { Employee } = await import('../../employees/employees.model.js');
+    const myEmp = await Employee.findOne({ userId: ctx.user.id, deletedAt: null });
+    if (myEmp) {
+      const reports = await Employee.find({ reportingManagerId: myEmp._id, deletedAt: null }).select('_id');
+      const allowedIds = [...reports.map((r) => r._id), myEmp._id];
+      if (queryFilters.employeeId) {
+        const targetIdStr = String(queryFilters.employeeId);
+        const isAllowed = allowedIds.some((id) => String(id) === targetIdStr);
+        if (!isAllowed) {
+          return [];
+        }
+      } else {
+        queryFilters.employeeId = { $in: allowedIds };
+      }
+    } else {
+      return [];
+    }
+  }
+
+  const records = await scopedFind(Attendance, queryFilters, ctx, { ownerField: 'employeeId' })
     .sort({ date: -1 })
     .populate('employeeId', 'fullName name department');
   return records;
@@ -214,9 +239,16 @@ export async function getMyAttendanceSummary(ctx: RequestContext, month: number,
   let totalWorkHours = 0;
   const daysWithRecords = new Set<string>();
 
+function formatLocalDate(d: Date | string): string {
+  const dateObj = typeof d === 'string' ? new Date(d) : d;
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
   const mappedRecords = records.map((r) => {
-    const dObj = new Date(r.date);
-    const dateStr = `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
+    const dateStr = formatLocalDate(r.date);
     daysWithRecords.add(dateStr);
 
     if (r.status === 'Present' || r.status === 'Late') {
@@ -254,8 +286,8 @@ export async function getMyAttendanceSummary(ctx: RequestContext, month: number,
 
   for (let d = new Date(start); d <= limitDate; d.setDate(d.getDate() + 1)) {
     const dayOfWeek = d.getDay();
-    const isWeekend = dayOfWeek === 0; // Sunday
-    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const isWeekend = dayOfWeek === 0; // Sunday only
+    const dateStr = formatLocalDate(d);
 
     if (!isWeekend) {
       workingDays++;

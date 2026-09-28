@@ -4,8 +4,10 @@ import { config } from '../config/index.js';
 import { withJobLock } from './job-runner.js';
 import { escalationJob } from './escalation.job.js';
 import { leadSlaReleaseJob } from './lead-sla.job.js';
+import { attendanceAutoCloseJob } from './attendance-autoclose.job.js';
 
 export { withJobLock } from './job-runner.js';
+export { attendanceAutoCloseJob } from './attendance-autoclose.job.js';
 
 /**
  * SCHEDULED JOBS.
@@ -14,9 +16,10 @@ export { withJobLock } from './job-runner.js';
  * here — the file itself lives next to this one as `<name>.job.ts`.
  *
  * Jobs the spec calls for, and who owns them:
- *   escalation.job.ts      every 15 minutes   D4
- *   finance-rollup.job.ts  nightly            F3
- *   audit-checks.job.ts    nightly + manual   H1
+ *   escalation.job.ts           every 15 minutes   D4
+ *   attendance-autoclose.job.ts nightly (23:55)    G2
+ *   finance-rollup.job.ts       nightly            F3
+ *   audit-checks.job.ts         nightly + manual   H1
  *
  * Wrap the body in `withJobLock` — see job-runner.ts for why that is not
  * optional once the app runs in PM2 cluster mode.
@@ -28,7 +31,7 @@ interface JobDefinition {
   schedule: string;
   /** How long the lock is held if the process dies mid-run. */
   lockTtlSeconds: number;
-  run: () => Promise<void>;
+  run: () => Promise<void | any>;
   description: string;
 }
 
@@ -46,6 +49,14 @@ const JOBS: JobDefinition[] = [
     lockTtlSeconds: 5 * 60,
     description: 'Auto-release claimed leads with breached 24h SLA and no action back to Unclaimed pool',
     run: leadSlaReleaseJob,
+  },
+  {
+    name: 'attendance-autoclose',
+    // 23:55 daily. Auto-closes forgotten check-outs at end of day and flags for HR review.
+    schedule: '55 23 * * *',
+    lockTtlSeconds: 10 * 60,
+    description: 'G2 — end-of-day auto-close forgotten check-outs',
+    run: attendanceAutoCloseJob,
   },
   {
     name: 'heartbeat',

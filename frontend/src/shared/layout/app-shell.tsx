@@ -6,6 +6,7 @@ import { type ReactNode, useState } from 'react';
 import {
   LayoutDashboard,
   Users,
+  Plus,
   FileText,
   MapPin,
   CalendarCheck,
@@ -95,6 +96,12 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: '/exceptions', label: 'Exceptions', icon: AlertTriangle, permission: 'exceptions.view' },
     ],
   },
+  {
+    label: 'ADMINISTRATION',
+    items: [
+      { href: '/users', label: 'Users', icon: Users, permission: 'users.view' },
+    ],
+  },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -159,6 +166,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         <li key={item.href}>
                           <Link
                             href={item.href}
+                            prefetch={false}
                             className={cx(
                               'flex items-center gap-3 px-6 py-2.5 text-sm transition-colors border-l-4',
                               isActive

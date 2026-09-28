@@ -11,3 +11,4 @@ reportsRoutes.get('/attendance/daily', requirePermission('reports.view'), contro
 reportsRoutes.get('/attendance/late', requirePermission('reports.view'), controller.getLateReport);
 reportsRoutes.get('/attendance/monthly', requirePermission('reports.view'), controller.getMonthlyRegister);
 reportsRoutes.get('/attendance/absence', requirePermission('reports.view'), controller.getAbsenceReport);
+reportsRoutes.get('/attendance/export', requirePermission('reports.view'), controller.exportReport);

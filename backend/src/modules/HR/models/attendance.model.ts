@@ -35,6 +35,9 @@ export interface IAttendance extends Document {
     workType: 'Office' | 'Remote' | 'Field Visit';
     status: 'Present' | 'Absent' | 'Leave' | 'Break' | 'Half-Day' | 'Late';
     deviceInfo?: string;
+    autoClosed?: boolean;
+    flaggedForReview?: boolean;
+    reviewNotes?: string;
     createdBy?: mongoose.Types.ObjectId;
     updatedBy?: mongoose.Types.ObjectId;
     deletedAt?: Date | null;
@@ -93,6 +96,9 @@ const attendanceSchema = new Schema<IAttendance>(
             default: 'Present',
         },
         deviceInfo: { type: String },
+        autoClosed: { type: Boolean, default: false },
+        flaggedForReview: { type: Boolean, default: false },
+        reviewNotes: { type: String },
         createdBy: { type: Schema.Types.ObjectId, ref: 'Employee' },
         updatedBy: { type: Schema.Types.ObjectId, ref: 'Employee' },
         deletedAt: { type: Date, default: null },

@@ -46,17 +46,19 @@ export interface IEmployee extends BaseDocument {
   fullName: string;
   workEmail: string;
   personalEmail?: string;
-  mobile: string;
+  mobile?: string;
   dateOfBirth?: Date | null;
 
-  department: Department;
-  designation: string;
-  employmentType: EmploymentType;
-  dateOfJoining: Date;
+  department?: Department | null;
+  designation?: string;
+  employmentType?: EmploymentType | null;
+  dateOfJoining?: Date | null;
   dateOfExit?: Date | null;
   reportingManagerId?: Types.ObjectId | null;
-  workLocation: string;
+  teamName?: string;
+  workLocation?: string;
   status: EmployeeStatus;
+  isProfileComplete?: boolean;
 
   // --- Sensitive. Never returned without employees.sensitive. ---
   panNumber?: string;
@@ -85,21 +87,23 @@ const employeeSchema = new Schema<IEmployee>({
   fullName: { type: String, required: true, trim: true },
   workEmail: { type: String, required: true, unique: true, lowercase: true, trim: true },
   personalEmail: { type: String, lowercase: true, trim: true },
-  mobile: { type: String, required: true, trim: true, index: true },
+  mobile: { type: String, trim: true, default: '', index: true },
   dateOfBirth: { type: Date, default: null },
 
-  department: { type: String, enum: DEPARTMENTS, required: true, index: true },
-  designation: { type: String, required: true, trim: true },
-  employmentType: { type: String, enum: EMPLOYMENT_TYPES, required: true, default: 'Full-time' },
-  dateOfJoining: { type: Date, required: true },
+  department: { type: String, enum: [...DEPARTMENTS, null], default: null, index: true },
+  designation: { type: String, trim: true, default: '' },
+  employmentType: { type: String, enum: [...EMPLOYMENT_TYPES, null], default: null },
+  dateOfJoining: { type: Date, default: null },
   dateOfExit: { type: Date, default: null },
 
   // Self-reference. D4 escalation and G4 leave approval both walk this chain,
   // so it has to be a real reference rather than a name string.
   reportingManagerId: { type: Schema.Types.ObjectId, ref: 'Employee', default: null, index: true },
+  teamName: { type: String, trim: true, default: '' },
 
-  workLocation: { type: String, required: true, trim: true },
+  workLocation: { type: String, trim: true, default: '' },
   status: { type: String, enum: EMPLOYEE_STATUSES, required: true, default: 'Active', index: true },
+  isProfileComplete: { type: Boolean, default: false, index: true },
 
   panNumber: { type: String, uppercase: true, trim: true },
   aadhaarNumber: { type: String, trim: true },

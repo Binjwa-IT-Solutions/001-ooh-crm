@@ -6,6 +6,8 @@ import type {
   EmployeeListQuery,
   EmployeeListResponse,
   ManagerOption,
+  MemberCrmSummaryResponse,
+  TeamHierarchyResponse,
 } from './types';
 
 /**
@@ -94,6 +96,59 @@ export const employeesApi = {
   managerOptions: () =>
     api.get<{ options: ManagerOption[] }>('/api/employees/manager-options').then((r) => r.options),
 
+  teams: (managerId?: string) => {
+    const q = managerId ? `?managerId=${encodeURIComponent(managerId)}` : '';
+    return api.get<TeamHierarchyResponse>(`/api/employees/teams${q}`);
+  },
+
+  createTeam: (payload: { name: string; description?: string; managerId?: string }) =>
+    api.post<{ message: string; team: any }>('/api/employees/teams', payload).then((res) => res.team),
+
+  updateTeam: (teamId: string, payload: { name?: string; description?: string }) =>
+    api.patch<{ message: string; team: any }>(`/api/employees/teams/${teamId}`, payload).then((res) => res.team),
+
+  deleteTeam: (teamId: string) =>
+    api.delete<{ success: boolean; message: string }>(`/api/employees/teams/${teamId}`),
+
+  addMemberToTeam: (teamId: string, employeeId: string) =>
+    api.post<{ message: string; team: any }>(`/api/employees/teams/${teamId}/members`, { employeeId }).then((res) => res.team),
+
+  removeMemberFromTeam: (teamId: string, employeeId: string) =>
+    api.delete<{ message: string; team: any }>(`/api/employees/teams/${teamId}/members/${employeeId}`).then((res) => res.team),
+
+  reassignTeamMember: (payload: { sourceTeamId: string; targetTeamId: string; employeeId: string }) =>
+    api.post<{ message: string }>('/api/employees/teams/reassign', payload),
+
+  updateTeamName: (teamName: string, managerId?: string) =>
+    api.patch<{ message: string; managerId: string; teamName: string }>('/api/employees/teams/name', {
+      teamName,
+      managerId,
+    }),
+
+  assignMember: (employeeId: string, managerId?: string | null) =>
+    api
+      .post<{ message: string; employee: Employee }>('/api/employees/teams/members', {
+        employeeId,
+        managerId,
+      })
+      .then((res) => res.employee),
+
+  removeMember: (employeeId: string) =>
+    api
+      .delete<{ message: string; employee: Employee }>(`/api/employees/teams/members/${employeeId}`)
+      .then((res) => res.employee),
+
+  getMemberCrmSummary: (employeeId: string) =>
+    api.get<MemberCrmSummaryResponse>(`/api/employees/${employeeId}/crm-summary`),
+
+  assignManager: (employeeId: string, reportingManagerId: string | null) =>
+    api
+      .post<{ message: string; employee: Employee }>('/api/employees/teams/members', {
+        employeeId,
+        managerId: reportingManagerId ? reportingManagerId : null,
+      })
+      .then((res) => res.employee),
+
   create: (values: EmployeeFormValues) =>
     api
       .post<{ employee: Employee }>('/api/employees', toPayload(values))
@@ -106,3 +161,4 @@ export const employeesApi = {
 
   deactivate: (id: string) => api.delete<{ id: string }>(`/api/employees/${id}`),
 };
+

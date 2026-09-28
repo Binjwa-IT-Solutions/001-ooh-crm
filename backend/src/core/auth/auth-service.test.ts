@@ -2,7 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { AuthService } from './auth-service.js';
-import { loginSchema, registerSchema, verifyOtpSchema } from './auth-validator.js';
+import {
+  listUsersSchema,
+  loginSchema,
+  registerSchema,
+  updateUserSchema,
+  verifyOtpSchema,
+} from './auth-validator.js';
 import {
   permissionsForRole,
   roleHasPermission,
@@ -71,6 +77,35 @@ test('register validation rejects an unknown role', () => {
   );
 });
 
+test('register validation accepts valid role and status', () => {
+  const parsed = registerSchema.parse({
+    name: 'New Officer',
+    email: 'officer@mediaoctus.test',
+    password: 'Password123!',
+    role: 'sales_agent',
+    status: 'Active',
+  });
+  assert.equal(parsed.role, 'sales_agent');
+  assert.equal(parsed.status, 'Active');
+});
+
+test('listUsers validation provides defaults', () => {
+  const parsed = listUsersSchema.parse({});
+  assert.equal(parsed.page, 1);
+  assert.equal(parsed.pageSize, 10);
+});
+
+test('updateUser validation validates fields properly', () => {
+  const parsed = updateUserSchema.parse({
+    name: 'Updated Name',
+    role: 'manager',
+    status: 'Inactive',
+  });
+  assert.equal(parsed.name, 'Updated Name');
+  assert.equal(parsed.role, 'manager');
+  assert.equal(parsed.status, 'Inactive');
+});
+
 test('every role has an entry in the permission matrix', () => {
   for (const role of ROLES) {
     assert.ok(ROLE_PERMISSIONS[role], `no permissions declared for role "${role}"`);
@@ -86,3 +121,5 @@ test('admin holds every permission and employee does not', () => {
 test('an unknown role gets no permissions rather than throwing', () => {
   assert.deepEqual(permissionsForRole('not-a-role'), []);
 });
+
+
