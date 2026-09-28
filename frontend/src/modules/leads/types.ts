@@ -54,6 +54,10 @@ export interface LeadQualification {
   city?: string;
   locationPreference?: LocationPreference;
   campaignDuration?: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  numberOfSites?: number;
+  preferredLocations?: string;
   budget?: number; // integer paise
   targetAudience?: string;
   campaignObjective?: string;

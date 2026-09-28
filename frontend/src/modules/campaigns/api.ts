@@ -41,6 +41,18 @@ function buildQuery(filters: CampaignFilters): string {
     params.set("endDate", filters.endDate);
   }
 
+  if (filters.myCampaigns !== undefined) {
+    params.set("myCampaigns", String(filters.myCampaigns));
+  }
+
+  if (filters.agentId?.trim()) {
+    params.set("agentId", filters.agentId.trim());
+  }
+
+  if (filters.tab?.trim()) {
+    params.set("tab", filters.tab.trim());
+  }
+
   const query = params.toString();
 
   return query ? `?${query}` : "";

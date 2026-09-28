@@ -27,6 +27,19 @@ export const leadQualificationSchema = z.object({
   city: z.string().trim().optional(),
   locationPreference: z.enum(LOCATION_PREFERENCES).optional(),
   campaignDuration: z.string().trim().optional(),
+  startDate: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : val),
+    z.coerce.date().nullable().optional(),
+  ),
+  endDate: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : val),
+    z.coerce.date().nullable().optional(),
+  ),
+  numberOfSites: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? undefined : Number(val)),
+    z.number().min(0).optional(),
+  ),
+  preferredLocations: z.string().trim().optional(),
   // User enters budget in Rupees -> convert to integer Paise
   budget: z.coerce
     .number()

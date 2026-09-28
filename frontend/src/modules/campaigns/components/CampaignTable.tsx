@@ -107,7 +107,7 @@ export default function CampaignTable({
                     </span>
                   </td>
 
-                  <td className="max-w-[200px] px-5 py-4">
+                  <td className="max-w-50 px-5 py-4">
                     <span className="block truncate text-sm font-medium text-gray-900">
                       {campaign.name}
                     </span>

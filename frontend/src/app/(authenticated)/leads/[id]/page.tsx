@@ -380,10 +380,20 @@ export default function LeadDetailPage() {
     setStatusError('');
 
     const formData = new FormData(e.currentTarget);
+    const startDate = (formData.get('startDate') as string) || '';
+    const endDate = (formData.get('endDate') as string) || '';
+    const numberOfSitesVal = formData.get('numberOfSites');
+    const numberOfSites = numberOfSitesVal ? Number(numberOfSitesVal) : undefined;
+    const preferredLocations = (formData.get('preferredLocations') as string) || '';
+
     const data: LeadQualification = {
       city: (formData.get('city') as string) || undefined,
       locationPreference: (formData.get('locationPreference') as LocationPreference) || undefined,
       campaignDuration: (formData.get('campaignDuration') as string) || undefined,
+      startDate: startDate ? new Date(startDate).toISOString() : null,
+      endDate: endDate ? new Date(endDate).toISOString() : null,
+      numberOfSites: numberOfSites !== undefined && !isNaN(numberOfSites) ? numberOfSites : undefined,
+      preferredLocations: preferredLocations.trim() || undefined,
       budget: formData.get('budget') ? Number(formData.get('budget')) : undefined,
       targetAudience: (formData.get('targetAudience') as string) || undefined,
       campaignObjective: (formData.get('campaignObjective') as string) || undefined,
@@ -740,6 +750,10 @@ export default function LeadDetailPage() {
             {lead.qualification &&
               (lead.qualification.budget ||
                 lead.qualification.campaignDuration ||
+                lead.qualification.startDate ||
+                lead.qualification.endDate ||
+                lead.qualification.numberOfSites ||
+                lead.qualification.preferredLocations ||
                 lead.qualification.locationPreference ||
                 lead.qualification.city ||
                 lead.qualification.notes ||
@@ -764,6 +778,20 @@ export default function LeadDetailPage() {
                       </p>
                     </div>
                     <div>
+                      <p className="text-xs text-slate-400">Target Dates</p>
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                        {lead.qualification.startDate
+                          ? `${formatDate(lead.qualification.startDate)}${lead.qualification.endDate ? ` → ${formatDate(lead.qualification.endDate)}` : ''}`
+                          : '-'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-400">Sites Required</p>
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                        {lead.qualification.numberOfSites ? `${lead.qualification.numberOfSites} site(s)` : '-'}
+                      </p>
+                    </div>
+                    <div>
                       <p className="text-xs text-slate-400">Location Preference</p>
                       <p className="text-sm font-semibold text-slate-900 dark:text-white">
                         {lead.qualification.locationPreference || '-'}
@@ -775,6 +803,14 @@ export default function LeadDetailPage() {
                         {lead.qualification.city || lead.city || '-'}
                       </p>
                     </div>
+                    {lead.qualification.preferredLocations && (
+                      <div className="sm:col-span-2">
+                        <p className="text-xs text-slate-400">Preferred Locations / Areas</p>
+                        <p className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                          {lead.qualification.preferredLocations}
+                        </p>
+                      </div>
+                    )}
                     {lead.qualification.campaignObjective && (
                       <div className="sm:col-span-2">
                         <p className="text-xs text-slate-400">Objective</p>
@@ -917,11 +953,47 @@ export default function LeadDetailPage() {
                 placeholder="Select location..."
               />
               <Field
+                label="Target Start Date"
+                name="startDate"
+                type="date"
+                defaultValue={
+                  lead.qualification?.startDate
+                    ? new Date(lead.qualification.startDate).toISOString().split('T')[0]
+                    : ''
+                }
+              />
+              <Field
+                label="Target End Date"
+                name="endDate"
+                type="date"
+                defaultValue={
+                  lead.qualification?.endDate
+                    ? new Date(lead.qualification.endDate).toISOString().split('T')[0]
+                    : ''
+                }
+              />
+              <Field
+                label="Number of Sites Required"
+                name="numberOfSites"
+                type="number"
+                min="1"
+                defaultValue={lead.qualification?.numberOfSites ?? ''}
+                placeholder="e.g. 5"
+              />
+              <Field
                 label="Campaign Duration"
                 name="campaignDuration"
                 defaultValue={lead.qualification?.campaignDuration}
                 placeholder="e.g. 30 days"
               />
+              <div className="md:col-span-2">
+                <Field
+                  label="Preferred Areas / Landmarks / Specific Sites"
+                  name="preferredLocations"
+                  defaultValue={lead.qualification?.preferredLocations ?? ''}
+                  placeholder="e.g. Western Express Highway, Bandra Reclamation, Vijay Nagar Square, AB Road"
+                />
+              </div>
               <Field
                 label="Budget (₹ Rupees)"
                 name="budget"

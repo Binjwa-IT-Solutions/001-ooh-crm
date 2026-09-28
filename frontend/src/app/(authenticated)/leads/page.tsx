@@ -625,7 +625,7 @@ export default function LeadsPage() {
                 {stats ? stats.wonCount : '-'}
               </p>
               <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium mt-0.5">
-                {stats ? `₹${((stats.wonRevenue || 0) / 100).toLocaleString('en-IN')}` : '-'}
+                Successfully converted
               </p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 flex items-center justify-center shrink-0">

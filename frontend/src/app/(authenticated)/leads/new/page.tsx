@@ -166,6 +166,10 @@ export default function NewLeadPage() {
     const budget = formData.get('budget') ? Number(formData.get('budget')) : undefined;
     const locationPreference = formData.get('locationPreference') as LocationPreference;
     const campaignDuration = formData.get('campaignDuration') as string;
+    const startDate = formData.get('startDate') as string;
+    const endDate = formData.get('endDate') as string;
+    const numberOfSites = formData.get('numberOfSites') ? Number(formData.get('numberOfSites')) : undefined;
+    const preferredLocations = formData.get('preferredLocations') as string;
 
     // Basic frontend validation
     const newErrors: Record<string, string> = {};
@@ -213,11 +217,23 @@ export default function NewLeadPage() {
         : scheduled.toISOString();
     }
 
-    if (budget || locationPreference || campaignDuration) {
+    if (
+      budget ||
+      locationPreference ||
+      campaignDuration ||
+      startDate ||
+      endDate ||
+      numberOfSites !== undefined ||
+      (preferredLocations && preferredLocations.trim())
+    ) {
       payload.qualification = {
         budget,
         locationPreference: locationPreference || undefined,
         campaignDuration: campaignDuration || undefined,
+        startDate: startDate ? new Date(startDate).toISOString() : undefined,
+        endDate: endDate ? new Date(endDate).toISOString() : undefined,
+        numberOfSites: numberOfSites !== undefined && !isNaN(numberOfSites) ? numberOfSites : undefined,
+        preferredLocations: preferredLocations?.trim() || undefined,
         city: city.trim() || undefined,
       };
     }
@@ -545,25 +561,61 @@ export default function NewLeadPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <SelectField
-                    label="Location Preference"
-                    name="locationPreference"
-                    placeholder="Select preference..."
-                    options={[
-                      { label: 'Airport', value: 'Airport' },
-                      { label: 'Highway', value: 'Highway' },
-                      { label: 'Mall', value: 'Mall' },
-                      { label: 'Metro', value: 'Metro' },
-                      { label: 'Other', value: 'Other' },
-                    ]}
-                  />
+                {/* Campaign Requirement Details */}
+                <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800">
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-3">
+                    Campaign Requirement Details
+                  </p>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <Field
+                      label="Target Start Date"
+                      name="startDate"
+                      type="date"
+                    />
 
-                  <Field
-                    label="Campaign Duration"
-                    name="campaignDuration"
-                    placeholder="e.g. 30 days"
-                  />
+                    <Field
+                      label="Target End Date"
+                      name="endDate"
+                      type="date"
+                    />
+
+                    <Field
+                      label="Number of Sites Required"
+                      name="numberOfSites"
+                      type="number"
+                      min="1"
+                      placeholder="e.g. 5 hoardings / billboards"
+                    />
+
+                    <SelectField
+                      label="Location Preference"
+                      name="locationPreference"
+                      placeholder="Select preference..."
+                      options={[
+                        { label: 'Airport', value: 'Airport' },
+                        { label: 'Highway', value: 'Highway' },
+                        { label: 'Mall', value: 'Mall' },
+                        { label: 'Metro', value: 'Metro' },
+                        { label: 'Other', value: 'Other' },
+                      ]}
+                    />
+
+                    <div className="md:col-span-2">
+                      <Field
+                        label="Preferred Areas / Landmarks / Specific Sites"
+                        name="preferredLocations"
+                        placeholder="e.g. Western Express Highway, Bandra Reclamation, Vijay Nagar Square, AB Road"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <Field
+                        label="Campaign Duration (Optional)"
+                        name="campaignDuration"
+                        placeholder="e.g. 30 days (auto-computed from dates if left blank)"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
