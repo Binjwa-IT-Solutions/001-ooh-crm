@@ -7,6 +7,7 @@ import authRoutes from './core/auth/auth-routes.js';
 import fileRoutes from './core/files/files-routes.js';
 import { errorHandler, notFoundHandler } from './core/http/error-middleware.js';
 import notificationRoutes from './core/notifications/notifications-routes.js';
+import profileRoutes from './core/profile/profile-routes.js';
 import employeeRoutes from './modules/employees/employees.routes.js';
 import { attendanceRoutes } from './modules/HR/routes/attendance.routes.js';
 import leaveTypeRoutes, {
@@ -66,6 +67,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/files', fileRoutes);
+app.use('/api/profile', profileRoutes);
 
 import { leadRoutes } from './modules/leads/leads.routes.js';
 

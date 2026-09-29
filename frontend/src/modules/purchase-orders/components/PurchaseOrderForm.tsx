@@ -15,6 +15,7 @@ import {
   getVendorOptionsForPO,
 } from "../api";
 import { getVendors } from "@/modules/vendors/api";
+import { DatePicker } from "@/shared/ui";
 
 interface Props {
   order: PurchaseOrder | null;
@@ -469,9 +470,8 @@ export default function PurchaseOrderForm({
                       />
 
                       {/* From */}
-                      <Field
+                      <DatePicker
                         label="From Date"
-                        type="date"
                         value={item.from}
                         onChange={(value) =>
                           updateItem(
@@ -483,9 +483,8 @@ export default function PurchaseOrderForm({
                       />
 
                       {/* To */}
-                      <Field
+                      <DatePicker
                         label="To Date"
-                        type="date"
                         value={item.to}
                         onChange={(value) =>
                           updateItem(
@@ -651,7 +650,7 @@ function CampaignSelector({
         type="button"
         disabled={disabled || loading}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between rounded-xl border border-gray-300 bg-white px-4 py-3 text-left text-sm font-medium text-gray-900 outline-none transition focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA] disabled:cursor-not-allowed disabled:bg-[#F7F8FA]"
+        className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-sm text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA] disabled:cursor-not-allowed disabled:bg-[#F7F8FA]"
       >
         <div className="truncate">
           {selectedCampaign ? (
@@ -678,11 +677,11 @@ function CampaignSelector({
             </span>
           )}
         </div>
-        <span className="ml-2 text-xs text-[#667085]">▾</span>
+        <span className="text-gray-500">▾</span>
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 z-50 mt-1 max-h-64 overflow-hidden rounded-xl border border-[#E8E8EC] bg-white shadow-xl">
+        <div className="absolute left-0 right-0 z-50 mt-1 max-h-64 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
           <div className="border-b border-gray-100 p-2">
             <input
               type="text"
@@ -706,10 +705,10 @@ function CampaignSelector({
                     setOpen(false);
                     setSearch("");
                   }}
-                  className={`block w-full px-4 py-2.5 text-left transition ${
+                  className={`block w-full px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
                     isSelected
-                      ? "bg-[#FFF5F5] text-[#8B2424]"
-                      : "hover:bg-[#F9DADA] hover:text-[#8B2424] text-gray-900"
+                      ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
+                      : "text-gray-900"
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -797,7 +796,7 @@ function VendorSelector({
         type="button"
         disabled={disabled || loading}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between rounded-xl border border-gray-300 bg-white px-4 py-3 text-left text-sm font-medium text-gray-900 outline-none transition focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA] disabled:cursor-not-allowed disabled:bg-[#F7F8FA]"
+        className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-sm text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA] disabled:cursor-not-allowed disabled:bg-[#F7F8FA]"
       >
         <div className="truncate">
           {selectedVendor ? (
@@ -820,11 +819,11 @@ function VendorSelector({
             </span>
           )}
         </div>
-        <span className="ml-2 text-xs text-[#667085]">▾</span>
+        <span className="text-gray-500">▾</span>
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 z-50 mt-1 max-h-64 overflow-hidden rounded-xl border border-[#E8E8EC] bg-white shadow-xl">
+        <div className="absolute left-0 right-0 z-50 mt-1 max-h-64 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
           <div className="border-b border-gray-100 p-2">
             <input
               type="text"
@@ -848,10 +847,10 @@ function VendorSelector({
                     setOpen(false);
                     setSearch("");
                   }}
-                  className={`block w-full px-4 py-2.5 text-left transition ${
+                  className={`block w-full px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
                     isSelected
-                      ? "bg-[#FFF5F5] text-[#8B2424]"
-                      : "hover:bg-[#F9DADA] hover:text-[#8B2424] text-gray-900"
+                      ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
+                      : "text-gray-900"
                   }`}
                 >
                   <div className="text-sm font-bold">{v.name}</div>

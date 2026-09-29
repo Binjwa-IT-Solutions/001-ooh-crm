@@ -45,7 +45,7 @@ export function AttendanceCalendar({ records }: { records: Attendance[] | null }
         switch (record.status) {
           case 'Present': bgColor = 'bg-emerald-50'; borderTone = 'border-emerald-200'; break;
           case 'Late': bgColor = 'bg-amber-50'; borderTone = 'border-amber-200'; break;
-          case 'Half-Day': bgColor = 'bg-blue-50'; borderTone = 'border-blue-200'; break;
+          case 'Half-Day': bgColor = 'bg-[#FFF5F5]'; borderTone = 'border-[#F9DADA]'; break;
           case 'Absent': bgColor = 'bg-red-50'; borderTone = 'border-red-200'; break;
         }
       }
@@ -53,7 +53,7 @@ export function AttendanceCalendar({ records }: { records: Attendance[] | null }
       days.push(
         <div 
           key={day} 
-          className={`h-24 p-2 border ${borderTone} ${bgColor} hover:scale-[1.03] transition-transform duration-200 ease-in-out z-10 hover:z-20 hover:shadow-sm relative cursor-default`}
+          className={`h-24 p-2 border ${borderTone} ${bgColor} hover:border-[#8B2424] hover:bg-[#F9DADA]/30 hover:scale-[1.03] transition-all duration-200 ease-in-out z-10 hover:z-20 hover:shadow-sm relative cursor-default`}
         >
           <span className="text-sm font-medium text-slate-700">{day}</span>
           {record && (
@@ -76,16 +76,16 @@ export function AttendanceCalendar({ records }: { records: Attendance[] | null }
         <div className="flex gap-2">
           <button 
             onClick={handlePrevMonth}
-            className="p-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+            className="flex items-center px-3 py-1.5 rounded-lg text-sm font-semibold text-[#8B2424] transition hover:bg-[#F9DADA] border border-gray-200"
           >
-            Prev
+            ‹ Prev
           </button>
           <span className="font-medium text-slate-800 min-w-[140px] text-center self-center">{monthName}</span>
           <button 
             onClick={handleNextMonth}
-            className="p-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+            className="flex items-center px-3 py-1.5 rounded-lg text-sm font-semibold text-[#8B2424] transition hover:bg-[#F9DADA] border border-gray-200"
           >
-            Next
+            Next ›
           </button>
         </div>
       </div>

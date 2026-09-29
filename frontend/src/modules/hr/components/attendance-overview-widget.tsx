@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, Filter, Users, Clock, MapPin, AlertCircle, Loader2 } from 'lucide-react';
-import { Card, cx } from '@/shared/ui';
+import { Card, cx, Dropdown } from '@/shared/ui';
 import { useMonthlyRegister } from '@/modules/hr/hooks/use-reports';
 import { MonthlyRegisterRow } from '@/modules/hr/types';
 import { formatHoursToHM } from '@/shared/utils/formatters';
@@ -413,18 +413,16 @@ export function AttendanceOverviewWidget({
             {/* Department filter */}
             <div className="flex items-center gap-1.5">
               <Filter className="h-4 w-4 text-slate-400" />
-              <select
+              <Dropdown
+                showArrow={false}
                 value={selectedDept}
-                onChange={(e) => setSelectedDept(e.target.value)}
-                className="h-9 px-3 rounded-lg border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-[#6E1D1D]/20 outline-none bg-white text-slate-700"
-              >
-                <option value="">All Departments</option>
-                {DEPARTMENTS.map((dept) => (
-                  <option key={dept} value={dept}>
-                    {dept}
-                  </option>
-                ))}
-              </select>
+                onChange={setSelectedDept}
+                options={[
+                  { value: '', label: 'All Departments' },
+                  ...DEPARTMENTS.map((dept) => ({ value: dept, label: dept })),
+                ]}
+                triggerClassName="h-9 px-3 text-xs font-medium min-w-[130px]"
+              />
             </div>
 
             {/* Month/Year navigator when controlled internally */}
@@ -433,7 +431,7 @@ export function AttendanceOverviewWidget({
                 <button
                   type="button"
                   onClick={handlePrevMonth}
-                  className="p-1 text-slate-600 hover:text-slate-900 rounded hover:bg-white transition-colors"
+                  className="p-1 text-[#8B2424] hover:bg-[#F9DADA] rounded transition-colors"
                   title="Previous Month"
                 >
                   <ChevronLeft className="h-4 w-4" />
@@ -444,7 +442,7 @@ export function AttendanceOverviewWidget({
                 <button
                   type="button"
                   onClick={handleNextMonth}
-                  className="p-1 text-slate-600 hover:text-slate-900 rounded hover:bg-white transition-colors"
+                  className="p-1 text-[#8B2424] hover:bg-[#F9DADA] rounded transition-colors"
                   title="Next Month"
                 >
                   <ChevronRight className="h-4 w-4" />

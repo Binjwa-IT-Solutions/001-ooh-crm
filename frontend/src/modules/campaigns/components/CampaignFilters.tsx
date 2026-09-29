@@ -185,7 +185,11 @@ export default function CampaignFilters({
                   });
                   setStatusOpen(false);
                 }}
-                className="block w-full cursor-pointer px-4 py-2.5 text-left text-gray-900 transition hover:bg-[#F9DADA] hover:text-[#8B2424]"
+                className={`block w-full cursor-pointer px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
+                  !filters.status
+                    ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
+                    : "text-gray-900"
+                }`}
               >
                 All Statuses
               </button>
@@ -201,7 +205,11 @@ export default function CampaignFilters({
                     });
                     setStatusOpen(false);
                   }}
-                  className="block w-full cursor-pointer px-4 py-2.5 text-left text-gray-900 transition hover:bg-[#F9DADA] hover:text-[#8B2424]"
+                  className={`block w-full cursor-pointer px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
+                    filters.status === option
+                      ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
+                      : "text-gray-900"
+                  }`}
                 >
                   {option === "InProgress" ? "In Progress" : option}
                 </button>

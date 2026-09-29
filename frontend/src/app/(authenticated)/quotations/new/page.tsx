@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { quotationsApi } from '@/modules/quotations/api';
 import { leadsApi } from '@/modules/leads/api';
 import { api } from '@/shared/api/client';
+import { DatePicker, Dropdown } from '@/shared/ui';
 import type { Lead } from '@/modules/leads/types';
 
 interface SiteOption {
@@ -236,21 +237,22 @@ export default function NewQuotationPage() {
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <h2 className="mb-4 text-base font-semibold text-slate-900 dark:text-white">1. Client & Lead Information</h2>
           <div className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-1 text-sm text-slate-700 dark:text-slate-200">
-              <span className="font-medium">Select Lead *</span>
-              <select
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+                Select Lead <span className="text-[#8B2424]">*</span>
+              </label>
+              <Dropdown
+                showArrow={false}
                 value={selectedLeadId}
-                onChange={(e) => handleLeadChange(e.target.value)}
-                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                required
-              >
-                {leads.map((lead) => (
-                  <option key={lead.id || (lead as any)._id} value={lead.id || (lead as any)._id}>
-                    {lead.companyName} ({lead.contactPerson} - {lead.city || 'No City'})
-                  </option>
-                ))}
-              </select>
-            </label>
+                onChange={handleLeadChange}
+                placeholder="Select Lead"
+                options={leads.map((lead) => ({
+                  value: lead.id || (lead as any)._id,
+                  label: `${lead.companyName} (${lead.contactPerson} - ${lead.city || 'No City'})`,
+                }))}
+                triggerClassName="w-full h-10 px-3 py-2 text-sm"
+              />
+            </div>
 
             <label className="space-y-1 text-sm text-slate-700 dark:text-slate-200">
               <span className="font-medium">Client Name</span>
@@ -272,15 +274,14 @@ export default function NewQuotationPage() {
               />
             </label>
 
-            <label className="space-y-1 text-sm text-slate-700 dark:text-slate-200">
-              <span className="font-medium">Proposal Valid Until</span>
-              <input
-                type="date"
+            <div>
+              <DatePicker
+                label="Proposal Valid Until"
                 value={validUntil}
-                onChange={(e) => setValidUntil(e.target.value)}
-                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                onChange={setValidUntil}
+                triggerClassName="py-2 text-sm"
               />
-            </label>
+            </div>
           </div>
         </div>
 
@@ -291,7 +292,7 @@ export default function NewQuotationPage() {
             <button
               type="button"
               onClick={addLineItem}
-              className="rounded bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-100 dark:bg-blue-950 dark:text-blue-300"
+              className="rounded bg-[#FFF5F5] border border-[#F9DADA] px-3 py-1.5 text-xs font-semibold text-[#8B2424] hover:bg-[#F9DADA] transition"
             >
               + Add Site Line Item
             </button>
@@ -306,40 +307,34 @@ export default function NewQuotationPage() {
                 <div key={idx} className="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
                   <div className="grid gap-3 sm:grid-cols-6">
                     <div className="sm:col-span-2">
-                      <label className="block text-xs font-medium text-slate-500">Site Location *</label>
-                      <select
+                      <label className="block text-xs font-medium text-slate-500 mb-1">Site Location *</label>
+                      <Dropdown
+                        showArrow={false}
                         value={item.siteId}
-                        onChange={(e) => updateLineItem(idx, 'siteId', e.target.value)}
-                        className="mt-1 w-full rounded border border-slate-300 bg-white p-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                        required
-                      >
-                        {sites.map((s) => (
-                          <option key={s._id} value={s._id}>
-                            {s.siteCode} ({s.city || 'City'}) - {s.type || 'Hoarding'}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-slate-500">Start Date *</label>
-                      <input
-                        type="date"
-                        value={item.startDate}
-                        onChange={(e) => updateLineItem(idx, 'startDate', e.target.value)}
-                        className="mt-1 w-full rounded border border-slate-300 bg-white p-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                        required
+                        onChange={(val) => updateLineItem(idx, 'siteId', val)}
+                        options={sites.map((s) => ({
+                          value: s._id,
+                          label: `${s.siteCode} (${s.city || 'City'}) - ${s.type || 'Hoarding'}`,
+                        }))}
+                        triggerClassName="w-full h-[34px] px-2 py-1 text-xs"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-slate-500">End Date *</label>
-                      <input
-                        type="date"
+                      <DatePicker
+                        label="Start Date *"
+                        value={item.startDate}
+                        onChange={(val) => updateLineItem(idx, 'startDate', val)}
+                        triggerClassName="p-1.5 text-xs h-[34px]"
+                      />
+                    </div>
+
+                    <div>
+                      <DatePicker
+                        label="End Date *"
                         value={item.endDate}
-                        onChange={(e) => updateLineItem(idx, 'endDate', e.target.value)}
-                        className="mt-1 w-full rounded border border-slate-300 bg-white p-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                        required
+                        onChange={(val) => updateLineItem(idx, 'endDate', val)}
+                        triggerClassName="p-1.5 text-xs h-[34px]"
                       />
                     </div>
 
