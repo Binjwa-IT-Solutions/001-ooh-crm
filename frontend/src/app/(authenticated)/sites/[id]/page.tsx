@@ -1,5 +1,5 @@
-﻿import { redirect } from 'next/navigation';
+﻿import SitesPage from "@/modules/sites/components/SitesPage";
 
-export default function SiteDetailPage() {
-  redirect('/sites');
+export default function Page() {
+  return <SitesPage />;
 }

@@ -1,19 +1,97 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import type {
+  AvailabilityStatus,
   CreateSiteData,
+  MediaPlanStatus,
+  MediaType,
   Site,
-  SiteType,
-  SiteStatus,
 } from "../types";
 
-interface Props {
-  site?: Site | null;
+interface SiteFormProps {
+  site: Site | null;
   onClose: () => void;
   onSuccess: () => void;
   onSubmit: (data: CreateSiteData) => Promise<void>;
+}
+
+const MEDIA_TYPES: MediaType[] = [
+  "Billboard",
+  "Hoarding",
+  "Transit",
+  "Metro",
+  "Airport",
+  "Mall",
+  "Digital",
+  "Other",
+];
+
+const AVAILABILITY_OPTIONS: AvailabilityStatus[] = [
+  "Available",
+  "Booked",
+];
+
+const STATUS_OPTIONS: MediaPlanStatus[] = [
+  "Draft",
+  "Pending",
+  "Approved",
+  "Rejected",
+];
+
+const inputClass =
+  "w-full rounded-lg border border-[#E8E8EC] bg-white px-3 py-2.5 text-sm text-[#1F2937] outline-none transition focus:border-[#8B2424] focus:ring-1 focus:ring-[#8B2424]";
+
+const selectClass =
+  "w-full rounded-lg border border-[#E8E8EC] bg-white px-3 py-2.5 text-sm text-[#1F2937] outline-none transition focus:border-[#8B2424] focus:ring-1 focus:ring-[#8B2424]";
+
+function today() {
+  const date = new Date();
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function toInputDate(value?: string) {
+  if (!value) return "";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value.slice(0, 10);
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function calculateDuration(
+  start: string,
+  end: string
+) {
+  if (!start || !end) return 0;
+
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+
+  const diff =
+    endDate.getTime() -
+    startDate.getTime();
+
+  if (diff < 0) return 0;
+
+  return (
+    Math.floor(
+      diff / (1000 * 60 * 60 * 24)
+    ) + 1
+  );
 }
 
 export default function SiteForm({
@@ -21,757 +99,725 @@ export default function SiteForm({
   onClose,
   onSuccess,
   onSubmit,
-}: Props) {
-  const [city, setCity] = useState("");
-  const [type, setType] = useState<SiteType>("Airport");
-  const [address, setAddress] = useState("");
+}: SiteFormProps) {
+  /* =========================
+     FORM STATE
+  ========================= */
 
-  const [lat, setLat] = useState("");
-  const [lng, setLng] = useState("");
+  const [clientName, setClientName] =
+    useState("");
 
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [salesPersonName, setSalesPersonName] =
+    useState("");
 
-  const [width, setWidth] = useState("");
-  const [height, setHeight] = useState("");
-  const [cost, setCost] = useState("");
+  const [salesPersonContact, setSalesPersonContact] =
+    useState("");
 
-  const [vendorId, setVendorId] = useState("");
-  const [photos, setPhotos] = useState("");
+  const [vendorName, setVendorName] =
+    useState("");
+
+  const [state, setState] =
+    useState("");
+
+  const [city, setCity] =
+    useState("");
+
+  const [location, setLocation] =
+    useState("");
+
+  const [mediaType, setMediaType] =
+    useState<MediaType>("Billboard");
+
+  const [quantity, setQuantity] =
+    useState(1);
+
+  const [startDate, setStartDate] =
+    useState("");
+
+  const [endDate, setEndDate] =
+    useState("");
+
+  const [duration, setDuration] =
+    useState(0);
+
+  const [availability, setAvailability] =
+    useState<AvailabilityStatus>(
+      "Available"
+    );
 
   const [status, setStatus] =
-    useState<SiteStatus>("Active");
+    useState<MediaPlanStatus>("Draft");
 
-  const [loading, setLoading] = useState(false);
-  const [gpsLoading, setGpsLoading] = useState(false);
+  const [loading, setLoading] =
+    useState(false);
 
-  const [error, setError] = useState("");
-  const [gpsError, setGpsError] = useState("");
+  const [error, setError] =
+    useState("");
 
-  const [typeOpen, setTypeOpen] = useState(false);
-  const [statusOpen, setStatusOpen] = useState(false);
+  /* =========================
+     EDIT DATA
+  ========================= */
 
-  const typeRef = useRef<HTMLDivElement>(null);
-  const statusRef = useRef<HTMLDivElement>(null);
-
-  /* -----------------------------------------
-     Load existing site
-  ----------------------------------------- */
   useEffect(() => {
-    if (!site) return;
+    if (!site) {
+      setClientName("");
+      setSalesPersonName("");
+      setSalesPersonContact("");
+      setVendorName("");
+      setState("");
+      setCity("");
+      setLocation("");
+      setMediaType("Billboard");
+      setQuantity(1);
+      setStartDate(today());
+      setEndDate(today());
+      setDuration(1);
+      setAvailability("Available");
+      setStatus("Draft");
+      setError("");
 
-    setCity(site.city);
-    setType(site.type);
-    setAddress(site.address || "");
+      return;
+    }
 
-    setLat(String(site.gps?.lat ?? ""));
-    setLng(String(site.gps?.lng ?? ""));
-
-    setStartDate(
-      site.startDate
-        ? String(site.startDate).slice(0, 10)
-        : ""
+    setClientName(
+      site.clientName || ""
     );
 
-    setEndDate(
-      site.endDate
-        ? String(site.endDate).slice(0, 10)
-        : ""
+    setSalesPersonName(
+      site.salesPersonName || ""
     );
 
-    setWidth(String(site.sizeWidth ?? ""));
-    setHeight(String(site.sizeHeight ?? ""));
-    setCost(String(site.baseCostPerDay ?? ""));
-
-    setVendorId(site.vendorId || "");
-
-    setPhotos(
-      site.photos?.join(", ") || ""
+    setSalesPersonContact(
+      site.salesPersonContact || ""
     );
 
-    setStatus(site.status);
+    setVendorName(
+      site.vendorName || ""
+    );
+
+    setState(
+      site.state || ""
+    );
+
+    setCity(
+      site.city || ""
+    );
+
+    setLocation(
+      site.location || ""
+    );
+
+    setMediaType(
+      site.mediaType || "Billboard"
+    );
+
+    setQuantity(
+      site.quantity || 1
+    );
+
+    const start =
+      toInputDate(site.startDate);
+
+    const end =
+      toInputDate(site.endDate);
+
+    setStartDate(start);
+    setEndDate(end);
+
+    setDuration(
+      site.duration ||
+        calculateDuration(start, end)
+    );
+
+    setAvailability(
+      site.availability || "Available"
+    );
+
+    setStatus(
+      site.status || "Draft"
+    );
+
+    setError("");
   }, [site]);
 
-  /* -----------------------------------------
-     Close dropdown on outside click
-  ----------------------------------------- */
-  useEffect(() => {
-    const close = (e: MouseEvent) => {
-      const target = e.target as Node;
+  /* =========================
+     DATE CHANGE
+  ========================= */
 
-      if (
-        typeRef.current &&
-        !typeRef.current.contains(target)
-      ) {
-        setTypeOpen(false);
-      }
+  function handleStartDateChange(
+    value: string
+  ) {
+    setStartDate(value);
 
-      if (
-        statusRef.current &&
-        !statusRef.current.contains(target)
-      ) {
-        setStatusOpen(false);
-      }
-    };
-
-    document.addEventListener(
-      "mousedown",
-      close
-    );
-
-    return () => {
-      document.removeEventListener(
-        "mousedown",
-        close
+    const calculated =
+      calculateDuration(
+        value,
+        endDate
       );
-    };
-  }, []);
 
-  /* -----------------------------------------
-     Get GPS
-  ----------------------------------------- */
-  const handleGetGPS = () => {
-    setGpsError("");
+    if (calculated > 0) {
+      setDuration(calculated);
+    }
+  }
 
-    if (!navigator.geolocation) {
-      setGpsError(
-        "GPS is not supported."
+  function handleEndDateChange(
+    value: string
+  ) {
+    setEndDate(value);
+
+    const calculated =
+      calculateDuration(
+        startDate,
+        value
+      );
+
+    if (calculated > 0) {
+      setDuration(calculated);
+    }
+  }
+
+  /* =========================
+     MOBILE
+  ========================= */
+
+  function handleMobileChange(
+    value: string
+  ) {
+    setSalesPersonContact(
+      value
+        .replace(/\D/g, "")
+        .slice(0, 10)
+    );
+  }
+
+  /* =========================
+     SUBMIT
+  ========================= */
+
+  async function handleSubmit(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    setError("");
+
+    if (!clientName.trim()) {
+      setError(
+        "Client name is required."
       );
       return;
     }
 
-    setGpsLoading(true);
+    if (!salesPersonName.trim()) {
+      setError(
+        "Sales person name is required."
+      );
+      return;
+    }
 
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        const {
-          latitude,
-          longitude,
-        } = coords;
+    if (
+      !/^[6-9]\d{9}$/.test(
+        salesPersonContact
+      )
+    ) {
+      setError(
+        "Enter a valid 10 digit mobile number."
+      );
+      return;
+    }
 
-        if (
-          latitude < 6 ||
-          latitude > 37.5 ||
-          longitude < 68 ||
-          longitude > 97.5
-        ) {
-          setGpsError(
-            "Location must be within India."
-          );
-        } else {
-          setLat(latitude.toString());
-          setLng(longitude.toString());
-        }
+    if (!vendorName.trim()) {
+      setError(
+        "Vendor name is required."
+      );
+      return;
+    }
 
-        setGpsLoading(false);
-      },
-      () => {
-        setGpsError(
-          "Location permission denied or unavailable."
-        );
+    if (!state.trim()) {
+      setError(
+        "State is required."
+      );
+      return;
+    }
 
-        setGpsLoading(false);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0,
-      }
-    );
-  };
-
-  /* -----------------------------------------
-     Submit
-  ----------------------------------------- */
-  async function handleSubmit(
-    e: React.FormEvent<HTMLFormElement>
-  ) {
-    e.preventDefault();
-
-    setError("");
-
-    /* City */
     if (!city.trim()) {
-      return setError(
+      setError(
         "City is required."
       );
+      return;
     }
 
-    /* Address */
-    if (!address.trim()) {
-      return setError(
-        "Address is required."
+    if (!location.trim()) {
+      setError(
+        "Location is required."
       );
+      return;
     }
 
-    /* GPS */
-    if (!lat || !lng) {
-      return setError(
-        "Please select location using GPS."
+    if (quantity < 1) {
+      setError(
+        "Quantity must be at least 1."
       );
+      return;
     }
 
-    /* Dates */
-    if (!startDate) {
-      return setError(
-        "Start date is required."
+    if (!startDate || !endDate) {
+      setError(
+        "Start date and end date are required."
       );
+      return;
     }
 
-    if (!endDate) {
-      return setError(
-        "End date is required."
+    const calculatedDuration =
+      calculateDuration(
+        startDate,
+        endDate
       );
-    }
 
-    if (
-      new Date(startDate) >
-      new Date(endDate)
-    ) {
-      return setError(
-        "End date cannot be before start date."
+    if (calculatedDuration <= 0) {
+      setError(
+        "End date must be after or equal to start date."
       );
+      return;
     }
 
-    /* Size */
-    if (!width || !height) {
-      return setError(
-        "Width and height are required."
-      );
-    }
-
-    /* Cost */
-    if (!cost) {
-      return setError(
-        "Base cost per day is required."
-      );
-    }
-
-    const latitude = Number(lat);
-    const longitude = Number(lng);
-
-    const siteWidth = Number(width);
-    const siteHeight = Number(height);
-
-    const dailyCost = Number(cost);
-
-    /* GPS validation */
-    if (
-      !Number.isFinite(latitude) ||
-      !Number.isFinite(longitude) ||
-      latitude < 6 ||
-      latitude > 37.5 ||
-      longitude < 68 ||
-      longitude > 97.5
-    ) {
-      return setError(
-        "GPS coordinates must fall within India."
-      );
-    }
-
-    /* Size validation */
-    if (
-      !Number.isFinite(siteWidth) ||
-      siteWidth <= 0 ||
-      !Number.isFinite(siteHeight) ||
-      siteHeight <= 0
-    ) {
-      return setError(
-        "Width and height must be greater than 0."
-      );
-    }
-
-    /* Cost validation */
-    if (
-      !Number.isInteger(dailyCost) ||
-      dailyCost < 0
-    ) {
-      return setError(
-        "Base cost per day must be a nonnegative whole number."
-      );
-    }
+    setLoading(true);
 
     try {
-      setLoading(true);
+      const payload: CreateSiteData = {
+        clientName:
+          clientName.trim(),
 
-      const data: CreateSiteData = {
-        city: city.trim(),
+        salesPersonName:
+          salesPersonName.trim(),
 
-        type,
+        salesPersonContact:
+          salesPersonContact.trim(),
 
-        address: address.trim(),
+        vendorName:
+          vendorName.trim(),
 
-        gps: {
-          lat: latitude,
-          lng: longitude,
-        },
+        state:
+          state.trim(),
+
+        city:
+          city.trim(),
+
+        location:
+          location.trim(),
+
+        mediaType,
+
+        quantity,
 
         startDate,
 
         endDate,
 
-        sizeWidth: siteWidth,
+        duration:
+          calculatedDuration,
 
-        sizeHeight: siteHeight,
-
-        baseCostPerDay: dailyCost,
-
-        vendorId: vendorId.trim()
-          ? vendorId.trim()
-          : null,
+        availability,
 
         status,
-
-        photos: photos
-          .split(",")
-          .map((p) => p.trim())
-          .filter(Boolean),
       };
 
-      await onSubmit(data);
+      await onSubmit(payload);
 
       onSuccess();
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : "Failed to save site."
+          : "Failed to save ATR."
       );
     } finally {
       setLoading(false);
     }
   }
 
-  /* -----------------------------------------
-     Options
-  ----------------------------------------- */
-  const typeOptions: SiteType[] = [
-    "Airport",
-    "Highway",
-    "Mall",
-    "Metro",
-    "Market",
-    "Other",
-  ];
-
-  const statusOptions: SiteStatus[] = [
-    "Active",
-    "Maintenance",
-    "Inactive",
-  ];
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
 
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-5">
+      <div className="max-h-[95vh] w-full max-w-3xl overflow-y-auto rounded-xl bg-white shadow-xl">
+
+        {/* =========================
+            HEADER
+        ========================= */}
+
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#E8E8EC] bg-white px-6 py-4">
+
           <div>
-            <h2 className="text-xl font-bold text-gray-900">
+            <h2 className="text-lg font-semibold text-[#1F2937]">
               {site
-                ? "Edit Site"
-                : "Add Site"}
+                ? "Edit ATR"
+                : "Add ATR"}
             </h2>
 
-            <p className="mt-1 text-sm text-gray-500">
-              {site
-                ? "Update site information"
-                : "Add a new advertising site"}
+            <p className="mt-1 text-xs text-[#667085]">
+              Manage ATR information and specifications
             </p>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-2xl text-gray-500 hover:bg-[#F9DADA] hover:text-[#8B2424]"
+            disabled={loading}
+            className="text-2xl leading-none text-[#667085] hover:text-[#8B2424]"
           >
             ×
           </button>
         </div>
 
+        {/* =========================
+            FORM
+        ========================= */}
+
         <form
           onSubmit={handleSubmit}
-          className="overflow-y-auto"
+          className="p-6"
         >
-          <div className="space-y-5 p-6">
 
-            {/* Error */}
-            {error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-                {error}
-              </div>
-            )}
+          {/* =========================
+              BASIC INFORMATION
+          ========================= */}
 
-            {/* City / Type / Status */}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="mb-6">
+            <h3 className="mb-4 text-sm font-semibold text-[#1F2937]">
+              Basic Information
+            </h3>
 
-              {/* City */}
-              <div>
-                <label className="mb-1.5 block text-sm font-semibold text-gray-900">
-                  City{" "}
-                  <span className="text-red-500">
-                    *
-                  </span>
-                </label>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
 
+              {/* CLIENT */}
+
+              <Field label="Client Name *">
                 <input
                   type="text"
-                  required
+                  value={clientName}
+                  onChange={(e) =>
+                    setClientName(
+                      e.target.value
+                    )
+                  }
+                  placeholder="Enter client name"
+                  className={inputClass}
+                />
+              </Field>
+
+              {/* SALES PERSON */}
+
+              <Field label="Sales Person Name *">
+                <input
+                  type="text"
+                  value={salesPersonName}
+                  onChange={(e) =>
+                    setSalesPersonName(
+                      e.target.value
+                    )
+                  }
+                  placeholder="Enter sales person name"
+                  className={inputClass}
+                />
+              </Field>
+
+              {/* MOBILE */}
+
+              <Field label="Mobile No *">
+                <input
+                  type="tel"
+                  value={
+                    salesPersonContact
+                  }
+                  onChange={(e) =>
+                    handleMobileChange(
+                      e.target.value
+                    )
+                  }
+                  placeholder="Enter mobile number"
+                  inputMode="numeric"
+                  maxLength={10}
+                  className={inputClass}
+                />
+              </Field>
+
+              {/* VENDOR */}
+
+              <Field label="Vendor Name *">
+                <input
+                  type="text"
+                  value={vendorName}
+                  onChange={(e) =>
+                    setVendorName(
+                      e.target.value
+                    )
+                  }
+                  placeholder="Enter vendor name"
+                  className={inputClass}
+                />
+              </Field>
+
+              {/* STATE */}
+
+              <Field label="State *">
+                <input
+                  type="text"
+                  value={state}
+                  onChange={(e) =>
+                    setState(
+                      e.target.value
+                    )
+                  }
+                  placeholder="Enter state"
+                  className={inputClass}
+                />
+              </Field>
+
+              {/* CITY */}
+
+              <Field label="City *">
+                <input
+                  type="text"
                   value={city}
                   onChange={(e) =>
-                    setCity(e.target.value)
+                    setCity(
+                      e.target.value
+                    )
                   }
                   placeholder="Enter city"
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+                  className={inputClass}
                 />
-              </div>
+              </Field>
 
-              {/* Type */}
-              <div
-                ref={typeRef}
-                className="relative"
-              >
-                <label className="mb-1.5 block text-sm font-semibold text-gray-900">
-                  Type{" "}
-                  <span className="text-red-500">
-                    *
-                  </span>
-                </label>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTypeOpen(!typeOpen);
-                    setStatusOpen(false);
-                  }}
-                  className="flex w-full items-center justify-between rounded-lg border border-gray-300 px-4 py-2.5 text-left hover:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
-                >
-                  {type}
-
-                  <span className="text-[#8B2424]">
-                    ▾
-                  </span>
-                </button>
-
-                {typeOpen && (
-                  <div className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded-lg border bg-white shadow-lg">
-                    {typeOptions.map(
-                      (option) => (
-                        <button
-                          key={option}
-                          type="button"
-                          onClick={() => {
-                            setType(option);
-                            setTypeOpen(false);
-                          }}
-                          className={`block w-full px-4 py-2.5 text-left hover:bg-[#F9DADA] hover:text-[#8B2424] ${
-                            type === option
-                              ? "bg-[#F9DADA] text-[#8B2424]"
-                              : ""
-                          }`}
-                        >
-                          {option}
-                        </button>
-                      )
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Status */}
-              <div
-                ref={statusRef}
-                className="relative"
-              >
-                <label className="mb-1.5 block text-sm font-semibold text-gray-900">
-                  Status{" "}
-                  <span className="text-red-500">
-                    *
-                  </span>
-                </label>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStatusOpen(
-                      !statusOpen
-                    );
-                    setTypeOpen(false);
-                  }}
-                  className="flex w-full items-center justify-between rounded-lg border border-gray-300 px-4 py-2.5 text-left hover:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
-                >
-                  {status}
-
-                  <span className="text-[#8B2424]">
-                    ▾
-                  </span>
-                </button>
-
-                {statusOpen && (
-                  <div className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded-lg border bg-white shadow-lg">
-                    {statusOptions.map(
-                      (option) => (
-                        <button
-                          key={option}
-                          type="button"
-                          onClick={() => {
-                            setStatus(option);
-                            setStatusOpen(false);
-                          }}
-                          className={`block w-full px-4 py-2.5 text-left hover:bg-[#F9DADA] hover:text-[#8B2424] ${
-                            status === option
-                              ? "bg-[#F9DADA] text-[#8B2424]"
-                              : ""
-                          }`}
-                        >
-                          {option}
-                        </button>
-                      )
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Address */}
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold text-gray-900">
-                Address{" "}
-                <span className="text-red-500">
-                  *
-                </span>
-              </label>
-
-              <input
-                type="text"
-                required
-                value={address}
-                onChange={(e) =>
-                  setAddress(e.target.value)
-                }
-                placeholder="Enter full address"
-                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
-              />
-            </div>
-
-            {/* Dates */}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-
-              {/* Start Date */}
-              <div>
-                <label className="mb-1.5 block text-sm font-semibold text-gray-900">
-                  Start Date{" "}
-                  <span className="text-red-500">
-                    *
-                  </span>
-                </label>
-
-                <input
-                  type="date"
-                  required
-                  value={startDate}
-                  onChange={(e) =>
-                    setStartDate(
-                      e.target.value
-                    )
-                  }
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
-                />
-              </div>
-
-              {/* End Date */}
-              <div>
-                <label className="mb-1.5 block text-sm font-semibold text-gray-900">
-                  End Date{" "}
-                  <span className="text-red-500">
-                    *
-                  </span>
-                </label>
-
-                <input
-                  type="date"
-                  required
-                  min={
-                    startDate ||
-                    undefined
-                  }
-                  value={endDate}
-                  onChange={(e) =>
-                    setEndDate(
-                      e.target.value
-                    )
-                  }
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
-                />
-              </div>
-            </div>
-
-            {/* GPS */}
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold text-gray-900">
-                GPS Location{" "}
-                <span className="text-red-500">
-                  *
-                </span>
-              </label>
-
-              <div className="flex items-center justify-between gap-4 rounded-lg border border-gray-300 bg-gray-50 p-3">
-
-                <div>
-                  {lat && lng ? (
-                    <p className="text-xs text-gray-600">
-                      Lat:{" "}
-                      {Number(lat).toFixed(6)}
-                      {" • "}
-                      Lng:{" "}
-                      {Number(lng).toFixed(6)}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-gray-500">
-                      Select location using GPS
-                    </p>
-                  )}
-
-                  {gpsError && (
-                    <p className="mt-1 text-xs text-red-600">
-                      {gpsError}
-                    </p>
-                  )}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleGetGPS}
-                  disabled={gpsLoading}
-                  className="shrink-0 rounded-lg bg-[#8B2424] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#F9DADA] hover:text-[#8B2424] disabled:opacity-60"
-                >
-                  {gpsLoading
-                    ? "Detecting..."
-                    : lat && lng
-                      ? "Update Location"
-                      : "Use Current Location"}
-                </button>
-              </div>
-            </div>
-
-            {/* Size / Cost */}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-
-              {/* Width */}
-              <div>
-                <label className="mb-1.5 block text-sm font-semibold text-gray-900">
-                  Width{" "}
-                  <span className="text-red-500">
-                    *
-                  </span>
-                </label>
-
-                <input
-                  type="number"
-                  min="0"
-                  required
-                  value={width}
-                  onChange={(e) =>
-                    setWidth(e.target.value)
-                  }
-                  placeholder="Enter width"
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
-                />
-              </div>
-
-              {/* Height */}
-              <div>
-                <label className="mb-1.5 block text-sm font-semibold text-gray-900">
-                  Height{" "}
-                  <span className="text-red-500">
-                    *
-                  </span>
-                </label>
-
-                <input
-                  type="number"
-                  min="0"
-                  required
-                  value={height}
-                  onChange={(e) =>
-                    setHeight(e.target.value)
-                  }
-                  placeholder="Enter height"
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
-                />
-              </div>
-
-              {/* Cost */}
-              <div>
-                <label className="mb-1.5 block text-sm font-semibold text-gray-900">
-                  Base Cost / Day{" "}
-                  <span className="text-red-500">
-                    *
-                  </span>
-                </label>
-
-                <input
-                  type="number"
-                  min="0"
-                  required
-                  value={cost}
-                  onChange={(e) =>
-                    setCost(e.target.value)
-                  }
-                  placeholder="Enter cost in paise"
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
-                />
-              </div>
-            </div>
-
-            {/* Vendor */}
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold text-gray-900">
-                Vendor ID
-              </label>
-
-              <input
-                type="text"
-                value={vendorId}
-                onChange={(e) =>
-                  setVendorId(e.target.value)
-                }
-                placeholder="Enter vendor ID (optional)"
-                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
-              />
-            </div>
-
-            {/* Photos */}
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold text-gray-900">
-                Photos (URLs)
-              </label>
-
-              <input
-                type="text"
-                value={photos}
-                onChange={(e) =>
-                  setPhotos(e.target.value)
-                }
-                placeholder="Enter photo URLs separated by comma"
-                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
-              />
-
-              <p className="mt-1.5 text-xs text-gray-500">
-                Example:
-                https://example.com/site.jpg
-              </p>
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="flex justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">
+          {/* =========================
+              LOCATION
+          ========================= */}
+
+          <div className="mb-6">
+            <h3 className="mb-4 text-sm font-semibold text-[#1F2937]">
+              Location
+            </h3>
+
+            <Field label="Location / Landmark *">
+              <input
+                type="text"
+                value={location}
+                onChange={(e) =>
+                  setLocation(
+                    e.target.value
+                  )
+                }
+                placeholder="Enter location or landmark"
+                className={inputClass}
+              />
+            </Field>
+          </div>
+
+          {/* =========================
+              MEDIA DETAILS
+          ========================= */}
+
+          <div className="mb-6">
+            <h3 className="mb-4 text-sm font-semibold text-[#1F2937]">
+              Media Details
+            </h3>
+
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+
+              {/* MEDIA TYPE */}
+
+              <Field label="Media Type *">
+                <select
+                  value={mediaType}
+                  onChange={(e) =>
+                    setMediaType(
+                      e.target
+                        .value as MediaType
+                    )
+                  }
+                  className={selectClass}
+                >
+                  {MEDIA_TYPES.map(
+                    (type) => (
+                      <option
+                        key={type}
+                        value={type}
+                      >
+                        {type}
+                      </option>
+                    )
+                  )}
+                </select>
+              </Field>
+
+              {/* QUANTITY */}
+
+              <Field label="Quantity *">
+                <input
+                  type="number"
+                  min={1}
+                  value={quantity}
+                  onChange={(e) =>
+                    setQuantity(
+                      Number(
+                        e.target.value
+                      )
+                    )
+                  }
+                  className={inputClass}
+                />
+              </Field>
+
+            </div>
+          </div>
+
+          {/* =========================
+              DURATION
+          ========================= */}
+
+          <div className="mb-6">
+            <h3 className="mb-4 text-sm font-semibold text-[#1F2937]">
+              Duration
+            </h3>
+
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+
+              {/* START */}
+
+              <Field label="Start Date *">
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) =>
+                    handleStartDateChange(
+                      e.target.value
+                    )
+                  }
+                  className={inputClass}
+                />
+              </Field>
+
+              {/* END */}
+
+              <Field label="End Date *">
+                <input
+                  type="date"
+                  value={endDate}
+                  min={startDate}
+                  onChange={(e) =>
+                    handleEndDateChange(
+                      e.target.value
+                    )
+                  }
+                  className={inputClass}
+                />
+              </Field>
+
+              {/* DURATION */}
+
+              <Field label="Duration (Days)">
+                <input
+                  type="number"
+                  min={1}
+                  value={duration}
+                  readOnly
+                  className={`${inputClass} bg-[#F9FAFB]`}
+                />
+              </Field>
+
+            </div>
+          </div>
+
+          {/* =========================
+              STATUS
+          ========================= */}
+
+          <div className="mb-6">
+            <h3 className="mb-4 text-sm font-semibold text-[#1F2937]">
+              Status
+            </h3>
+
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+
+              {/* AVAILABILITY */}
+
+              <Field label="Availability *">
+                <select
+                  value={availability}
+                  onChange={(e) =>
+                    setAvailability(
+                      e.target
+                        .value as AvailabilityStatus
+                    )
+                  }
+                  className={selectClass}
+                >
+                  {AVAILABILITY_OPTIONS.map(
+                    (item) => (
+                      <option
+                        key={item}
+                        value={item}
+                      >
+                        {item}
+                      </option>
+                    )
+                  )}
+                </select>
+              </Field>
+
+              {/* ATR STATUS */}
+
+              <Field label="ATR Status *">
+                <select
+                  value={status}
+                  onChange={(e) =>
+                    setStatus(
+                      e.target
+                        .value as MediaPlanStatus
+                    )
+                  }
+                  className={selectClass}
+                >
+                  {STATUS_OPTIONS.map(
+                    (item) => (
+                      <option
+                        key={item}
+                        value={item}
+                      >
+                        {item}
+                      </option>
+                    )
+                  )}
+                </select>
+              </Field>
+
+            </div>
+          </div>
+
+          {/* =========================
+              ERROR
+          ========================= */}
+
+          {error && (
+            <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+              {error}
+            </div>
+          )}
+
+          {/* =========================
+              FOOTER
+          ========================= */}
+
+          <div className="flex justify-end gap-3 border-t border-[#E8E8EC] pt-5">
 
             <button
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="rounded-lg border border-[#8B2424] bg-[#F9DADA] px-5 py-2.5 font-semibold text-[#8B2424] hover:bg-[#8B2424] hover:text-[#F9DADA] disabled:opacity-50"
+              className="rounded-lg border border-[#E8E8EC] px-5 py-2.5 text-sm font-medium text-[#667085] hover:bg-[#F9FAFB] disabled:opacity-50"
             >
               Cancel
             </button>
@@ -779,17 +825,40 @@ export default function SiteForm({
             <button
               type="submit"
               disabled={loading}
-              className="rounded-lg bg-[#8B2424] px-6 py-2.5 font-semibold text-[#F9DADA] hover:bg-[#A8383B] disabled:opacity-50"
+              className="rounded-lg bg-[#8B2424] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#741D1D] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading
                 ? "Saving..."
                 : site
-                  ? "Update Site"
-                  : "Save Site"}
+                ? "Update ATR"
+                : "Create ATR"}
             </button>
+
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+/* =========================
+   FIELD
+========================= */
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-w-0">
+      <label className="mb-1.5 block text-xs font-medium text-[#344054]">
+        {label}
+      </label>
+
+      {children}
     </div>
   );
 }

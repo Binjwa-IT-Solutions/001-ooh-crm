@@ -210,7 +210,7 @@ useEffect(() => {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-white">
       <div className="mx-auto max-w-7xl p-6">
         {/* PAGE HEADER */}
         <div className="mb-6 flex items-center justify-between">

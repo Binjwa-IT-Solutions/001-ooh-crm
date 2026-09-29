@@ -61,9 +61,8 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'OPERATIONS',
     items: [
-      { href: '/sites', label: 'Sites', icon: MapPin, permission: 'sites.view' },
-      { href: '/booking', label: 'Bookings', icon: CalendarCheck, permission: 'bookings.view' },
       { href: '/vendors', label: 'Vendors', icon: Building2, permission: 'vendors.view' },
+      { href: '/sites', label: 'ATR', icon: MapPin, permission: 'sites.view' },
       { href: '/purchase-orders', label: 'Purchase Orders', icon: ShoppingCart, permission: 'purchase_orders.view' },
       { href: '/campaigns', label: 'Campaigns', icon: Megaphone, permission: 'campaigns.view' },
       { href: '/tasks', label: 'Tasks', icon: ClipboardCheck, permission: 'tasks.view' },

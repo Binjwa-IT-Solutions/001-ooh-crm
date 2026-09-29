@@ -1,170 +1,218 @@
 "use client";
 
-import { useState } from "react";
-
 import type {
-  SiteStatus,
-  SiteType,
+  AvailabilityStatus,
+  MediaPlanStatus,
+  MediaType,
 } from "../types";
 
-interface SiteFiltersProps {
+interface Props {
+  search: string;
+  state: string;
   city: string;
-  type: SiteType | "";
-  status: SiteStatus | "";
+  vendorName: string;
+
+  mediaType: MediaType | "";
+  availability: AvailabilityStatus | "";
+  status: MediaPlanStatus | "";
+
+  stateOptions?: string[];
+  cityOptions?: string[];
+  vendorOptions?: string[];
+
+  onSearchChange: (value: string) => void;
+  onStateChange: (value: string) => void;
   onCityChange: (value: string) => void;
-  onTypeChange: (value: SiteType | "") => void;
-  onStatusChange: (value: SiteStatus | "") => void;
+  onVendorChange: (value: string) => void;
+
+  onMediaTypeChange: (value: MediaType | "") => void;
+  onAvailabilityChange: (
+    value: AvailabilityStatus | ""
+  ) => void;
+  onStatusChange: (
+    value: MediaPlanStatus | ""
+  ) => void;
 }
 
-const TYPES: SiteType[] = [
-  "Airport",
-  "Highway",
-  "Mall",
+const MEDIA_TYPES: MediaType[] = [
+  "Billboard",
+  "Hoarding",
+  "Transit",
   "Metro",
-  "Market",
+  "Airport",
+  "Mall",
+  "Digital",
   "Other",
 ];
 
-const STATUSES: SiteStatus[] = [
-  "Active",
-  "Maintenance",
-  "Inactive",
+const AVAILABILITY: AvailabilityStatus[] = [
+  "Available",
+  "Booked",
 ];
 
+const STATUSES: MediaPlanStatus[] = [
+  "Draft",
+  "Pending",
+  "Approved",
+  "Rejected",
+];
+
+const inputClass =
+  "w-full rounded-lg border border-[#E8E8EC] bg-white px-3 py-2.5 text-sm text-[#1F2937] outline-none transition placeholder:text-[#98A2B3] focus:border-[#A8383B]";
+
 export default function SiteFilters({
+  search,
+  state,
   city,
-  type,
+  vendorName,
+  mediaType,
+  availability,
   status,
+  stateOptions = [],
+  cityOptions = [],
+  vendorOptions = [],
+  onSearchChange,
+  onStateChange,
   onCityChange,
-  onTypeChange,
+  onVendorChange,
+  onMediaTypeChange,
+  onAvailabilityChange,
   onStatusChange,
-}: SiteFiltersProps) {
-  const [typeOpen, setTypeOpen] = useState(false);
-  const [statusOpen, setStatusOpen] = useState(false);
-
+}: Props) {
   return (
-    <div className="rounded-xl border border-[#E8E8EC] bg-white p-4">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
+      {/* SEARCH */}
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => onSearchChange(e.target.value)}
+        placeholder="Media Plan, client, location..."
+        className={inputClass}
+      />
 
-        {/* City */}
-        <div>
-          <label className="mb-2 block text-sm font-medium text-[#1F2937]">
-            City
-          </label>
+      {/* STATE */}
+      <select
+        value={state}
+        onChange={(e) => {
+          const value = e.target.value;
 
-          <input
-            type="text"
-            value={city}
-            onChange={(e) =>
-              onCityChange(e.target.value)
-            }
-            placeholder="Search city..."
-            className="w-full rounded-lg border border-[#E8E8EC] px-3 py-2.5 text-sm text-[#1F2937] outline-none placeholder:text-[#98A2B3] transition focus:border-[#A8383B] focus:ring-1 focus:ring-[#A8383B]"
+          onStateChange(value);
+          onCityChange("");
+        }}
+        className={`${inputClass} cursor-pointer`}
+      >
+        <option value="">All States</option>
+
+        {stateOptions.map((item) => (
+          <option key={item} value={item}>
+            {item}
+          </option>
+        ))}
+      </select>
+
+      {/* CITY */}
+      <select
+        value={city}
+        onChange={(e) =>
+          onCityChange(e.target.value)
+        }
+        disabled={!state}
+        className={`${inputClass} cursor-pointer disabled:cursor-not-allowed disabled:bg-[#F9FAFB]`}
+      >
+        <option value="">
+          {state
+            ? "All Cities"
+            : "Select State First"}
+        </option>
+
+        {cityOptions.map((item) => (
+          <option key={item} value={item}>
+            {item}
+          </option>
+        ))}
+      </select>
+
+      {/* VENDOR */}
+      <input
+        type="text"
+        list="vendor-options"
+        value={vendorName}
+        onChange={(e) =>
+          onVendorChange(e.target.value)
+        }
+        placeholder="Vendor"
+        className={inputClass}
+      />
+
+      <datalist id="vendor-options">
+        {vendorOptions.map((vendor) => (
+          <option
+            key={vendor}
+            value={vendor}
           />
-        </div>
+        ))}
+      </datalist>
 
-        {/* Type */}
-        <div className="relative">
-          <label className="mb-2 block text-sm font-medium text-[#1F2937]">
-            Type
-          </label>
+      {/* MEDIA TYPE */}
+      <select
+        value={mediaType}
+        onChange={(e) =>
+          onMediaTypeChange(
+            e.target.value as MediaType | ""
+          )
+        }
+        className={`${inputClass} cursor-pointer`}
+      >
+        <option value="">Media Type</option>
 
-          <button
-            type="button"
-            onClick={() => {
-              setTypeOpen(!typeOpen);
-              setStatusOpen(false);
-            }}
-            className="flex w-full items-center justify-between rounded-lg border border-[#E8E8EC] bg-white px-3 py-2.5 text-sm text-[#1F2937] outline-none transition hover:border-[#A8383B] focus:border-[#A8383B]"
-          >
-            <span>{type || "All Types"}</span>
+        {MEDIA_TYPES.map((type) => (
+          <option key={type} value={type}>
+            {type}
+          </option>
+        ))}
+      </select>
 
-            <span className="text-[#667085]">
-              {typeOpen ? "⌃" : "⌄"}
-            </span>
-          </button>
+      {/* AVAILABILITY */}
+      <select
+        value={availability}
+        onChange={(e) =>
+          onAvailabilityChange(
+            e.target.value as
+              | AvailabilityStatus
+              | ""
+          )
+        }
+        className={`${inputClass} cursor-pointer`}
+      >
+        <option value="">Availability</option>
 
-          {typeOpen && (
-            <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-lg border border-[#E8E8EC] bg-white shadow-lg">
-              <button
-                type="button"
-                onClick={() => {
-                  onTypeChange("");
-                  setTypeOpen(false);
-                }}
-                className="w-full px-3 py-2.5 text-left text-sm text-[#1F2937] transition hover:bg-[#F9DADA] hover:text-[#A8383B]"
-              >
-                All Types
-              </button>
+        {AVAILABILITY.map((item) => (
+          <option key={item} value={item}>
+            {item}
+          </option>
+        ))}
+      </select>
 
-              {TYPES.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => {
-                    onTypeChange(item);
-                    setTypeOpen(false);
-                  }}
-                  className="w-full px-3 py-2.5 text-left text-sm text-[#1F2937] transition hover:bg-[#F9DADA] hover:text-[#A8383B]"
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+      {/* STATUS */}
+      <select
+        value={status}
+        onChange={(e) =>
+          onStatusChange(
+            e.target.value as
+              | MediaPlanStatus
+              | ""
+          )
+        }
+        className={`${inputClass} cursor-pointer`}
+      >
+        <option value="">Status</option>
 
-        {/* Status */}
-        <div className="relative">
-          <label className="mb-2 block text-sm font-medium text-[#1F2937]">
-            Status
-          </label>
-
-          <button
-            type="button"
-            onClick={() => {
-              setStatusOpen(!statusOpen);
-              setTypeOpen(false);
-            }}
-            className="flex w-full items-center justify-between rounded-lg border border-[#E8E8EC] bg-white px-3 py-2.5 text-sm text-[#1F2937] outline-none transition hover:border-[#A8383B] focus:border-[#A8383B]"
-          >
-            <span>{status || "All Status"}</span>
-
-            <span className="text-[#667085]">
-              {statusOpen ? "⌃" : "⌄"}
-            </span>
-          </button>
-
-          {statusOpen && (
-            <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-lg border border-[#E8E8EC] bg-white shadow-lg">
-              <button
-                type="button"
-                onClick={() => {
-                  onStatusChange("");
-                  setStatusOpen(false);
-                }}
-                className="w-full px-3 py-2.5 text-left text-sm text-[#1F2937] transition hover:bg-[#F9DADA] hover:text-[#A8383B]"
-              >
-                All Status
-              </button>
-
-              {STATUSES.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => {
-                    onStatusChange(item);
-                    setStatusOpen(false);
-                  }}
-                  className="w-full px-3 py-2.5 text-left text-sm text-[#1F2937] transition hover:bg-[#F9DADA] hover:text-[#A8383B]"
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+        {STATUSES.map((item) => (
+          <option key={item} value={item}>
+            {item}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

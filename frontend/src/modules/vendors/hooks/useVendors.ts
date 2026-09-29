@@ -1,268 +1,146 @@
-"use client";
-
+import { useCallback, useEffect, useState } from "react";
 import {
-  useCallback,
-  useEffect,
-  useState,
-} from "react";
-
-import {
+  getVendors,
+  getVendor,
+  getVendorFilters,
   createVendor,
+  updateVendor,
   deactivateVendor,
   getVendorSites,
-  getVendors,
-  updateVendor,
+  type VendorFilters,
 } from "../api";
 
-import type {
-  Vendor,
-  VendorFormData,
-  VendorSite,
-} from "../types";
+import type { Vendor, VendorFormData, VendorSite } from "../types";
 
-interface VendorFilters {
-  search?: string;
-  state?: string;
-  city?: string;
-}
+export const useVendors = () => {
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [filters, setFilters] = useState<VendorFilters>({});
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sites, setSites] = useState<VendorSite[]>([]);
 
-export function useVendors() {
-  const [vendors, setVendors] = useState<Vendor[]>(
-    [],
-  );
+  const loadVendors = useCallback(async (currentFilters: VendorFilters = filters) => {
+    setLoading(true);
+    setError(null);
 
-  const [loading, setLoading] =
-    useState(true);
+    try {
+      const res = await getVendors(currentFilters);
+      setVendors(res.data || []);
+    } catch (err: any) {
+      setError(err?.message || "Failed to load vendors");
+    } finally {
+      setLoading(false);
+    }
+  }, [filters]);
 
-  const [saving, setSaving] =
-    useState(false);
+  const loadFilters = async () => {
+    return getVendorFilters();
+  };
 
-  const [error, setError] =
-    useState("");
+  const addVendor = async (data: VendorFormData): Promise<boolean> => {
+    setSaving(true);
+    setError(null);
+    try {
+      await createVendor(data);
+      await loadVendors();
+      return true;
+    } catch (err: any) {
+      setError(err?.message || "Failed to create vendor");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
 
-  const [filters, setFilters] =
-    useState<VendorFilters>({
-      search: "",
-      state: "",
-      city: "",
-    });
+  const editVendor = async (id: string, data: Partial<VendorFormData>): Promise<boolean> => {
+    setSaving(true);
+    setError(null);
+    try {
+      await updateVendor(id, data);
+      await loadVendors();
+      return true;
+    } catch (err: any) {
+      setError(err?.message || "Failed to update vendor");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
 
-  /* ----------------------------------
-     LOAD VENDORS
-  ----------------------------------- */
+  const deactivate = async (id: string) => {
+    setSaving(true);
+    setError(null);
+    try {
+      await deactivateVendor(id);
+      await loadVendors();
+    } catch (err: any) {
+      setError(err?.message || "Failed to deactivate vendor");
+    } finally {
+      setSaving(false);
+    }
+  };
 
-  const loadVendors = useCallback(
-    async (
-      nextFilters: VendorFilters = filters,
-    ) => {
-      try {
-        setLoading(true);
-        setError("");
+  const getSites = async (id: string) => {
+    const res = await getVendorSites(id);
+    setSites(res.data || []);
+    return res.data || [];
+  };
 
-        const response =
-          await getVendors(nextFilters);
+  const applyFilters = async (newFilters: VendorFilters) => {
+    setFilters(newFilters);
+    await loadVendors(newFilters);
+  };
 
-        setVendors(
-          response.data || [],
-        );
-      } catch (error) {
-        setError(
-          error instanceof Error
-            ? error.message
-            : "Failed to load vendors",
-        );
-      } finally {
-        setLoading(false);
-      }
-    },
-    [filters],
-  );
-
-  /* ----------------------------------
-     INITIAL LOAD
-  ----------------------------------- */
+  const clearFilters = async () => {
+    setFilters({});
+    await loadVendors({});
+  };
 
   useEffect(() => {
-    loadVendors({
-      search: "",
-      state: "",
-      city: "",
-    });
+    loadVendors({});
   }, []);
-
-  /* ----------------------------------
-     APPLY FILTERS
-  ----------------------------------- */
-
-  const applyFilters = useCallback(
-    async (
-      nextFilters: VendorFilters,
-    ) => {
-      setFilters(nextFilters);
-
-      await loadVendors(
-        nextFilters,
-      );
-    },
-    [loadVendors],
-  );
-
-  /* ----------------------------------
-     CLEAR FILTERS
-  ----------------------------------- */
-
-  const clearFilters =
-    useCallback(async () => {
-      const emptyFilters = {
-        search: "",
-        state: "",
-        city: "",
-      };
-
-      setFilters(emptyFilters);
-
-      await loadVendors(
-        emptyFilters,
-      );
-    }, [loadVendors]);
-
-  /* ----------------------------------
-     ADD VENDOR
-  ----------------------------------- */
-
-  async function addVendor(
-    data: VendorFormData,
-  ) {
-    try {
-      setSaving(true);
-      setError("");
-
-      await createVendor(data);
-
-      await loadVendors(filters);
-
-      return true;
-    } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Failed to create vendor",
-      );
-
-      return false;
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  /* ----------------------------------
-     EDIT VENDOR
-  ----------------------------------- */
-
-  async function editVendor(
-    id: string,
-    data: Partial<VendorFormData>,
-  ) {
-    try {
-      setSaving(true);
-      setError("");
-
-      await updateVendor(
-        id,
-        data,
-      );
-
-      await loadVendors(filters);
-
-      return true;
-    } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Failed to update vendor",
-      );
-
-      return false;
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  /* ----------------------------------
-     DEACTIVATE VENDOR
-  ----------------------------------- */
-
-  async function deactivate(
-    id: string,
-  ) {
-    try {
-      setSaving(true);
-      setError("");
-
-      await deactivateVendor(id);
-
-      await loadVendors(filters);
-
-      return true;
-    } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Failed to deactivate vendor",
-      );
-
-      return false;
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  /* ----------------------------------
-     GET VENDOR SITES
-  ----------------------------------- */
-
-  async function getSites(
-    id: string,
-  ): Promise<VendorSite[]> {
-    try {
-      setError("");
-
-      const response =
-        await getVendorSites(id);
-
-      return response.data || [];
-    } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Failed to load sites",
-      );
-
-      return [];
-    }
-  }
 
   return {
     vendors,
+    filters,
     loading,
-    isLoading: loading,
     saving,
     error,
-
-    filters,
-
+    sites,
     loadVendors,
-    applyFilters,
-    clearFilters,
-
+    loadFilters,
     addVendor,
     editVendor,
     deactivate,
     getSites,
-    updateFilter: (key: string, value: string) => {
-      if (key === "search") {
-        void applyFilters({ ...filters, search: value });
-      }
-    },
+    applyFilters,
+    clearFilters,
   };
-}
+};
+
+export const useVendor = (id: string) => {
+  const [vendor, setVendor] = useState<Vendor | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchVendor = useCallback(async () => {
+    if (!id) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await getVendor(id);
+      setVendor(res.data || null);
+    } catch (err: any) {
+      setError(err?.message || "Failed to load vendor");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    fetchVendor();
+  }, [fetchVendor]);
+
+  return { vendor, isLoading, error, refetch: fetchVendor };
+};

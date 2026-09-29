@@ -1,205 +1,178 @@
-import {
-  Model,
+
+import mongoose, {
+  Document,
   Schema,
-  Types,
-  model,
 } from "mongoose";
 
-import {
-  basePlugin,
-  type BaseDocument,
-} from "../../core/db/basePlugin.js";
-
-/* ----------------------------------
-   SITE TYPE
------------------------------------ */
-
-export enum SiteType {
-  AIRPORT = "Airport",
-  HIGHWAY = "Highway",
-  MALL = "Mall",
+export enum MediaType {
+  BILLBOARD = "Billboard",
+  HOARDING = "Hoarding",
+  TRANSIT = "Transit",
   METRO = "Metro",
-  MARKET = "Market",
+  AIRPORT = "Airport",
+  MALL = "Mall",
+  DIGITAL = "Digital",
   OTHER = "Other",
 }
 
-/* ----------------------------------
-   SITE STATUS
------------------------------------ */
-
-export enum SiteStatus {
-  ACTIVE = "Active",
-  MAINTENANCE = "Maintenance",
-  INACTIVE = "Inactive",
+export enum AvailabilityStatus {
+  AVAILABLE = "Available",
+  BOOKED = "Booked",
 }
 
-/* ----------------------------------
-   GPS
------------------------------------ */
-
-export interface IGps {
-  lat: number;
-  lng: number;
+export enum ATRStatus {
+  DRAFT = "Draft",
+  PENDING = "Pending",
+  APPROVED = "Approved",
+  REJECTED = "Rejected",
 }
 
-/* ----------------------------------
-   SITE
------------------------------------ */
+export interface ISite extends Document {
+  atrNo: string;
 
-export interface ISite extends BaseDocument {
-  code: string;
+  clientName: string;
+
+  salesPersonName: string;
+  salesPersonContact: string;
+
+  state: string;
   city: string;
-  type: SiteType;
-  address?: string;
+  location: string;
 
-  /*
-   * GPS coordinates selected from
-   * browser/device location.
-   */
-  gps: IGps;
+  mediaType: MediaType;
 
-  /*
-   * Availability window for this site.
-   */
+  quantity: number;
+
   startDate: Date;
   endDate: Date;
+  duration: number;
 
-  sizeWidth: number;
-  sizeHeight: number;
+  vendorName: string;
 
-  // Amount stored in paise
-  baseCostPerDay: number;
+  availability: AvailabilityStatus;
+  status: ATRStatus;
 
-  vendorId?: Types.ObjectId | null;
+  createdAt: Date;
+  updatedAt: Date;
 
-  status: SiteStatus;
-
-  photos: string[];
+  deletedAt: Date | null;
 }
 
-/* ----------------------------------
-   GPS SCHEMA
------------------------------------ */
+const siteSchema =
+  new Schema<ISite>(
+    {
+      atrNo: {
+        type: String,
+        required: true,
+        unique: true,
+        trim: true,
+        index: true,
+      },
 
-const gpsSchema = new Schema<IGps>(
-  {
-    lat: {
-      type: Number,
-      required: true,
-      min: -90,
-      max: 90,
+      clientName: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+
+      salesPersonName: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+
+      salesPersonContact: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+
+      state: {
+        type: String,
+        required: true,
+        trim: true,
+        index: true,
+      },
+
+      city: {
+        type: String,
+        required: true,
+        trim: true,
+        index: true,
+      },
+
+      location: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+
+      mediaType: {
+        type: String,
+        enum: Object.values(MediaType),
+        required: true,
+      },
+
+      quantity: {
+        type: Number,
+        required: true,
+        min: 1,
+      },
+
+      startDate: {
+        type: Date,
+        required: true,
+      },
+
+      endDate: {
+        type: Date,
+        required: true,
+      },
+
+      duration: {
+        type: Number,
+        required: true,
+        min: 1,
+      },
+
+      vendorName: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+
+      availability: {
+        type: String,
+        enum: Object.values(
+          AvailabilityStatus
+        ),
+        default:
+          AvailabilityStatus.AVAILABLE,
+      },
+
+      status: {
+        type: String,
+        enum: Object.values(ATRStatus),
+        default: ATRStatus.DRAFT,
+      },
+
+      deletedAt: {
+        type: Date,
+        default: null,
+      },
     },
+    {
+      timestamps: true,
+    }
+  );
 
-    lng: {
-      type: Number,
-      required: true,
-      min: -180,
-      max: 180,
-    },
-  },
-  {
-    _id: false,
-  }
-);
+export const Site =
+  mongoose.model<ISite>(
+    "Site",
+    siteSchema
+  );
 
-/* ----------------------------------
-   SITE SCHEMA
------------------------------------ */
+// Backward compatibility
+export const MediaPlanStatus =
+  ATRStatus;
 
-const siteSchema = new Schema<ISite>(
-  {
-    code: {
-      type: String,
-      required: true,
-      unique: true,
-      index: true,
-      uppercase: true,
-      trim: true,
-    },
-
-    city: {
-      type: String,
-      required: true,
-      index: true,
-      trim: true,
-    },
-
-    type: {
-      type: String,
-      enum: Object.values(SiteType),
-      required: true,
-    },
-
-    address: {
-      type: String,
-      trim: true,
-    },
-
-    /*
-     * GPS is required.
-     *
-     * Frontend should obtain these values
-     * using browser/device GPS.
-     */
-    gps: {
-      type: gpsSchema,
-      required: true,
-    },
-
-    /*
-     * Availability window.
-     */
-    startDate: {
-      type: Date,
-      required: true,
-      index: true,
-    },
-
-    endDate: {
-      type: Date,
-      required: true,
-      index: true,
-    },
-
-    sizeWidth: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-
-    sizeHeight: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-
-    baseCostPerDay: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-
-    vendorId: {
-      type: Schema.Types.ObjectId,
-      ref: "Vendor",
-      default: null,
-    },
-
-    status: {
-      type: String,
-      enum: Object.values(SiteStatus),
-      default: SiteStatus.ACTIVE,
-      index: true,
-    },
-
-    photos: {
-      type: [String],
-      default: [],
-    },
-  }
-);
-
-siteSchema.plugin(basePlugin);
-
-export const Site: Model<ISite> =
-  model<ISite>("Site", siteSchema);

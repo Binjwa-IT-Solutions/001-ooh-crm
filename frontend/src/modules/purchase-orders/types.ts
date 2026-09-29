@@ -6,19 +6,23 @@ export type PurchaseOrderStatus =
 
 export interface PurchaseOrderLineItem {
   _id?: string;
-  siteId: string;
-  from: string;
-  to: string;
-  negotiatedRatePerDay: number;
-  days: number;
-  amount: number;
+  siteId?: string;
+  city?: string;
+  spaceType?: string;
+  from?: string;
+  to?: string;
+  negotiatedRatePerDay?: number;
+  days?: number;
+  amount?: number;
 }
 
 export interface PurchaseOrder {
   _id: string;
   poNumber: string;
-  campaignId:
+  pricingId?: string;
+  campaignId?:
     | string
+    | null
     | {
         _id: string;
         name: string;
@@ -40,6 +44,24 @@ export interface PurchaseOrder {
         mobile?: string;
         email?: string;
       };
+
+  city?: string;
+  spaceType?: string;
+  cardRate?: number;
+  negotiatedRate?: number;
+  discountGiven?: number;
+  discountPercent?: number;
+  companyCostPrice?: number;
+  companySellingPrice?: number;
+  profitPerUnit?: number;
+  profitMarginPercent?: number;
+  durationDays?: number;
+  validityFrom?: string;
+  validityTo?: string;
+  negotiationRounds?: number;
+  negotiationNotes?: string;
+  approvedBy?: string;
+
   lineItems: PurchaseOrderLineItem[];
   totalAmount: number;
   status: PurchaseOrderStatus;
@@ -50,9 +72,33 @@ export interface PurchaseOrder {
 }
 
 export interface PurchaseOrderFormData {
-  campaignId: string;
+  pricingId?: string;
   vendorId: string;
-  lineItems: Omit<
+  campaignId?: string;
+
+  city: string;
+  spaceType: string;
+
+  cardRate: number;
+  negotiatedRate: number;
+  discountGiven?: number;
+  discountPercent?: number;
+
+  companyCostPrice: number;
+  companySellingPrice: number;
+  profitPerUnit?: number;
+  profitMarginPercent?: number;
+
+  durationDays: number;
+  validityFrom?: string;
+  validityTo?: string;
+
+  negotiationRounds?: number;
+  negotiationNotes?: string;
+  approvedBy?: string;
+
+  totalAmount?: number;
+  lineItems?: Omit<
     PurchaseOrderLineItem,
     "amount" | "days"
   >[];
@@ -83,6 +129,7 @@ export interface PurchaseOrderFilters {
   status?: string;
   campaignId?: string;
   vendorId?: string;
+  city?: string;
 }
 
 export interface PurchaseOrdersResponse {

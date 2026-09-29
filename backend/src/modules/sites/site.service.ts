@@ -1,258 +1,418 @@
 import mongoose from "mongoose";
 
 import {
-  withOptionalTransaction,
-} from "../../core/db/transaction.js";
-
-import {
   Site,
-  SiteStatus,
-  SiteType,
-  ISite,
+  ATRStatus,
+  AvailabilityStatus,
+  MediaType,
 } from "./site.model.js";
 
-import {
+import type { ISite } from "./site.model.js";
+
+import type {
   CreateSiteInput,
   UpdateSiteInput,
+  SiteQueryInput,
 } from "./site.validator.js";
 
+const EDIT_LIMIT = 48 * 60 * 60 * 1000;
+
 /* ----------------------------------
-   TYPES
+   DATE
 ----------------------------------- */
 
-interface SiteFilters {
-  city?: string;
-  type?: SiteType;
-  status?: SiteStatus;
-  search?: string;
+function normalizeDate(
+  value: string | Date
+): Date {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("Invalid date");
+  }
+
+  return date;
 }
 
 /* ----------------------------------
-   CITY CODE
+   DURATION
 ----------------------------------- */
 
-function getCityCode(city: string): string {
-  const code = city
-    .replace(/[^A-Za-z]/g, "")
-    .substring(0, 3)
-    .toUpperCase();
+function calculateDuration(
+  startDate: Date,
+  endDate: Date
+): number {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
 
-  return code.padEnd(3, "X");
-}
-
-/* ----------------------------------
-   INDIA GPS VALIDATION
------------------------------------ */
-
-function isInsideIndia(
-  lat: number,
-  lng: number
-): boolean {
-  const minLat = 6;
-  const maxLat = 37.5;
-
-  const minLng = 68;
-  const maxLng = 97.5;
+  start.setHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
 
   return (
-    lat >= minLat &&
-    lat <= maxLat &&
-    lng >= minLng &&
-    lng <= maxLng
+    Math.floor(
+      (end.getTime() - start.getTime()) /
+        (1000 * 60 * 60 * 24)
+    ) + 1
   );
 }
 
 /* ----------------------------------
-   GENERATE SITE CODE
+   ESCAPE REGEX
 ----------------------------------- */
 
-async function generateSiteCode(
-  city: string,
-  type: SiteType,
-  session?: mongoose.ClientSession
-): Promise<string> {
-  const cityCode = getCityCode(city);
+function escapeRegex(
+  value: string
+): string {
+  return value.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
+  );
+}
 
-  const typeCode = type
-    .replace(/\s+/g, "-")
-    .toUpperCase();
+/* ----------------------------------
+   ATR NUMBER HELPERS
+----------------------------------- */
 
-  /*
-    Counter document is stored in MongoDB.
+function getAtrNumber(
+  atrNo: string
+): number {
+  const number = Number(
+    atrNo.replace(/^ATR-/i, "")
+  );
 
-    We use a collection directly here so
-    we don't need another model file.
-  */
+  return Number.isNaN(number)
+    ? 0
+    : number;
+}
 
-  const counterCollection =
-    mongoose.connection.collection(
-      "site_counters"
+async function getLastAtrNumber(): Promise<number> {
+  const atrs = await Site.find({
+    atrNo: {
+      $regex: /^ATR-\d+$/i,
+    },
+    deletedAt: null,
+  })
+    .select("atrNo")
+    .lean();
+
+  let maxNumber = 0;
+
+  for (const atr of atrs) {
+    const number = getAtrNumber(
+      atr.atrNo
     );
 
-  const key = `${cityCode}-${typeCode}`;
-
-  const findOptions: any = {
-    upsert: true,
-    returnDocument: "after",
-  };
-
-  if (session) {
-    findOptions.session = session;
+    if (number > maxNumber) {
+      maxNumber = number;
+    }
   }
 
-  const result =
-    await counterCollection.findOneAndUpdate(
-      {
-        id: key,
-      },
-      {
-        $inc: {
-          sequence: 1,
-        },
-      },
-      findOptions
-    );
+  return maxNumber;
+}
 
-  const sequence =
-    (result as any)?.sequence ??
-    (result as any)?.value?.sequence ??
-    1;
+/* ----------------------------------
+   GENERATE ATR NO
+----------------------------------- */
 
-  return `${cityCode}-${typeCode}-${String(
-    sequence
+export async function generateAtrNo(): Promise<string> {
+  const lastNumber =
+    await getLastAtrNumber();
+
+  return `ATR-${String(
+    lastNumber + 1
   ).padStart(3, "0")}`;
 }
 
 /* ----------------------------------
-   CREATE SITE
+   BACKFILL OLD ATRS
+----------------------------------- */
+
+export async function backfillAtrNumbers() {
+  const oldAtrs = await Site.find({
+    $or: [
+      {
+        atrNo: {
+          $exists: false,
+        },
+      },
+      {
+        atrNo: null,
+      },
+      {
+        atrNo: "",
+      },
+    ],
+    deletedAt: null,
+  })
+    .sort({
+      createdAt: 1,
+    })
+    .select("_id atrNo")
+    .lean();
+
+  if (!oldAtrs.length) {
+    return {
+      updated: 0,
+    };
+  }
+
+  const lastNumber =
+    await getLastAtrNumber();
+
+  const operations =
+    oldAtrs.map(
+      (atr, index) => ({
+        updateOne: {
+          filter: {
+            _id: atr._id,
+          },
+          update: {
+            $set: {
+              atrNo: `ATR-${String(
+                lastNumber + index + 1
+              ).padStart(3, "0")}`,
+            },
+          },
+        },
+      })
+    );
+
+  if (operations.length) {
+    await Site.bulkWrite(
+      operations
+    );
+  }
+
+  return {
+    updated: operations.length,
+  };
+}
+
+/* ----------------------------------
+   CREATE ATR
 ----------------------------------- */
 
 export async function createSite(
   data: CreateSiteInput
 ): Promise<ISite> {
-  return withOptionalTransaction(
-    async (session) => {
-      /*
-        1. Validate GPS
-      */
+  const startDate =
+    normalizeDate(data.startDate);
 
-      if (
-        !isInsideIndia(
-          data.gps.lat,
-          data.gps.lng
-        )
-      ) {
-        throw new Error(
-          "GPS coordinates must fall within India"
-        );
-      }
+  const endDate =
+    normalizeDate(data.endDate);
 
-      /*
-        2. Validate dates
-      */
+  if (endDate < startDate) {
+    throw new Error(
+      "End date must be on or after start date"
+    );
+  }
 
-      if (
-        Number.isNaN(
-          data.startDate.getTime()
-        )
-      ) {
-        throw new Error(
-          "Invalid site start date"
-        );
-      }
+  const duration =
+    calculateDuration(
+      startDate,
+      endDate
+    );
 
-      if (
-        Number.isNaN(
-          data.endDate.getTime()
-        )
-      ) {
-        throw new Error(
-          "Invalid site end date"
-        );
-      }
+  const atrNo =
+    await generateAtrNo();
 
-      if (
-        data.endDate < data.startDate
-      ) {
-        throw new Error(
-          "endDate must be on or after startDate"
-        );
-      }
+  const existing =
+    await Site.findOne({
+      atrNo,
+      deletedAt: null,
+    }).lean();
 
-      /*
-        3. Generate unique code
-      */
+  if (existing) {
+    throw new Error(
+      `ATR ${atrNo} already exists`
+    );
+  }
 
-      const code =
-        await generateSiteCode(
-          data.city,
-          data.type,
-          session
-        );
+  const atr = new Site({
+    atrNo,
 
-      /*
-        4. Create site
-      */
+    clientName:
+      data.clientName,
 
-      const saveOptions: any = {};
+    salesPersonName:
+      data.salesPersonName,
 
-      if (session) {
-        saveOptions.session = session;
-      }
+    salesPersonContact:
+      data.salesPersonContact,
 
-      const site = new Site({
-        ...data,
-        code,
-      });
+    state:
+      data.state.trim(),
 
-      await site.save(saveOptions);
+    city:
+      data.city.trim(),
 
-      return site as unknown as ISite;
-    }
-  );
+    location:
+      data.location.trim(),
+
+    mediaType:
+      data.mediaType,
+
+    quantity:
+      data.quantity,
+
+    startDate,
+
+    endDate,
+
+    duration,
+
+    vendorName:
+      data.vendorName.trim(),
+
+    availability:
+      data.availability ??
+      AvailabilityStatus.AVAILABLE,
+
+    status:
+      data.status ??
+      ATRStatus.DRAFT,
+
+    deletedAt: null,
+  });
+
+  await atr.save();
+
+  return atr;
 }
 
 /* ----------------------------------
-   GET SITES
+   GET ALL ATR
 ----------------------------------- */
 
 export async function getSites(
-  filters: SiteFilters
+  filters: SiteQueryInput = {}
 ) {
-  const query: Record<
-    string,
-    any
-  > = {};
+  await backfillAtrNumbers();
 
-  if (filters.city) {
-    query.city = filters.city;
+  const query: any = {
+    deletedAt: null,
+  };
+
+  /* STATE */
+
+  if (filters.state?.trim()) {
+    query.state = {
+      $regex: escapeRegex(
+        filters.state.trim()
+      ),
+      $options: "i",
+    };
   }
 
-  if (filters.type) {
-    query.type = filters.type;
+  /* CITY */
+
+  if (filters.city?.trim()) {
+    query.city = {
+      $regex: escapeRegex(
+        filters.city.trim()
+      ),
+      $options: "i",
+    };
   }
+
+  /* VENDOR */
+
+  if (filters.vendorName?.trim()) {
+    query.vendorName = {
+      $regex: escapeRegex(
+        filters.vendorName.trim()
+      ),
+      $options: "i",
+    };
+  }
+
+  /* SALES PERSON */
+
+  if (
+    filters.salesPersonName?.trim()
+  ) {
+    query.salesPersonName = {
+      $regex: escapeRegex(
+        filters.salesPersonName.trim()
+      ),
+      $options: "i",
+    };
+  }
+
+  /* MEDIA TYPE */
+
+  if (filters.mediaType) {
+    query.mediaType =
+      filters.mediaType;
+  }
+
+  /* AVAILABILITY */
+
+  if (filters.availability) {
+    query.availability =
+      filters.availability;
+  }
+
+  /* STATUS */
 
   if (filters.status) {
-    query.status = filters.status;
+    query.status =
+      filters.status;
   }
 
-  if (filters.search) {
+  /* SEARCH */
+
+  if (filters.search?.trim()) {
+    const search =
+      escapeRegex(
+        filters.search.trim()
+      );
+
     query.$or = [
       {
-        code: {
-          $regex: filters.search,
+        atrNo: {
+          $regex: search,
+          $options: "i",
+        },
+      },
+      {
+        clientName: {
+          $regex: search,
+          $options: "i",
+        },
+      },
+      {
+        salesPersonName: {
+          $regex: search,
+          $options: "i",
+        },
+      },
+      {
+        salesPersonContact: {
+          $regex: search,
+          $options: "i",
+        },
+      },
+      {
+        state: {
+          $regex: search,
           $options: "i",
         },
       },
       {
         city: {
-          $regex: filters.search,
+          $regex: search,
           $options: "i",
         },
       },
       {
-        address: {
-          $regex: filters.search,
+        location: {
+          $regex: search,
+          $options: "i",
+        },
+      },
+      {
+        vendorName: {
+          $regex: search,
           $options: "i",
         },
       },
@@ -267,35 +427,42 @@ export async function getSites(
 }
 
 /* ----------------------------------
-   GET SINGLE SITE
+   GET ONE ATR
 ----------------------------------- */
 
 export async function getSiteById(
   id: string
 ) {
   if (
-    !mongoose.Types.ObjectId.isValid(id)
+    !mongoose.Types.ObjectId.isValid(
+      id
+    )
   ) {
     throw new Error(
-      "Invalid site ID"
+      "Invalid ATR ID"
     );
   }
 
-  const site =
-    await Site.findById(id)
-      .lean();
+  await backfillAtrNumbers();
 
-  if (!site) {
+  const atr =
+    await Site.findOne({
+      _id: id,
+      deletedAt: null,
+    }).lean();
+
+  if (!atr) {
     throw new Error(
-      "Site not found"
+      "ATR not found"
     );
   }
 
-  return site;
+  return atr;
 }
 
 /* ----------------------------------
-   UPDATE SITE
+   UPDATE ATR
+   ONLY 48 HOURS
 ----------------------------------- */
 
 export async function updateSite(
@@ -303,168 +470,254 @@ export async function updateSite(
   data: UpdateSiteInput
 ) {
   if (
-    !mongoose.Types.ObjectId.isValid(id)
+    !mongoose.Types.ObjectId.isValid(
+      id
+    )
   ) {
     throw new Error(
-      "Invalid site ID"
+      "Invalid ATR ID"
     );
   }
 
-  /*
-    Validate GPS when GPS is updated.
-  */
+  const existing =
+    await Site.findOne({
+      _id: id,
+      deletedAt: null,
+    }).lean();
 
-  if (data.gps) {
-    if (
-      !isInsideIndia(
-        data.gps.lat,
-        data.gps.lng
-      )
-    ) {
-      throw new Error(
-        "GPS coordinates must fall within India"
-      );
-    }
+  if (!existing) {
+    throw new Error(
+      "ATR not found"
+    );
   }
 
-  /*
-    Validate dates when dates are updated.
-  */
+  /* 48 HOURS CHECK */
 
-  if (data.startDate) {
-    if (
-      Number.isNaN(
-        data.startDate.getTime()
-      )
-    ) {
-      throw new Error(
-        "Invalid site start date"
-      );
-    }
+  const createdAt =
+    new Date(
+      existing.createdAt
+    ).getTime();
+
+  const age =
+    Date.now() - createdAt;
+
+  if (age >= EDIT_LIMIT) {
+    throw new Error(
+      "Edit time expired. ATR can only be edited within 48 hours of creation."
+    );
   }
 
-  if (data.endDate) {
-    if (
-      Number.isNaN(
-        data.endDate.getTime()
-      )
-    ) {
-      throw new Error(
-        "Invalid site end date"
-      );
-    }
-  }
+  /* DATE */
 
-  /*
-    If only one date is updated, compare it
-    with the existing site's other date.
-  */
+  let startDate =
+    existing.startDate;
+
+  let endDate =
+    existing.endDate;
 
   if (
-    data.startDate ||
-    data.endDate
+    data.startDate !== undefined
   ) {
-    const existingSite =
-      await Site.findById(id)
-        .select("startDate endDate")
-        .lean();
-
-    if (!existingSite) {
-      throw new Error(
-        "Site not found"
+    startDate =
+      normalizeDate(
+        data.startDate
       );
-    }
-
-    const finalStartDate =
-      data.startDate ??
-      existingSite.startDate;
-
-    const finalEndDate =
-      data.endDate ??
-      existingSite.endDate;
-
-    if (
-      finalStartDate &&
-      finalEndDate &&
-      finalEndDate < finalStartDate
-    ) {
-      throw new Error(
-        "endDate must be on or after startDate"
-      );
-    }
   }
 
-  /*
-    Code is never accepted
-    from the client.
-  */
+  if (
+    data.endDate !== undefined
+  ) {
+    endDate =
+      normalizeDate(
+        data.endDate
+      );
+  }
+
+  if (endDate < startDate) {
+    throw new Error(
+      "End date must be on or after start date"
+    );
+  }
+
+  /* DURATION */
+
+  const duration =
+    data.startDate !== undefined ||
+    data.endDate !== undefined
+      ? calculateDuration(
+          startDate,
+          endDate
+        )
+      : existing.duration;
+
+  /* UPDATE */
 
   const updateData: any = {
     ...data,
+    startDate,
+    endDate,
+    duration,
   };
 
-  delete updateData.code;
+  /* ATR NO CANNOT CHANGE */
 
-  const site =
-    await Site.findByIdAndUpdate(
-      id,
-      updateData,
+  delete updateData.atrNo;
+
+  /* TRIM TEXT VALUES */
+
+  if (typeof updateData.state === "string") {
+    updateData.state =
+      updateData.state.trim();
+  }
+
+  if (typeof updateData.city === "string") {
+    updateData.city =
+      updateData.city.trim();
+  }
+
+  if (
+    typeof updateData.location ===
+    "string"
+  ) {
+    updateData.location =
+      updateData.location.trim();
+  }
+
+  if (
+    typeof updateData.vendorName ===
+    "string"
+  ) {
+    updateData.vendorName =
+      updateData.vendorName.trim();
+  }
+
+  const updated =
+    await Site.findOneAndUpdate(
       {
-        returnDocument: "after",
+        _id: id,
+        deletedAt: null,
+      },
+      {
+        $set: updateData,
+      },
+      {
+        new: true,
         runValidators: true,
       }
     ).lean();
 
-  if (!site) {
+  if (!updated) {
     throw new Error(
-      "Site not found"
+      "ATR not found"
     );
   }
 
-  return site;
+  return updated;
+}
+
+/* ----------------------------------
+   GET STATES
+   DYNAMIC FROM MONGODB
+----------------------------------- */
+
+export async function getSiteStates(
+  search = ""
+): Promise<string[]> {
+  const query: any = {
+    deletedAt: null,
+  };
+
+  if (search.trim()) {
+    query.state = {
+      $regex: escapeRegex(
+        search.trim()
+      ),
+      $options: "i",
+    };
+  }
+
+  const states =
+    await Site.distinct(
+      "state",
+      query
+    );
+
+  return states
+    .filter(Boolean)
+    .map((state) =>
+      String(state).trim()
+    )
+    .filter(Boolean)
+    .sort((a, b) =>
+      a.localeCompare(b)
+    );
+}
+
+/* ----------------------------------
+   GET CITIES
+   BASED ON STATE
+----------------------------------- */
+
+export async function getSiteCities(
+  state: string,
+  search = ""
+): Promise<string[]> {
+  const cleanState =
+    state?.trim();
+
+  if (!cleanState) {
+    throw new Error(
+      "State is required"
+    );
+  }
+
+  const query: any = {
+    deletedAt: null,
+
+    state: {
+      $regex: `^${escapeRegex(
+        cleanState
+      )}$`,
+      $options: "i",
+    },
+  };
+
+  if (search.trim()) {
+    query.city = {
+      $regex: escapeRegex(
+        search.trim()
+      ),
+      $options: "i",
+    };
+  }
+
+  const cities =
+    await Site.distinct(
+      "city",
+      query
+    );
+
+  return cities
+    .filter(Boolean)
+    .map((city) =>
+      String(city).trim()
+    )
+    .filter(Boolean)
+    .sort((a, b) =>
+      a.localeCompare(b)
+    );
 }
 
 /* ----------------------------------
    CSV IMPORT
 ----------------------------------- */
 
-interface CsvRow {
-  city: string;
-  type: string;
-  address?: string;
-
-  lat: number;
-  lng: number;
-
-  startDate: Date;
-  endDate: Date;
-
-  sizeWidth: number;
-  sizeHeight: number;
-
-  baseCostPerDay: number;
-}
-
-/*
-  Expected CSV:
-
-  city,type,address,lat,lng,startDate,endDate,sizeWidth,sizeHeight,baseCostPerDay
-
-  Example:
-
-  Mumbai,Airport,Mumbai Airport,19.0896,72.8656,2026-09-01,2026-12-31,40,20,500000
-*/
-
-/* ----------------------------------
-   CSV PARSER
------------------------------------ */
-
-function parseCsv(
+export async function importSitesFromCsv(
   csv: string
-): CsvRow[] {
+) {
   const lines = csv
     .trim()
-    .split("\n")
+    .split(/\r?\n/)
     .map((line) =>
       line.trim()
     )
@@ -483,11 +736,21 @@ function parseCsv(
         header.trim()
       );
 
-  return lines
-    .slice(1)
-    .map((line) => {
+  const imported: ISite[] = [];
+
+  const errors: {
+    row: number;
+    message: string;
+  }[] = [];
+
+  for (
+    let i = 1;
+    i < lines.length;
+    i++
+  ) {
+    try {
       const values =
-        line
+        lines[i]
           .split(",")
           .map((value) =>
             value.trim()
@@ -502,348 +765,120 @@ function parseCsv(
         }
       );
 
-      return {
-        city: row.city,
+      const input =
+        createSiteDataFromCsv(row);
 
-        type: row.type,
+      const atr =
+        await createSite(input);
 
-        address:
-          row.address,
-
-        lat: Number(
-          row.lat
-        ),
-
-        lng: Number(
-          row.lng
-        ),
-
-        startDate: new Date(
-          row.startDate
-        ),
-
-        endDate: new Date(
-          row.endDate
-        ),
-
-        sizeWidth:
-          Number(
-            row.sizeWidth
-          ),
-
-        sizeHeight:
-          Number(
-            row.sizeHeight
-          ),
-
-        baseCostPerDay:
-          Number(
-            row.baseCostPerDay
-          ),
-      };
-    });
-}
-
-/* ----------------------------------
-   CSV VALIDATION
------------------------------------ */
-
-function validateCsvRows(
-  rows: CsvRow[]
-) {
-  const errors: string[] = [];
-
-  rows.forEach(
-    (row, index) => {
-      const rowNumber =
-        index + 2;
-
-      if (!row.city) {
-        errors.push(
-          `Row ${rowNumber}: city is required`
-        );
-      }
-
-      if (
-        !Object.values(
-          SiteType
-        ).includes(
-          row.type as SiteType
-        )
-      ) {
-        errors.push(
-          `Row ${rowNumber}: invalid site type`
-        );
-      }
-
-      /*
-        GPS validation
-      */
-
-      if (
-        Number.isNaN(
-          row.lat
-        ) ||
-        Number.isNaN(
-          row.lng
-        )
-      ) {
-        errors.push(
-          `Row ${rowNumber}: invalid GPS`
-        );
-      }
-
-      if (
-        !Number.isNaN(
-          row.lat
-        ) &&
-        !Number.isNaN(
-          row.lng
-        ) &&
-        !isInsideIndia(
-          row.lat,
-          row.lng
-        )
-      ) {
-        errors.push(
-          `Row ${rowNumber}: GPS must be within India`
-        );
-      }
-
-      /*
-        Date validation
-      */
-
-      if (
-        Number.isNaN(
-          row.startDate.getTime()
-        )
-      ) {
-        errors.push(
-          `Row ${rowNumber}: invalid start date`
-        );
-      }
-
-      if (
-        Number.isNaN(
-          row.endDate.getTime()
-        )
-      ) {
-        errors.push(
-          `Row ${rowNumber}: invalid end date`
-        );
-      }
-
-      if (
-        !Number.isNaN(
-          row.startDate.getTime()
-        ) &&
-        !Number.isNaN(
-          row.endDate.getTime()
-        ) &&
-        row.endDate < row.startDate
-      ) {
-        errors.push(
-          `Row ${rowNumber}: end date must be on or after start date`
-        );
-      }
-
-      /*
-        Dimensions
-      */
-
-      if (
-        row.sizeWidth <= 0 ||
-        row.sizeHeight <= 0
-      ) {
-        errors.push(
-          `Row ${rowNumber}: invalid dimensions`
-        );
-      }
-
-      /*
-        Cost
-      */
-
-      if (
-        !Number.isInteger(
-          row.baseCostPerDay
-        ) ||
-        row.baseCostPerDay < 0
-      ) {
-        errors.push(
-          `Row ${rowNumber}: invalid base cost`
-        );
-      }
+      imported.push(atr);
+    } catch (error: any) {
+      errors.push({
+        row: i + 1,
+        message:
+          error?.message ||
+          "Invalid row",
+      });
     }
-  );
-
-  return errors;
-}
-
-/* ----------------------------------
-   IMPORT CSV
------------------------------------ */
-
-export async function importSitesFromCsv(
-  csv: string
-) {
-  const rows =
-    parseCsv(csv);
-
-  /*
-    IMPORTANT:
-
-    Validate EVERYTHING first.
-
-    Do not write anything if even one
-    row contains an error.
-  */
-
-  const errors =
-    validateCsvRows(rows);
-
-  if (
-    errors.length > 0
-  ) {
-    return {
-      success: false,
-      imported: 0,
-      errors,
-    };
   }
 
-  return withOptionalTransaction(
-    async (session) => {
-      const importedSites: ISite[] =
-        [];
+  return {
+    success:
+      errors.length === 0,
 
-      const createOptions: any =
-        {};
+    imported:
+      imported.length,
 
-      if (session) {
-        createOptions.session =
-          session;
-      }
+    data: imported,
 
-      for (
-        const row of rows
-      ) {
-        const code =
-          await generateSiteCode(
-            row.city,
-            row.type as SiteType,
-            session
-          );
-
-        const site =
-          new Site({
-            code,
-
-            city:
-              row.city,
-
-            type:
-              row.type as SiteType,
-
-            address:
-              row.address,
-
-            gps: {
-              lat:
-                row.lat,
-
-              lng:
-                row.lng,
-            },
-
-            startDate:
-              row.startDate,
-
-            endDate:
-              row.endDate,
-
-            sizeWidth:
-              row.sizeWidth,
-
-            sizeHeight:
-              row.sizeHeight,
-
-            baseCostPerDay:
-              row.baseCostPerDay,
-
-            vendorId:
-              null,
-
-            status:
-              SiteStatus.ACTIVE,
-
-            photos: [],
-          });
-
-        await site.save(
-          createOptions
-        );
-
-        importedSites.push(
-          site as unknown as ISite
-        );
-      }
-
-      return {
-        success: true,
-
-        imported:
-          importedSites.length,
-
-        data:
-          importedSites,
-
-        errors: [],
-      };
-    }
-  );
+    errors,
+  };
 }
 
 /* ----------------------------------
-   CROSS-MODULE SERVICE HELPERS
+   CSV CONVERTER
+----------------------------------- */
+
+function createSiteDataFromCsv(
+  row: any
+): CreateSiteInput {
+  return {
+    clientName:
+      row.clientName,
+
+    salesPersonName:
+      row.salesPersonName,
+
+    salesPersonContact:
+      row.salesPersonContact,
+
+    state:
+      row.state,
+
+    city:
+      row.city,
+
+    location:
+      row.location,
+
+    mediaType:
+      row.mediaType as MediaType,
+
+    quantity:
+      Number(row.quantity),
+
+    startDate:
+      row.startDate,
+
+    endDate:
+      row.endDate,
+
+    vendorName:
+      row.vendorName,
+
+    availability:
+      row.availability ||
+      AvailabilityStatus.AVAILABLE,
+
+    status:
+      row.status ||
+      ATRStatus.DRAFT,
+  };
+}
+
+/* ----------------------------------
+   CHECK ATR EXIST
 ----------------------------------- */
 
 export async function checkSitesExist(
   siteIds: string[],
   session?: mongoose.ClientSession
-): Promise<{
-  valid: boolean;
-  missingIds: string[];
-}> {
+) {
   const validIds =
-    siteIds.filter(
-      (id) =>
-        mongoose.Types.ObjectId.isValid(
-          id
-        )
+    siteIds.filter((id) =>
+      mongoose.Types.ObjectId.isValid(
+        id
+      )
     );
 
   if (
     validIds.length !==
     siteIds.length
   ) {
-    const invalidFormat =
-      siteIds.filter(
-        (id) =>
-          !mongoose.Types.ObjectId.isValid(
-            id
-          )
-      );
-
     return {
       valid: false,
+
       missingIds:
-        invalidFormat,
+        siteIds.filter(
+          (id) =>
+            !mongoose.Types.ObjectId.isValid(
+              id
+            )
+        ),
     };
   }
 
-  let query =
+  let query: any =
     Site.find({
       _id: {
         $in: validIds.map(
@@ -859,26 +894,24 @@ export async function checkSitesExist(
 
   if (session) {
     query =
-      query.session(
-        session
-      );
+      query.session(session);
   }
 
-  const found =
+  const sites =
     await query.lean();
 
-  const foundIds =
+  const found =
     new Set(
-      found.map(
-        (s) =>
-          s._id.toString()
+      sites.map(
+        (site: any) =>
+          site._id.toString()
       )
     );
 
   const missingIds =
     validIds.filter(
       (id) =>
-        !foundIds.has(id)
+        !found.has(id)
     );
 
   return {
@@ -889,17 +922,35 @@ export async function checkSitesExist(
   };
 }
 
+/* ----------------------------------
+   CHECK ATR ACTIVE
+----------------------------------- */
+
 export async function checkSitesActive(
   siteIds: string[],
   session?: mongoose.ClientSession
-): Promise<{
-  valid: boolean;
-  inactiveCodes: string[];
-}> {
-  let query =
+) {
+  const validIds =
+    siteIds.filter((id) =>
+      mongoose.Types.ObjectId.isValid(
+        id
+      )
+    );
+
+  if (
+    validIds.length !==
+    siteIds.length
+  ) {
+    return {
+      valid: false,
+      inactiveCodes: [],
+    };
+  }
+
+  let query: any =
     Site.find({
       _id: {
-        $in: siteIds.map(
+        $in: validIds.map(
           (id) =>
             new mongoose.Types.ObjectId(
               id
@@ -909,45 +960,61 @@ export async function checkSitesActive(
 
       deletedAt: null,
     }).select(
-      "_id code status"
+      "_id atrNo status availability"
     );
 
   if (session) {
     query =
-      query.session(
-        session
-      );
+      query.session(session);
   }
 
   const sites =
     await query.lean();
 
-  const inactive =
+  const invalid =
     sites.filter(
-      (s) =>
-        s.status !==
-        SiteStatus.ACTIVE
+      (site: any) =>
+        site.status !==
+          ATRStatus.APPROVED ||
+        site.availability ===
+          AvailabilityStatus.BOOKED
     );
 
   return {
     valid:
-      inactive.length === 0,
+      invalid.length === 0,
 
     inactiveCodes:
-      inactive.map(
-        (s) => s.code
+      invalid.map(
+        (site: any) =>
+          site.atrNo
       ),
   };
 }
+
+/* ----------------------------------
+   GET ATR BY IDS
+----------------------------------- */
 
 export async function getSitesByIds(
   siteIds: string[],
   fields?: string
 ) {
-  let query =
+  const validIds =
+    siteIds.filter((id) =>
+      mongoose.Types.ObjectId.isValid(
+        id
+      )
+    );
+
+  if (!validIds.length) {
+    return [];
+  }
+
+  let query: any =
     Site.find({
       _id: {
-        $in: siteIds.map(
+        $in: validIds.map(
           (id) =>
             new mongoose.Types.ObjectId(
               id
@@ -960,61 +1027,85 @@ export async function getSitesByIds(
 
   if (fields) {
     query =
-      query.select(
-        fields
-      );
+      query.select(fields);
   }
 
   return query.lean();
 }
 
+/* ----------------------------------
+   GET ATR BY VENDOR
+----------------------------------- */
+
 export async function getSitesByVendor(
-  vendorId: string
+  vendorName: string
 ) {
+  if (!vendorName?.trim()) {
+    throw new Error(
+      "Vendor name is required"
+    );
+  }
+
+  await backfillAtrNumbers();
+
   return Site.find({
-    vendorId:
-      new mongoose.Types.ObjectId(
-        vendorId
+    vendorName: {
+      $regex: escapeRegex(
+        vendorName.trim()
       ),
+      $options: "i",
+    },
 
     deletedAt: null,
   })
     .select(
-      "code city type status startDate endDate gps"
+      "atrNo clientName salesPersonName salesPersonContact state city location mediaType quantity startDate endDate duration vendorName availability status"
     )
     .sort({
-      code: 1,
+      atrNo: 1,
     })
     .lean();
 }
+
+/* ----------------------------------
+   AVAILABLE ATRS IN CITY
+----------------------------------- */
 
 export async function getAvailableSitesInCity(
   city: string,
-  bookedSiteIds: string[]
+  excludeIds: string[] = []
 ) {
-  return Site.find({
-    city,
+  if (!city?.trim()) {
+    throw new Error(
+      "City is required"
+    );
+  }
 
-    status:
-      SiteStatus.ACTIVE,
+  const query: any = {
+    city: {
+      $regex:
+        `^${escapeRegex(
+          city.trim()
+        )}$`,
+      $options: "i",
+    },
+
+    availability:
+      AvailabilityStatus.AVAILABLE,
 
     deletedAt: null,
+  };
 
-    _id: {
-      $nin: bookedSiteIds.map(
-        (id) =>
-          new mongoose.Types.ObjectId(
-            id
-          )
-      ),
-    },
-  })
-    .populate(
-      "vendorId",
-      "name city"
-    )
+  if (excludeIds.length) {
+    query._id = {
+      $nin: excludeIds,
+    };
+  }
+
+  return Site.find(query)
     .sort({
-      code: 1,
+      startDate: 1,
     })
     .lean();
 }
+
