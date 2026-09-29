@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, Field, Button, Alert, TextAreaField, SelectField } from '@/shared/ui';
+import { Card, Field, Button, Alert, TextAreaField, SelectField, DatePicker } from '@/shared/ui';
 import { LeadsSelect } from '@/modules/leads/components/leads-select';
 import { leadsApi } from '@/modules/leads/api';
 import { ChevronDown, ChevronUp, Users, Building2, Plus, X, Sparkles, Loader2 } from 'lucide-react';
@@ -545,11 +545,11 @@ export default function NewLeadPage() {
                 />
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Field
+                  <DatePicker
                     label="Scheduled Next Action Date"
                     name="nextActionDate"
-                    type="date"
                     min={new Date().toISOString().split('T')[0]}
+                    triggerClassName="h-11 px-3 text-sm"
                   />
 
                   <Field
@@ -567,16 +567,16 @@ export default function NewLeadPage() {
                     Campaign Requirement Details
                   </p>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <Field
+                    <DatePicker
                       label="Target Start Date"
                       name="startDate"
-                      type="date"
+                      triggerClassName="h-11 px-3 text-sm"
                     />
 
-                    <Field
+                    <DatePicker
                       label="Target End Date"
                       name="endDate"
-                      type="date"
+                      triggerClassName="h-11 px-3 text-sm"
                     />
 
                     <Field

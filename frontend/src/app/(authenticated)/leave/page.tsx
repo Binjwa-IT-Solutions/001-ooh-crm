@@ -3,7 +3,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Card, Badge, Spinner, Button, Alert, Field, SelectField, TextAreaField, EmptyState } from '@/shared/ui';
+import { Card, Badge, Spinner, Button, Alert, Field, SelectField, TextAreaField, EmptyState, Dropdown, DatePicker } from '@/shared/ui';
 import {
   useLeaveBalance,
   useMyLeaveRequests,
@@ -297,18 +297,16 @@ function MyLeavesTab({ showApplyForm, setShowApplyForm }: MyLeavesTabProps) {
             )}
 
             <div className="grid grid-cols-2 gap-4">
-              <Field
-                type="date"
+              <DatePicker
                 label="From Date"
                 value={formData.fromDate}
-                onChange={(e) => handleDateChange('fromDate', e.target.value)}
+                onChange={(val) => handleDateChange('fromDate', val)}
                 required
               />
-              <Field
-                type="date"
+              <DatePicker
                 label="To Date"
                 value={formData.toDate}
-                onChange={(e) => handleDateChange('toDate', e.target.value)}
+                onChange={(val) => handleDateChange('toDate', val)}
                 required
               />
             </div>
@@ -1008,46 +1006,52 @@ function HolidayCalendarTab() {
           <div>
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
               <div className="flex items-center gap-3">
-                <select
-                  value={currentMonth}
-                  onChange={(e) => {
+                <Dropdown
+                  showArrow={false}
+                  value={String(currentMonth)}
+                  onChange={(val) => {
                     setFormError(null);
                     setSelectedDay(null);
                     setIsEditing(false);
-                    setCurrentMonth(Number(e.target.value));
+                    setCurrentMonth(Number(val));
                   }}
-                  className="px-3 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6E1D1D] text-sm font-semibold bg-white text-slate-800"
-                >
-                  {MONTHS.map((month, index) => (
-                    <option key={month} value={index}>
-                      {month}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={currentYear}
-                  onChange={(e) => {
+                  options={MONTHS.map((month, index) => ({
+                    value: String(index),
+                    label: month,
+                  }))}
+                  triggerClassName="px-3 py-1.5 text-sm font-semibold min-w-[120px]"
+                />
+                <Dropdown
+                  showArrow={false}
+                  value={String(currentYear)}
+                  onChange={(val) => {
                     setFormError(null);
                     setSelectedDay(null);
                     setIsEditing(false);
-                    setCurrentYear(Number(e.target.value));
+                    setCurrentYear(Number(val));
                   }}
-                  className="px-3 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6E1D1D] text-sm font-semibold bg-white text-slate-800"
-                >
-                  {[2024, 2025, 2026, 2027, 2028, 2029, 2030].map((yr) => (
-                    <option key={yr} value={yr}>
-                      {yr}
-                    </option>
-                  ))}
-                </select>
+                  options={[2024, 2025, 2026, 2027, 2028, 2029, 2030].map((yr) => ({
+                    value: String(yr),
+                    label: String(yr),
+                  }))}
+                  triggerClassName="px-3 py-1.5 text-sm font-semibold min-w-[85px]"
+                />
               </div>
               <div className="flex gap-2">
-                <Button variant="secondary" onClick={prevMonth}>
-                  &larr; Prev
-                </Button>
-                <Button variant="secondary" onClick={nextMonth}>
-                  Next &rarr;
-                </Button>
+                <button
+                  type="button"
+                  onClick={prevMonth}
+                  className="flex items-center px-3 py-1.5 rounded-lg text-sm font-semibold text-[#8B2424] transition hover:bg-[#F9DADA] border border-gray-200"
+                >
+                  ‹ Prev
+                </button>
+                <button
+                  type="button"
+                  onClick={nextMonth}
+                  className="flex items-center px-3 py-1.5 rounded-lg text-sm font-semibold text-[#8B2424] transition hover:bg-[#F9DADA] border border-gray-200"
+                >
+                  Next ›
+                </button>
               </div>
             </div>
 
@@ -1073,7 +1077,7 @@ function HolidayCalendarTab() {
                 const dayLeaves = getLeavesForDay(dayNum);
                 const isSelected = selectedDay === dayNum;
 
-                let cellBg = 'bg-white hover:bg-slate-50';
+                let cellBg = 'bg-white hover:bg-[#F9DADA]/50 hover:text-[#8B2424]';
                 let borderStyle = 'border border-slate-200';
                 let textStyle = 'text-slate-800';
 
@@ -1087,12 +1091,12 @@ function HolidayCalendarTab() {
                   textStyle = 'text-emerald-700 font-bold';
                   borderStyle = 'border-2 border-emerald-300';
                 } else if (dayLeaves.length > 0) {
-                  cellBg = 'bg-blue-50/40 hover:bg-blue-100/40';
-                  borderStyle = 'border border-blue-200';
+                  cellBg = 'bg-[#FFF5F5] hover:bg-[#F9DADA]/60';
+                  borderStyle = 'border border-[#F9DADA]';
                 }
 
                 if (isSelected) {
-                  borderStyle = 'border-2 border-[#6E1D1D] ring-2 ring-[#6E1D1D]/20';
+                  borderStyle = 'border-2 border-[#8B2424] ring-2 ring-[#F9DADA]';
                 }
 
                 return (
@@ -1111,7 +1115,7 @@ function HolidayCalendarTab() {
                       )}
                       {dayLeaves.length > 0 && (
                         <span
-                          className="inline-flex items-center px-1 py-0.5 text-[9px] font-medium bg-blue-100 text-blue-800 rounded truncate max-w-full"
+                          className="inline-flex items-center px-1 py-0.5 text-[9px] font-semibold bg-[#F9DADA] text-[#8B2424] rounded truncate max-w-full"
                           title={dayLeaves.map((l) => `${l.employeeName || 'Staff'} (${l.leaveTypeName || 'Leave'})`).join(', ')}
                         >
                           {dayLeaves.length === 1
