@@ -43,3 +43,52 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Standardized Select / Dropdown matching Campaigns UI Reference */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: #FFFFFF;
+  border: 1px solid #D1D5DB; /* border-gray-300 */
+  border-radius: 0.5rem; /* rounded-lg */
+  padding: 0.625rem 2.25rem 0.625rem 1rem; /* px-4 py-2.5 */
+  font-size: 0.875rem; /* text-sm */
+  line-height: 1.25rem;
+  color: #111827; /* text-gray-900 */
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%236B7280'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.875rem center;
+  background-size: 1rem 1rem;
+  cursor: pointer;
+}
+
+select:hover {
+  border-color: #8B2424;
+}
+
+select:focus {
+  border-color: #8B2424;
+  outline: none;
+  box-shadow: 0 0 0 2px #F9DADA;
+}
+
+select:disabled {
+  background-color: #F3F4F6;
+  color: #9CA3AF;
+  cursor: not-allowed;
+}
+
+select option {
+  background-color: #FFFFFF;
+  color: #111827;
+  padding: 0.5rem 1rem;
+}
+
+select option:checked {
+  background-color: #FFF5F5;
+  color: #8B2424;
+  font-weight: 600;
+}

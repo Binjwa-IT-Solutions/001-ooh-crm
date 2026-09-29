@@ -7,7 +7,7 @@ import { MonthlyRegisterGrid } from '@/modules/hr/components/monthly-register-gr
 import { TeamAttendanceTable } from '@/modules/hr/components/team-attendance-table';
 import { AttendanceOverviewWidget } from '@/modules/hr/components/attendance-overview-widget';
 import { DEPARTMENTS } from '@/modules/employees/types';
-import { cx } from '@/shared/ui';
+import { cx, Dropdown, DatePicker } from '@/shared/ui';
 import { reportsApi } from '@/modules/hr/api';
 
 type ReportType = 'monthly' | 'daily' | 'late' | 'absence';
@@ -146,40 +146,41 @@ export function AttendanceReportsView() {
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-end">
         <div className="flex-1 space-y-1.5 w-full md:w-auto">
           <label className="text-sm font-medium text-slate-700">Report Type</label>
-          <select
-            className="w-full h-10 px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors bg-white text-sm"
+          <Dropdown
+            showArrow={false}
             value={reportType}
-            onChange={(e) => setReportType(e.target.value as ReportType)}
-          >
-            <option value="monthly">Monthly Register</option>
-            <option value="daily">Daily Summary</option>
-            <option value="late">Late Arrival Report</option>
-            <option value="absence">Absence Report</option>
-          </select>
+            onChange={(val) => setReportType(val as ReportType)}
+            options={[
+              { value: 'daily', label: 'Daily Summary' },
+              { value: 'monthly', label: 'Monthly Register' },
+              { value: 'late', label: 'Late Arrival Report' },
+              { value: 'absence', label: 'Absence Report' },
+            ]}
+            triggerClassName="h-10 px-3 text-sm font-medium"
+          />
         </div>
 
         <div className="flex-1 space-y-1.5 w-full md:w-auto">
           <label className="text-sm font-medium text-slate-700">Department</label>
-          <select
-            className="w-full h-10 px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors bg-white text-sm"
+          <Dropdown
+            showArrow={false}
             value={department}
-            onChange={(e) => setDepartment(e.target.value)}
-          >
-            <option value="">All Departments</option>
-            {DEPARTMENTS.map((dept) => (
-              <option key={dept} value={dept}>{dept}</option>
-            ))}
-          </select>
+            onChange={setDepartment}
+            options={[
+              { value: '', label: 'All Departments' },
+              ...DEPARTMENTS.map((dept) => ({ value: dept, label: dept })),
+            ]}
+            triggerClassName="h-10 px-3 text-sm"
+          />
         </div>
 
         {reportType === 'daily' && (
           <div className="flex-1 space-y-1.5 w-full md:w-auto">
-            <label className="text-sm font-medium text-slate-700">Date</label>
-            <input
-              type="date"
-              className="w-full h-10 px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors bg-white text-sm"
+            <DatePicker
+              label="Date"
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={setDate}
+              triggerClassName="h-10 px-3 text-sm"
             />
           </div>
         )}
@@ -187,21 +188,19 @@ export function AttendanceReportsView() {
         {(reportType === 'late' || reportType === 'absence') && (
           <>
             <div className="flex-1 space-y-1.5 w-full md:w-auto">
-              <label className="text-sm font-medium text-slate-700">From Date</label>
-              <input
-                type="date"
-                className="w-full h-10 px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors bg-white text-sm"
+              <DatePicker
+                label="From Date"
                 value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
+                onChange={setFromDate}
+                triggerClassName="h-10 px-3 text-sm"
               />
             </div>
             <div className="flex-1 space-y-1.5 w-full md:w-auto">
-              <label className="text-sm font-medium text-slate-700">To Date</label>
-              <input
-                type="date"
-                className="w-full h-10 px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors bg-white text-sm"
+              <DatePicker
+                label="To Date"
                 value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
+                onChange={setToDate}
+                triggerClassName="h-10 px-3 text-sm"
               />
             </div>
           </>
@@ -211,53 +210,55 @@ export function AttendanceReportsView() {
           <>
             <div className="flex-1 space-y-1.5 w-full md:w-auto min-w-[140px]">
               <label className="text-sm font-medium text-slate-700">Date Range</label>
-              <select
-                className="w-full h-10 px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors bg-white text-sm font-medium"
+              <Dropdown
+                showArrow={false}
                 value={monthPreset}
-                onChange={(e) => handlePresetChange(e.target.value as MonthPreset)}
-              >
-                <option value="this_month">This Month</option>
-                <option value="last_3_months">Last 3 Months</option>
-                <option value="last_6_months">Last 6 Months</option>
-                <option value="custom">Custom Range</option>
-              </select>
+                onChange={(val) => handlePresetChange(val as MonthPreset)}
+                options={[
+                  { value: 'this_month', label: 'This Month' },
+                  { value: 'last_3_months', label: 'Last 3 Months' },
+                  { value: 'last_6_months', label: 'Last 6 Months' },
+                  { value: 'custom', label: 'Custom Range' },
+                ]}
+                triggerClassName="h-10 px-3 text-sm font-medium"
+              />
             </div>
 
             {monthPreset === 'this_month' && (
               <>
                 <div className="flex-1 space-y-1.5 w-full md:w-auto">
                   <label className="text-sm font-medium text-slate-700">Month</label>
-                  <select
-                    className="w-full h-10 px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors bg-white text-sm"
-                    value={fromMonth}
-                    onChange={(e) => {
-                      const m = parseInt(e.target.value, 10);
+                  <Dropdown
+                    showArrow={false}
+                    value={String(fromMonth)}
+                    onChange={(val) => {
+                      const m = parseInt(val, 10);
                       setFromMonth(m);
                       setToMonth(m);
                     }}
-                  >
-                    {Array.from({ length: 12 }, (_, i) => (
-                      <option key={i + 1} value={i + 1}>
-                        {new Date(0, i).toLocaleString('default', { month: 'long' })}
-                      </option>
-                    ))}
-                  </select>
+                    options={Array.from({ length: 12 }, (_, i) => ({
+                      value: String(i + 1),
+                      label: new Date(0, i).toLocaleString('default', { month: 'long' }),
+                    }))}
+                    triggerClassName="h-10 px-3 text-sm"
+                  />
                 </div>
                 <div className="flex-1 space-y-1.5 w-full md:w-auto">
                   <label className="text-sm font-medium text-slate-700">Year</label>
-                  <select
-                    className="w-full h-10 px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors bg-white text-sm"
-                    value={fromYear}
-                    onChange={(e) => {
-                      const y = parseInt(e.target.value, 10);
+                  <Dropdown
+                    showArrow={false}
+                    value={String(fromYear)}
+                    onChange={(val) => {
+                      const y = parseInt(val, 10);
                       setFromYear(y);
                       setToYear(y);
                     }}
-                  >
-                    {[currentYear - 1, currentYear, currentYear + 1].map((y) => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </select>
+                    options={[currentYear - 1, currentYear, currentYear + 1].map((y) => ({
+                      value: String(y),
+                      label: String(y),
+                    }))}
+                    triggerClassName="h-10 px-3 text-sm"
+                  />
                 </div>
               </>
             )}
@@ -276,52 +277,52 @@ export function AttendanceReportsView() {
                 <div className="flex-1 space-y-1.5 w-full md:w-auto">
                   <label className="text-sm font-medium text-slate-700">From Month / Year</label>
                   <div className="flex gap-1.5">
-                    <select
-                      className="w-full h-10 px-2.5 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors bg-white text-xs"
-                      value={fromMonth}
-                      onChange={(e) => setFromMonth(parseInt(e.target.value, 10))}
-                    >
-                      {Array.from({ length: 12 }, (_, i) => (
-                        <option key={i + 1} value={i + 1}>
-                          {new Date(0, i).toLocaleString('default', { month: 'short' })}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      className="w-24 h-10 px-2 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors bg-white text-xs"
-                      value={fromYear}
-                      onChange={(e) => setFromYear(parseInt(e.target.value, 10))}
-                    >
-                      {[currentYear - 2, currentYear - 1, currentYear, currentYear + 1].map((y) => (
-                        <option key={y} value={y}>{y}</option>
-                      ))}
-                    </select>
+                    <Dropdown
+                      showArrow={false}
+                      value={String(fromMonth)}
+                      onChange={(val) => setFromMonth(parseInt(val, 10))}
+                      options={Array.from({ length: 12 }, (_, i) => ({
+                        value: String(i + 1),
+                        label: new Date(0, i).toLocaleString('default', { month: 'short' }),
+                      }))}
+                      triggerClassName="h-10 px-2.5 text-xs min-w-[75px]"
+                    />
+                    <Dropdown
+                      showArrow={false}
+                      value={String(fromYear)}
+                      onChange={(val) => setFromYear(parseInt(val, 10))}
+                      options={[currentYear - 2, currentYear - 1, currentYear, currentYear + 1].map((y) => ({
+                        value: String(y),
+                        label: String(y),
+                      }))}
+                      triggerClassName="h-10 px-2 text-xs min-w-[65px]"
+                    />
                   </div>
                 </div>
 
                 <div className="flex-1 space-y-1.5 w-full md:w-auto">
                   <label className="text-sm font-medium text-slate-700">To Month / Year</label>
                   <div className="flex gap-1.5">
-                    <select
-                      className="w-full h-10 px-2.5 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors bg-white text-xs"
-                      value={toMonth}
-                      onChange={(e) => setToMonth(parseInt(e.target.value, 10))}
-                    >
-                      {Array.from({ length: 12 }, (_, i) => (
-                        <option key={i + 1} value={i + 1}>
-                          {new Date(0, i).toLocaleString('default', { month: 'short' })}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      className="w-24 h-10 px-2 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors bg-white text-xs"
-                      value={toYear}
-                      onChange={(e) => setToYear(parseInt(e.target.value, 10))}
-                    >
-                      {[currentYear - 2, currentYear - 1, currentYear, currentYear + 1].map((y) => (
-                        <option key={y} value={y}>{y}</option>
-                      ))}
-                    </select>
+                    <Dropdown
+                      showArrow={false}
+                      value={String(toMonth)}
+                      onChange={(val) => setToMonth(parseInt(val, 10))}
+                      options={Array.from({ length: 12 }, (_, i) => ({
+                        value: String(i + 1),
+                        label: new Date(0, i).toLocaleString('default', { month: 'short' }),
+                      }))}
+                      triggerClassName="h-10 px-2.5 text-xs min-w-[75px]"
+                    />
+                    <Dropdown
+                      showArrow={false}
+                      value={String(toYear)}
+                      onChange={(val) => setToYear(parseInt(val, 10))}
+                      options={[currentYear - 2, currentYear - 1, currentYear, currentYear + 1].map((y) => ({
+                        value: String(y),
+                        label: String(y),
+                      }))}
+                      triggerClassName="h-10 px-2 text-xs min-w-[65px]"
+                    />
                   </div>
                 </div>
               </>

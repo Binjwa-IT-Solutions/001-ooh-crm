@@ -24,6 +24,7 @@ import {
   getVendorOptionsForPO,
 } from "../api";
 import { getVendors } from "@/modules/vendors/api";
+import { DatePicker } from "@/shared/ui";
 
 interface Props {
   order: PurchaseOrder | null;
@@ -567,6 +568,118 @@ export default function PurchaseOrderForm({
                   </label>
                   <div className="rounded-xl border border-gray-200 bg-gray-50/70 px-3.5 py-2.5 text-sm font-bold text-emerald-600">
                     {discountPercent}%
+              <div className="space-y-4">
+                {lineItems.map((item, index) => (
+                  <div
+                    key={`${item.siteId || "new-site"}-${index}`}
+                    className="rounded-xl border border-[#E8E8EC] bg-[#FAFAFB] p-4"
+                  >
+                    <div className="mb-4 flex items-center justify-between">
+                      <p className="text-sm font-bold text-[#1F2937]">
+                        Site {index + 1}
+                      </p>
+
+                      {lineItems.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            removeItem(index)
+                          }
+                          disabled={saving}
+                          className="text-xs font-bold text-[#8B2424] hover:underline disabled:opacity-50"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+                      {/* Site ID */}
+                      <Field
+                        label="Site ID"
+                        value={item.siteId}
+                        placeholder="Site ID"
+                        onChange={(value) =>
+                          updateItem(
+                            index,
+                            "siteId",
+                            value,
+                          )
+                        }
+                      />
+
+                      {/* From */}
+                      <DatePicker
+                        label="From Date"
+                        value={item.from}
+                        onChange={(value) =>
+                          updateItem(
+                            index,
+                            "from",
+                            value,
+                          )
+                        }
+                      />
+
+                      {/* To */}
+                      <DatePicker
+                        label="To Date"
+                        value={item.to}
+                        onChange={(value) =>
+                          updateItem(
+                            index,
+                            "to",
+                            value,
+                          )
+                        }
+                      />
+
+                      {/* Rate */}
+                      <Field
+                        label="Rate / Day"
+                        type="number"
+                        value={String(
+                          item.negotiatedRatePerDay ||
+                            "",
+                        )}
+                        placeholder="0"
+                        onChange={(value) =>
+                          updateItem(
+                            index,
+                            "negotiatedRatePerDay",
+                            Number(value),
+                          )
+                        }
+                      />
+
+                      {/* Amount */}
+                      <div>
+                        <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#667085]">
+                          Amount
+                        </label>
+
+                        <div className="rounded-xl border border-[#E8E8EC] bg-white px-4 py-3 text-sm font-bold text-[#8B2424]">
+                          ₹
+                          {item.amount.toLocaleString(
+                            "en-IN",
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Days calculation */}
+                    {item.days > 0 && (
+                      <p className="mt-3 text-xs font-semibold text-[#667085]">
+                        {item.days} day
+                        {item.days !== 1
+                          ? "s"
+                          : ""}{" "}
+                        × ₹
+                        {item.negotiatedRatePerDay.toLocaleString(
+                          "en-IN",
+                        )}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -800,6 +913,41 @@ function CampaignSelector({
       {open && (
         <div className="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl">
           <div className="p-2 border-b border-gray-100">
+        disabled={disabled || loading}
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-sm text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA] disabled:cursor-not-allowed disabled:bg-[#F7F8FA]"
+      >
+        <div className="truncate">
+          {selectedCampaign ? (
+            <div>
+              <span className="font-bold text-[#1F2937]">{selectedCampaign.name}</span>
+              {selectedCampaign.campaignCode && (
+                <span className="ml-2 text-xs font-semibold text-[#8B2424]">
+                  ({selectedCampaign.campaignCode})
+                </span>
+              )}
+              {selectedCampaign.city && (
+                <span className="ml-2 text-xs text-[#667085]">
+                  • {selectedCampaign.city}
+                </span>
+              )}
+            </div>
+          ) : fallbackName ? (
+            <span className="font-semibold text-gray-900">{fallbackName}</span>
+          ) : value ? (
+            <span className="text-gray-700">Campaign #{value.slice(-6)}</span>
+          ) : (
+            <span className="text-gray-400">
+              {loading ? "Loading campaigns..." : "Select Campaign"}
+            </span>
+          )}
+        </div>
+        <span className="text-gray-500">▾</span>
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 z-50 mt-1 max-h-64 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+          <div className="border-b border-gray-100 p-2">
             <input
               type="text"
               value={search}
@@ -823,6 +971,46 @@ function CampaignSelector({
             {loading && <div className="p-3 text-center text-xs text-gray-400">Loading...</div>}
             {!loading && filteredCampaigns.length === 0 && (
               <div className="p-3 text-center text-xs text-gray-400">No campaigns found</div>
+          <div className="max-h-48 overflow-y-auto divide-y divide-gray-50">
+            {filteredCampaigns.map((c) => {
+              const isSelected = c._id === value;
+              return (
+                <button
+                  key={c._id}
+                  type="button"
+                  onClick={() => {
+                    onChange(c._id);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className={`block w-full px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
+                    isSelected
+                      ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
+                      : "text-gray-900"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold">{c.name}</span>
+                    {c.campaignCode && (
+                      <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">
+                        {c.campaignCode}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-0.5 text-xs text-[#667085]">
+                    {c.city || "No city specified"}
+                    {c.status ? ` • ${c.status}` : ""}
+                  </div>
+                </button>
+              );
+            })}
+
+            {filteredCampaigns.length === 0 && (
+              <div className="px-4 py-4 text-center text-xs text-gray-500">
+                {campaigns.length === 0
+                  ? "No campaigns found"
+                  : "No matching campaigns found"}
+              </div>
             )}
             {filteredCampaigns.map((c) => (
               <button
@@ -914,6 +1102,37 @@ function VendorSelector({
       {open && (
         <div className="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl">
           <div className="p-2 border-b border-gray-100">
+        disabled={disabled || loading}
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-sm text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA] disabled:cursor-not-allowed disabled:bg-[#F7F8FA]"
+      >
+        <div className="truncate">
+          {selectedVendor ? (
+            <div>
+              <span className="font-bold text-[#1F2937]">{selectedVendor.name}</span>
+              {selectedVendor.city && (
+                <span className="ml-2 text-xs text-[#667085]">
+                  — {selectedVendor.city}
+                  {selectedVendor.state ? `, ${selectedVendor.state}` : ""}
+                </span>
+              )}
+            </div>
+          ) : fallbackName ? (
+            <span className="font-semibold text-gray-900">{fallbackName}</span>
+          ) : value ? (
+            <span className="text-gray-700">Vendor #{value.slice(-6)}</span>
+          ) : (
+            <span className="text-gray-400">
+              {loading ? "Loading vendors..." : "Select Active Vendor"}
+            </span>
+          )}
+        </div>
+        <span className="text-gray-500">▾</span>
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 z-50 mt-1 max-h-64 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+          <div className="border-b border-gray-100 p-2">
             <input
               type="text"
               value={search}
@@ -927,6 +1146,39 @@ function VendorSelector({
             {loading && <div className="p-3 text-center text-xs text-gray-400">Loading...</div>}
             {!loading && filteredVendors.length === 0 && (
               <div className="p-3 text-center text-xs text-gray-400">No vendors found</div>
+          <div className="max-h-48 overflow-y-auto divide-y divide-gray-50">
+            {filteredVendors.map((v) => {
+              const isSelected = v._id === value;
+              return (
+                <button
+                  key={v._id}
+                  type="button"
+                  onClick={() => {
+                    onChange(v._id);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className={`block w-full px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
+                    isSelected
+                      ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
+                      : "text-gray-900"
+                  }`}
+                >
+                  <div className="text-sm font-bold">{v.name}</div>
+                  <div className="mt-0.5 text-xs text-[#667085]">
+                    {v.contactPerson ? `${v.contactPerson} • ` : ""}
+                    {v.city ? `${v.city}${v.state ? `, ${v.state}` : ""}` : "No location"}
+                  </div>
+                </button>
+              );
+            })}
+
+            {filteredVendors.length === 0 && (
+              <div className="px-4 py-4 text-center text-xs text-gray-500">
+                {vendors.length === 0
+                  ? "No active vendors found"
+                  : "No matching vendors found"}
+              </div>
             )}
             {filteredVendors.map((v) => (
               <button

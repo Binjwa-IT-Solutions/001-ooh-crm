@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Button, Field, TextAreaField, SelectField } from '@/shared/ui';
+import { Button, Field, TextAreaField, SelectField, DatePicker } from '@/shared/ui';
 import { ChevronDown } from 'lucide-react';
 import { FOLLOW_UP_TYPES, FOLLOW_UP_REASONS, type FollowUpType } from '../types';
 
@@ -215,12 +215,12 @@ function LogCallModalContent({
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field
+            <DatePicker
               label="Next Action Date"
-              type="date"
               min={new Date().toISOString().slice(0, 10)}
               value={nextActionDate}
-              onChange={(e) => setNextActionDate(e.target.value)}
+              onChange={setNextActionDate}
+              triggerClassName="h-11"
             />
 
             <SelectField

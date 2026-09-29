@@ -553,6 +553,59 @@ export default function VendorForm({
                       </button>
                     </div>
                   ))}
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() =>
+                  setStatusOpen(
+                    !statusOpen,
+                  )
+                }
+                className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-sm text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span>
+                  {form.status}
+                </span>
+
+                <span className="text-gray-500">
+                  ▾
+                </span>
+              </button>
+
+              {statusOpen && (
+                <div className="absolute left-0 right-0 z-40 mt-1 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+
+                  {/* ACTIVE */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      update("status", "Active");
+                      setStatusOpen(false);
+                    }}
+                    className={`block w-full cursor-pointer px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
+                      form.status === "Active"
+                        ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
+                        : "text-gray-900"
+                    }`}
+                  >
+                    Active
+                  </button>
+
+                  {/* INACTIVE */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      update("status", "Inactive");
+                      setStatusOpen(false);
+                    }}
+                    className={`block w-full cursor-pointer px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
+                      form.status === "Inactive"
+                        ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
+                        : "text-gray-900"
+                    }`}
+                  >
+                    Inactive
+                  </button>
                 </div>
               )}
             </div>

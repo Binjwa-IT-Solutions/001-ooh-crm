@@ -1,6 +1,7 @@
 import { Types } from 'mongoose';
 
 import { AuthUser } from '../auth/auth-model.js';
+import { ForbiddenError } from '../errors/index.js';
 import { Notification, type INotification } from './notification-model.js';
 import { resolveTransport } from './transports.js';
 import type { EmailMessage } from './types.js';
@@ -140,5 +141,24 @@ export const notificationService = {
       { $set: { readAt: new Date() } },
     );
     return result.modifiedCount;
+  },
+
+  /** Scoped to the owner by construction — you cannot delete someone else's notification. */
+  async deleteForUser(userId: string, notificationId: string): Promise<boolean> {
+    if (!Types.ObjectId.isValid(notificationId) || !Types.ObjectId.isValid(userId)) {
+      return false;
+    }
+
+    const notification = await Notification.findById(notificationId);
+    if (!notification) {
+      return false;
+    }
+
+    if (notification.userId.toString() !== userId.toString()) {
+      throw new ForbiddenError('You do not have permission to delete this notification');
+    }
+
+    await Notification.deleteOne({ _id: notification._id });
+    return true;
   },
 };

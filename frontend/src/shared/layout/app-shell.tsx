@@ -37,6 +37,7 @@ import { ROLE_LABELS } from '../auth/types';
 import { Button, cx } from '../ui';
 import { type LucideIcon } from 'lucide-react';
 import NotificationBell from './NotificationBell';
+import ProfileMenu from './ProfileMenu';
 import { PageHeaderProvider } from './page-header-context';
 import { PageHeader } from './page-header';
 
@@ -229,21 +230,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                   {/* Notification Bell */}
                   <NotificationBell />
 
-                  {/* Profile Pill */}
-                  <div className="flex items-center gap-2 border border-[#E6E8EC] rounded-full p-1 pr-3 shadow-sm cursor-pointer hover:bg-slate-50 transition-colors bg-white">
-                    <div className="flex items-center justify-center h-8 w-8 rounded-full overflow-hidden shrink-0 bg-primary-100 text-primary font-bold text-sm">
-                      {user?.name?.[0]?.toUpperCase() ?? 'U'}
-                    </div>
-                    <div className="hidden sm:flex flex-col text-left mr-1">
-                      <span className="text-[13px] font-semibold leading-none text-[#1F2937]">
-                        {user?.name ?? 'User'}
-                      </span>
-                      <span className="text-[11px] font-medium text-[#687280] mt-0.5 capitalize">
-                        {user ? (ROLE_LABELS[user.role] ?? user.role) : 'Admin'}
-                      </span>
-                    </div>
-                    <ChevronDown className="h-4 w-4 text-[#687280]" />
-                  </div>
+                  {/* Shared Profile Menu */}
+                  <ProfileMenu />
 
                   <Button variant="ghost" onClick={() => void signOut()} className="h-10 px-3 text-[#687280] hover:text-primary transition-colors border border-transparent" title="Sign out">
                     <LogOut className="h-4 w-4" />

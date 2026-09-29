@@ -9,6 +9,7 @@ import type {
   MediaType,
   Site,
 } from "../types";
+import { DatePicker } from "@/shared/ui";
 
 interface SiteFormProps {
   site: Site | null;
@@ -504,6 +505,114 @@ export default function SiteForm({
                   className={inputClass}
                 />
               </Field>
+              </div>
+
+              {/* Type */}
+              <div
+                ref={typeRef}
+                className="relative"
+              >
+                <label className="mb-1.5 block text-sm font-semibold text-gray-900">
+                  Type{" "}
+                  <span className="text-red-500">
+                    *
+                  </span>
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTypeOpen(!typeOpen);
+                    setStatusOpen(false);
+                  }}
+                  className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-sm text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+                >
+                  <span className="truncate mr-2">{type}</span>
+
+                  <span className="text-gray-500 shrink-0 select-none">
+                    ▾
+                  </span>
+                </button>
+
+                {typeOpen && (
+                  <div className="absolute left-0 right-0 z-30 mt-1 max-h-60 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                    {typeOptions.map(
+                      (option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => {
+                            setType(option);
+                            setTypeOpen(false);
+                          }}
+                          className={`block w-full cursor-pointer px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
+                            type === option
+                              ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
+                              : "text-gray-900"
+                          }`}
+                        >
+                          {option}
+                        </button>
+                      )
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Status */}
+              <div
+                ref={statusRef}
+                className="relative"
+              >
+                <label className="mb-1.5 block text-sm font-medium text-gray-900">
+                  Status{" "}
+                  <span className="text-[#8B2424]">
+                    *
+                  </span>
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStatusOpen(
+                      !statusOpen
+                    );
+                    setTypeOpen(false);
+                  }}
+                  className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-sm text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+                >
+                  <span className="truncate mr-2">{status}</span>
+
+                  <span className="text-gray-500 shrink-0 select-none">
+                    ▾
+                  </span>
+                </button>
+
+                {statusOpen && (
+                  <div className="absolute left-0 right-0 z-30 mt-1 max-h-60 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                    {statusOptions.map(
+                      (option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => {
+                            setStatus(option);
+                            setStatusOpen(false);
+                          }}
+                          className={`block w-full cursor-pointer px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
+                            status === option
+                              ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
+                              : "text-gray-900"
+                          }`}
+                        >
+                          {option}
+                        </button>
+                      )
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
 
               {/* SALES PERSON */}
 
@@ -554,6 +663,14 @@ export default function SiteForm({
                   }
                   placeholder="Enter vendor name"
                   className={inputClass}
+              {/* Start Date */}
+              <div>
+                <DatePicker
+                  label="Start Date"
+                  required
+                  value={startDate}
+                  onChange={setStartDate}
+                  triggerClassName="px-4 py-2.5"
                 />
               </Field>
 
@@ -586,6 +703,18 @@ export default function SiteForm({
                   }
                   placeholder="Enter city"
                   className={inputClass}
+              {/* End Date */}
+              <div>
+                <DatePicker
+                  label="End Date"
+                  required
+                  min={
+                    startDate ||
+                    undefined
+                  }
+                  value={endDate}
+                  onChange={setEndDate}
+                  triggerClassName="px-4 py-2.5"
                 />
               </Field>
 

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useMyAttendanceSummary } from '@/modules/hr/hooks/use-attendance';
 import { formatHoursToHM } from '@/shared/utils/formatters';
-import { cx, Card } from '@/shared/ui';
+import { cx, Card, Dropdown } from '@/shared/ui';
 import { Calendar, Clock, AlertCircle, FileText, Loader2 } from 'lucide-react';
 
 const MONTHS = [
@@ -48,25 +48,21 @@ export function MyAttendanceView() {
         </div>
 
         <div className="flex items-center gap-3 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
-          <select
-            className="h-9 px-3 rounded-lg border-transparent hover:bg-slate-50 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 text-sm font-medium transition-colors"
-            value={month}
-            onChange={(e) => setMonth(Number(e.target.value))}
-          >
-            {MONTHS.map((m) => (
-              <option key={m.value} value={m.value}>{m.label}</option>
-            ))}
-          </select>
+          <Dropdown
+            showArrow={false}
+            value={String(month)}
+            onChange={(val) => setMonth(Number(val))}
+            options={MONTHS.map((m) => ({ value: String(m.value), label: m.label }))}
+            triggerClassName="h-9 px-3 border-transparent hover:bg-slate-50 focus:bg-white text-sm font-medium min-w-[110px]"
+          />
           <div className="w-px h-6 bg-slate-200"></div>
-          <select
-            className="h-9 px-3 rounded-lg border-transparent hover:bg-slate-50 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 text-sm font-medium transition-colors"
-            value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-          >
-            {YEARS.map((y) => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
+          <Dropdown
+            showArrow={false}
+            value={String(year)}
+            onChange={(val) => setYear(Number(val))}
+            options={YEARS.map((y) => ({ value: String(y), label: String(y) }))}
+            triggerClassName="h-9 px-3 border-transparent hover:bg-slate-50 focus:bg-white text-sm font-medium min-w-[80px]"
+          />
         </div>
       </div>
 

@@ -10,6 +10,9 @@ export interface IUser extends BaseDocument {
   role: Role;
   status: 'Active' | 'Inactive';
   lastLoginAt?: Date | null;
+  phone?: string;
+  designation?: string;
+  gender?: 'Male' | 'Female' | null;
 }
 
 const userSchema = new Schema<IUser>({
@@ -46,6 +49,21 @@ const userSchema = new Schema<IUser>({
   },
   lastLoginAt: {
     type: Date,
+    default: null,
+  },
+  phone: {
+    type: String,
+    trim: true,
+    default: '',
+  },
+  designation: {
+    type: String,
+    trim: true,
+    default: '',
+  },
+  gender: {
+    type: String,
+    enum: ['Male', 'Female', null],
     default: null,
   },
 });

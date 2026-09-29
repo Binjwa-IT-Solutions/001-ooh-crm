@@ -442,6 +442,10 @@ export const employeeService = {
     if (input.reportingManagerId === null || input.reportingManagerId === '') {
       employee.reportingManagerId = null;
       delete payload.reportingManagerId;
+      await Team.updateMany(
+        { members: employee._id },
+        { $pull: { members: employee._id } },
+      );
     } else if (payload.reportingManagerId) {
       const rawId = String(payload.reportingManagerId).trim();
       const objId = toObjectId(rawId);
@@ -459,6 +463,12 @@ export const employeeService = {
       }
 
       await assertNoManagerCycle(employee._id as Types.ObjectId, targetManagerId);
+      if (String(employee.reportingManagerId || '') !== String(targetManagerId)) {
+        await Team.updateMany(
+          { members: employee._id },
+          { $pull: { members: employee._id } },
+        );
+      }
       employee.reportingManagerId = targetManagerId;
       delete payload.reportingManagerId;
     }
@@ -1168,7 +1178,7 @@ export const employeeService = {
     return {
       teams: legacyTeams,
       managers: managerGroups,
-      unassigned: managerFilterId ? [] : filteredUnassigned,
+      unassigned: managerFilterId || ctx.user.role === 'manager' ? [] : filteredUnassigned,
     };
   },
 
