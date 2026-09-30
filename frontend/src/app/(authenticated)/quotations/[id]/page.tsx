@@ -8,7 +8,7 @@ import { api } from '@/shared/api/client';
 import { sessionStore } from '@/shared/auth/session-store';
 import { DatePicker, Dropdown } from '@/shared/ui';
 import type { Quotation } from '@/modules/quotations/types';
-import { Pencil, Upload, FileText, X } from 'lucide-react';
+import { Pencil, Upload, FileText, X, Download } from 'lucide-react';
 
 export default function QuotationDetailPage() {
   const params = useParams<{ id?: string | string[] }>();
@@ -331,15 +331,25 @@ export default function QuotationDetailPage() {
           </button>
 
           {pdfUrl && (
-            <a
-              href={pdfUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-300"
-            >
-              <FileText className="w-3.5 h-3.5 shrink-0" />
-              <span>View PDF</span>
-            </a>
+            <>
+              <a
+                href={pdfUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-300"
+              >
+                <FileText className="w-3.5 h-3.5 shrink-0" />
+                <span>View PDF</span>
+              </a>
+              <a
+                href={pdfUrl}
+                download={`${quotation?.quoteNumber || 'Quotation'}.pdf`}
+                className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+              >
+                <Download className="w-3.5 h-3.5 shrink-0" />
+                <span>Download</span>
+              </a>
+            </>
           )}
 
           <button
@@ -628,7 +638,7 @@ export default function QuotationDetailPage() {
                 <button
                   type="submit"
                   disabled={editSaving}
-                  className="rounded bg-[#8B2424] px-5 py-2 text-xs font-semibold text-white hover:bg-[#6E1D1D] disabled:opacity-50 shadow-sm"
+                  className="rounded bg-[#8B2424] px-5 py-2 text-xs font-semibold text-white hover:bg-primary disabled:opacity-50 shadow-sm"
                 >
                   {editSaving ? 'Saving Changes...' : 'Save Changes'}
                 </button>

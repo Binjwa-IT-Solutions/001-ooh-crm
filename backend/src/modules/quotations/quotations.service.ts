@@ -9,7 +9,7 @@ import { Site } from '../sites/site.model.js';
 import { createFromQuotation } from '../campaigns/campaign.service.js';
 import { toObjectId } from '../../core/db/basePlugin.js';
 import { formattedSequence } from '../../core/db/sequence.js';
-import { renderPdf, lineItemsTable, formatPaise } from '../../core/pdf/index.js';
+import { renderPdf, lineItemsTable, formatPaise, renderQuotationBillBookPdf, type QuotationLineItem } from '../../core/pdf/index.js';
 import { fileService } from '../../core/files/index.js';
 import { notify } from '../../core/notifications/index.js';
 import { employeeService } from '../employees/employees.service.js';
@@ -328,58 +328,105 @@ export class QuotationsService {
     ctx: RequestContext,
   ): Promise<{ pdfKey: string; pdfUrl: string }> {
     const quotation = await Quotation.findOne({ _id: toObjectId(id), deletedAt: null })
-      .populate('leadId', 'companyName contactPerson mobile email')
-      .populate('sites.siteId', 'siteCode city type address')
+      .populate('leadId', 'companyName contactPerson mobile email city companyAddress')
+      .populate('sites.siteId', 'code siteCode city type address sizeWidth sizeHeight baseCostPerDay')
       .exec();
 
     if (!quotation) throw new NotFoundError('Quotation not found');
 
-    const leadName = quotation.clientName || (quotation.leadId as any)?.companyName || 'Valued Client';
-    const rows: string[][] = [];
+    const lead = quotation.leadId as any;
+    const clientCompanyName = quotation.clientName || lead?.companyName || 'Valued Client';
+    const clientContact = lead?.contactPerson || '-';
+    const clientPhone = quotation.clientPhone || lead?.mobile || '-';
+    const clientEmail = quotation.clientEmail || lead?.email || '-';
+    const clientCity = lead?.city || '';
+    const clientAddress = lead?.companyAddress || '';
 
-    for (const line of quotation.sites) {
+    const items: QuotationLineItem[] = [];
+    for (const [index, line] of quotation.sites.entries()) {
       const site = line.siteId as any;
-      const siteName = site?.siteCode ? `${site.siteCode} (${site.city || ''})` : 'Outdoor Site';
-      const startStr = new Date(line.startDate).toLocaleDateString('en-IN');
-      const endStr = new Date(line.endDate).toLocaleDateString('en-IN');
-      const dates = `${startStr} - ${endStr}`;
+      const siteCode = site?.code || site?.siteCode || `SITE-${index + 1}`;
+      const location = site?.address || site?.city ? `${site.address || ''} ${site.city ? `(${site.city})` : ''}`.trim() : (line.description || 'Outdoor Display Site');
+      const mediaType = site?.type || 'Hoarding';
+      const dimensions = (site?.sizeWidth && site?.sizeHeight)
+        ? `${site.sizeWidth}ft x ${site.sizeHeight}ft (${site.sizeWidth * site.sizeHeight} sq.ft)`
+        : (line.description || 'Standard Display');
+      const startStr = new Date(line.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const endStr = new Date(line.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-      rows.push([
-        siteName,
-        dates,
-        String(line.days),
-        formatPaise(line.ratePerDay),
-        formatPaise(line.amount),
-      ]);
+      items.push({
+        index: index + 1,
+        siteCode,
+        location,
+        mediaType,
+        dimensions,
+        dates: `${startStr} - ${endStr}`,
+        days: line.days,
+        ratePerDay: line.ratePerDay,
+        amount: line.amount,
+      });
     }
 
-    const pdfBuffer = await renderPdf({
-      title: 'PROPOSAL / QUOTATION',
-      reference: quotation.quoteNumber,
-      meta: [
-        ['Client', leadName],
-        ['Date', new Date(quotation.createdAt).toLocaleDateString('en-IN')],
-        ['Valid Until', new Date(quotation.validUntil).toLocaleDateString('en-IN')],
-        ['Status', quotation.status],
-      ],
-      build: (doc) => {
-        lineItemsTable(doc, {
-          columns: [
-            { header: 'Site / Location', width: 0.35, align: 'left' },
-            { header: 'Duration', width: 0.25, align: 'left' },
-            { header: 'Days', width: 0.1, align: 'right' },
-            { header: 'Rate / Day', width: 0.15, align: 'right' },
-            { header: 'Amount', width: 0.15, align: 'right' },
-          ],
-          rows,
-          totals: [
-            ['Subtotal', quotation.subtotal],
-            ['GST (18%)', quotation.taxAmount],
-            ['Total Amount', quotation.total],
-          ],
-        });
-      },
-    });
+    let pdfBuffer: Buffer;
+    try {
+      pdfBuffer = await renderQuotationBillBookPdf({
+        quotationNumber: quotation.quoteNumber,
+        date: quotation.createdAt,
+        validUntil: quotation.validUntil,
+        status: quotation.status,
+        client: {
+          companyName: clientCompanyName,
+          contactPerson: clientContact,
+          phone: clientPhone,
+          email: clientEmail,
+          city: clientCity,
+          address: clientAddress,
+        },
+        items,
+        pricing: {
+          subtotal: quotation.subtotal,
+          taxRate: quotation.taxPercent ? quotation.taxPercent / 100 : 0.18,
+          taxAmount: quotation.taxAmount,
+          grandTotal: quotation.total,
+        },
+      });
+    } catch (renderErr) {
+      console.warn('[QuotationPdf] renderQuotationBillBookPdf fallback to standard renderPdf:', renderErr);
+      const rows: string[][] = items.map((it) => [
+        it.siteCode ? `${it.siteCode} (${it.location})` : it.location || 'Outdoor Site',
+        it.dates,
+        String(it.days),
+        formatPaise(it.ratePerDay),
+        formatPaise(it.amount),
+      ]);
+      pdfBuffer = await renderPdf({
+        title: 'PROPOSAL / QUOTATION',
+        reference: quotation.quoteNumber,
+        meta: [
+          ['Client', clientCompanyName],
+          ['Date', new Date(quotation.createdAt).toLocaleDateString('en-IN')],
+          ['Valid Until', new Date(quotation.validUntil).toLocaleDateString('en-IN')],
+          ['Status', quotation.status],
+        ],
+        build: (doc) => {
+          lineItemsTable(doc, {
+            columns: [
+              { header: 'Site / Location', width: 0.35, align: 'left' },
+              { header: 'Duration', width: 0.25, align: 'left' },
+              { header: 'Days', width: 0.1, align: 'right' },
+              { header: 'Rate / Day', width: 0.15, align: 'right' },
+              { header: 'Amount', width: 0.15, align: 'right' },
+            ],
+            rows,
+            totals: [
+              ['Subtotal', quotation.subtotal],
+              ['GST (18%)', quotation.taxAmount],
+              ['Total Amount', quotation.total],
+            ],
+          });
+        },
+      });
+    }
 
     const versionNum = Date.now();
     const stored = await fileService.saveBuffer({
