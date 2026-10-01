@@ -74,10 +74,10 @@ import { leadRoutes } from './modules/leads/leads.routes.js';
 import vendorRoutes from './modules/vendors/vendor.routes.js';
 import siteRoutes from './modules/sites/site.routes.js';
 import campaignRoutes from './modules/campaigns/campaign.routes.js';
-import bookingRoutes from './modules/bookings/booking.routes.js';
 import taskRoutes from './modules/tasks/task.routes.js';
 import escalationRoutes from './modules/escalations/escalation.routes.js';
 import purchaseOrderRoutes from "./modules/purchase-orders/purchase-order.routes.js";
+import proofRoutes from './modules/proofs/proof.routes.js';
 
 
 import quotationsRoutes, { publicQuotationsRoutes } from './modules/quotations/quotations.routes.js';
@@ -98,7 +98,7 @@ app.use('/api/tasks',taskRoutes);
 app.use('/api', escalationRoutes);
 
 app.use('/api/purchase-orders', purchaseOrderRoutes);
-app.use('/api/bookings', bookingRoutes);
+app.use('/api/proofs', proofRoutes);
 app.use('/api/quotations', quotationsRoutes);
 
 //attendance & shift configs

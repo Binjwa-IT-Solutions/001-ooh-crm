@@ -1,88 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getVendorFilters } from "../api";
-
-interface Props {
+interface VendorFiltersProps {
   search: string;
-  status: string;
   state: string;
   city: string;
+  status: string;
+  registrationStatus: string;
+
+  states: string[];
+  cities: string[];
+
   onSearchChange: (value: string) => void;
-  onStatusChange: (value: string) => void;
   onStateChange: (value: string) => void;
   onCityChange: (value: string) => void;
+  onStatusChange: (value: string) => void;
+  onRegistrationStatusChange: (value: string) => void;
 }
 
 export default function VendorFilters({
   search,
-  status,
   state,
   city,
+  status,
+  registrationStatus,
+  states,
+  cities,
   onSearchChange,
-  onStatusChange,
   onStateChange,
   onCityChange,
-}: Props) {
-  const [statusOpen, setStatusOpen] = useState(false);
-  const [stateOpen, setStateOpen] = useState(false);
-  const [cityOpen, setCityOpen] = useState(false);
-
-  const [states, setStates] = useState<string[]>([]);
-  const [cities, setCities] = useState<string[]>([]);
-
-  const statusOptions = ["Active", "Inactive"];
-
-  /* LOAD STATES / CITIES */
-  useEffect(() => {
-    getVendorFilters(state)
-      .then((response) => {
-        const stateData = response.data?.states || [];
-
-        const uniqueStates = Array.from(
-          new Set(
-            stateData
-              .map((item) => item.state)
-              .filter(Boolean),
-          ),
-        );
-
-        setStates(uniqueStates);
-
-        const selectedStateCities = state
-          ? stateData.find(
-              (item) => item.state === state,
-            )?.cities || []
-          : response.data?.cities || [];
-
-        const uniqueCities = Array.from(
-          new Set(
-            selectedStateCities.filter(Boolean),
-          ),
-        );
-
-        setCities(uniqueCities);
-      })
-      .catch(() => {
-        setStates([]);
-        setCities([]);
-      });
-  }, [state]);
-
-  /* CLEAR CITY WHEN STATE CHANGES */
-  function handleStateChange(value: string) {
-    onStateChange(value);
-    onCityChange("");
-    setCityOpen(false);
-  }
-
+  onStatusChange,
+  onRegistrationStatusChange,
+}: VendorFiltersProps) {
   return (
     <div className="rounded-2xl border border-[#E8E8EC] bg-white p-5 shadow-sm">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
 
-        {/* SEARCH */}
-        <div className="lg:col-span-2">
-          <label className="mb-2 block text-sm font-bold text-[#1F2937]">
+        {/* Search */}
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-[#101828]">
             Search Vendor
           </label>
 
@@ -93,51 +48,56 @@ export default function VendorFilters({
               onSearchChange(e.target.value)
             }
             placeholder="Search vendor, city, contact or GST..."
-            className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-900 placeholder:text-gray-500 outline-none transition focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+            className="h-[51px] w-full rounded-xl border border-[#D0D5DD] bg-white px-4 text-sm text-[#344054] outline-none placeholder:text-[#667085] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
           />
         </div>
 
-        {/* STATE */}
-        <Dropdown
-          label="State"
-          value={state}
-          placeholder="All States"
-          options={states}
-          open={stateOpen}
-          setOpen={setStateOpen}
-          onChange={handleStateChange}
-        />
+        {/* State */}
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-[#101828]">
+            State
+          </label>
 
-        {/* CITY */}
-        <Dropdown
-          label="City"
-          value={city}
-          placeholder="All Cities"
-          options={cities}
-          open={cityOpen}
-          setOpen={setCityOpen}
-          onChange={onCityChange}
-        />
+          <select
+            value={state}
+            onChange={(e) =>
+              onStateChange(e.target.value)
+            }
+            className="h-[51px] w-full rounded-xl border border-[#D0D5DD] bg-white px-4 text-sm text-[#101828] outline-none focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+          >
+            <option value="">All States</option>
 
-        {/* STATUS */}
-        <Dropdown
-          label="Status"
-          value={status}
-          placeholder="All Status"
-          options={statusOptions}
-          open={statusOpen}
-          setOpen={setStatusOpen}
-          onChange={onStatusChange}
-        />
-      </div>
-    </div>
-  );
-}
+            {states.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </div>
 
+        {/* City */}
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-[#101828]">
+            City
+          </label>
 
+          <select
+            value={city}
+            onChange={(e) =>
+              onCityChange(e.target.value)
+            }
+            className="h-[51px] w-full rounded-xl border border-[#D0D5DD] bg-white px-4 text-sm text-[#101828] outline-none focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+          >
+            <option value="">Select State First</option>
+
+            {cities.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
 /* =========================
    DROPDOWN
-========================= */
 
 function Dropdown({
   label,
@@ -224,7 +184,58 @@ function Dropdown({
             </p>
           )}
         </div>
-      )}
+
+        {/* Status */}
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-[#101828]">
+            Status
+          </label>
+
+          <select
+            value={status}
+            onChange={(e) =>
+              onStatusChange(e.target.value)
+            }
+            className="h-[51px] w-full rounded-xl border border-[#D0D5DD] bg-white px-4 text-sm text-[#101828] outline-none focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+          >
+            <option value="">All Status</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+            <option value="Blacklist">Blacklist</option>
+          </select>
+        </div>
+
+        {/* Registration */}
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-[#101828]">
+            Registration
+          </label>
+
+          <select
+            value={registrationStatus}
+            onChange={(e) =>
+              onRegistrationStatusChange(
+                e.target.value
+              )
+            }
+            className="h-[51px] w-full rounded-xl border border-[#D0D5DD] bg-white px-4 text-sm text-[#101828] outline-none focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+          >
+            <option value="">
+              All Registration
+            </option>
+            <option value="Registered">
+              Registered
+            </option>
+            <option value="Unregistered">
+              Unregistered
+            </option>
+            <option value="Pending">
+              Pending
+            </option>
+          </select>
+        </div>
+
+      </div>
     </div>
   );
 }

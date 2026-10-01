@@ -1,10 +1,15 @@
-import {
-  Request,
-  Response,
-} from "express";
 
-import * as siteService
-  from "./site.service.js";
+import type { Request, Response } from "express";
+
+import {
+  createSite as createSiteService,
+  getSites,
+  getSiteById,
+  updateSite,
+  importSitesFromCsv,
+  getSiteStates,
+  getSiteCities,
+} from "./site.service.js";
 
 import {
   createSiteSchema,
@@ -13,7 +18,7 @@ import {
 } from "./site.validator.js";
 
 /* ----------------------------------
-   CREATE
+   CREATE ATR
 ----------------------------------- */
 
 export async function createSite(
@@ -22,47 +27,39 @@ export async function createSite(
 ) {
   try {
     const data =
-      createSiteSchema.parse(
-        req.body
-      );
+      createSiteSchema.parse(req.body);
 
-    const site =
-      await siteService.createSite(
-        data
-      );
+    const atr =
+      await createSiteService(data);
 
     return res.status(201).json({
       success: true,
-      message:
-        "Site created successfully",
-      data: site,
+      data: atr,
     });
   } catch (error: any) {
     return res.status(400).json({
       success: false,
-      message: error.message,
+      message:
+        error?.message ||
+        "Failed to create ATR",
     });
   }
 }
 
 /* ----------------------------------
-   GET ALL
+   GET ALL ATR
 ----------------------------------- */
 
-export async function getSites(
+export async function getSitesController(
   req: Request,
   res: Response
 ) {
   try {
     const filters =
-      siteQuerySchema.parse(
-        req.query
-      );
+      siteQuerySchema.parse(req.query);
 
     const sites =
-      await siteService.getSites(
-        filters
-      );
+      await getSites(filters);
 
     return res.status(200).json({
       success: true,
@@ -71,13 +68,15 @@ export async function getSites(
   } catch (error: any) {
     return res.status(400).json({
       success: false,
-      message: error.message,
+      message:
+        error?.message ||
+        "Failed to fetch ATRs",
     });
   }
 }
 
 /* ----------------------------------
-   GET ONE
+   GET SINGLE ATR
 ----------------------------------- */
 
 export async function getSite(
@@ -85,59 +84,138 @@ export async function getSite(
   res: Response
 ) {
   try {
-    const siteId =
-      req.params.id as string;
+    const id =
+      String(req.params.id);
 
-    const site =
-      await siteService.getSiteById(
-        siteId
-      );
+    const atr =
+      await getSiteById(id);
 
     return res.status(200).json({
       success: true,
-      data: site,
+      data: atr,
     });
   } catch (error: any) {
     return res.status(404).json({
       success: false,
-      message: error.message,
+      message:
+        error?.message ||
+        "ATR not found",
     });
   }
 }
 
 /* ----------------------------------
-   UPDATE
+   UPDATE ATR
 ----------------------------------- */
 
-export async function updateSite(
+export async function updateSiteController(
   req: Request,
   res: Response
 ) {
   try {
-    const siteId =
-      req.params.id as string;
+    const id =
+      String(req.params.id);
 
     const data =
-      updateSiteSchema.parse(
-        req.body
-      );
+      updateSiteSchema.parse(req.body);
 
-    const site =
-      await siteService.updateSite(
-        siteId,
-        data
-      );
+    const atr =
+      await updateSite(id, data);
 
     return res.status(200).json({
       success: true,
-      message:
-        "Site updated successfully",
-      data: site,
+      data: atr,
+    });
+  } catch (error: any) {
+    const message =
+      error?.message ||
+      "Failed to update ATR";
+
+    const status =
+      message.includes("48 hours")
+        ? 403
+        : 400;
+
+    return res.status(status).json({
+      success: false,
+      message,
+    });
+  }
+}
+
+/* ----------------------------------
+   GET SAVED STATES
+----------------------------------- */
+
+export async function getStates(
+  req: Request,
+  res: Response
+) {
+  try {
+    const search =
+      typeof req.query.search === "string"
+        ? req.query.search
+        : "";
+
+    const states =
+      await getSiteStates(search);
+
+    return res.status(200).json({
+      success: true,
+      data: states,
     });
   } catch (error: any) {
     return res.status(400).json({
       success: false,
-      message: error.message,
+      message:
+        error?.message ||
+        "Failed to fetch states",
+    });
+  }
+}
+
+/* ----------------------------------
+   GET SAVED CITIES BY STATE
+----------------------------------- */
+
+export async function getCities(
+  req: Request,
+  res: Response
+) {
+  try {
+    const state =
+      typeof req.query.state === "string"
+        ? req.query.state
+        : "";
+
+    const search =
+      typeof req.query.search === "string"
+        ? req.query.search
+        : "";
+
+    if (!state.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "State is required",
+      });
+    }
+
+    const cities =
+      await getSiteCities(
+        state,
+        search
+      );
+
+    return res.status(200).json({
+      success: true,
+      data: cities,
+    });
+  } catch (error: any) {
+    return res.status(400).json({
+      success: false,
+      message:
+        error?.message ||
+        "Failed to fetch cities",
     });
   }
 }
@@ -151,45 +229,29 @@ export async function importSites(
   res: Response
 ) {
   try {
-    /*
-      CSV content is sent as:
+    const csv =
+      typeof req.body === "string"
+        ? req.body
+        : req.body?.csv;
 
-      {
-        "csv": "city,type,address,lat,lng,date,..."
-      }
-    */
-
-    const csv = req.body.csv;
-
-    if (
-      typeof csv !== "string" ||
-      !csv.trim()
-    ) {
+    if (!csv) {
       return res.status(400).json({
         success: false,
-        message:
-          "CSV content is required",
+        message: "CSV data is required",
       });
     }
 
     const result =
-      await siteService.importSitesFromCsv(
-        csv
-      );
+      await importSitesFromCsv(csv);
 
-    if (!result.success) {
-      return res
-        .status(400)
-        .json(result);
-    }
-
-    return res
-      .status(201)
-      .json(result);
+    return res.status(201).json(result);
   } catch (error: any) {
     return res.status(400).json({
       success: false,
-      message: error.message,
+      message:
+        error?.message ||
+        "CSV import failed",
     });
   }
 }
+

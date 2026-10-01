@@ -1,13 +1,7 @@
 "use client";
 
 import type { Vendor } from "../types";
-
-import {
-  formatGST,
-  formatMSME,
-  formatPAN,
-  formatValue,
-} from "../format";
+import { formatGST, formatPAN, formatValue } from "../format";
 
 interface Props {
   vendor: Vendor;
@@ -24,13 +18,11 @@ export default function VendorDetails({
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
       <div className="flex h-full w-full max-w-xl flex-col overflow-hidden bg-white shadow-2xl">
 
-        {/* HEADER */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#EEEEF3] bg-white px-6 py-5">
+        <div className="flex items-center justify-between border-b border-[#EEEEF3] px-6 py-5">
           <div>
             <h2 className="text-xl font-bold text-[#1F2937]">
               Vendor Details
             </h2>
-
             <p className="mt-1 text-sm text-[#667085]">
               {vendor.name}
             </p>
@@ -39,146 +31,98 @@ export default function VendorDetails({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
-            className="
-              rounded-lg
-              px-3 py-1
-              text-2xl
-              font-bold
-              text-gray-500
-              transition
-              hover:bg-[#F9DADA]
-              hover:text-[#8B2424]
-              focus:outline-none
-              focus:ring-2
-              focus:ring-[#F9DADA]
-            "
+            className="rounded-lg px-3 py-1 text-2xl font-bold text-gray-500 hover:bg-[#F9DADA] hover:text-[#8B2424]"
           >
             ×
           </button>
         </div>
 
-        {/* CONTENT */}
         <div className="flex-1 overflow-y-auto">
           <div className="space-y-5 p-6">
 
-            {/* BASIC INFORMATION */}
             <Section title="Basic Information">
+              <Item label="Vendor Name" value={vendor.name} />
+              <Item label="Vendor Type" value={vendor.vendorType} />
+              <Item label="Registration" value={vendor.registrationStatus} />
+              <Item label="Status" value={vendor.status} />
               <Item
-                label="Vendor Name"
-                value={vendor.name}
+                label="Rating"
+                value={vendor.vendorRating ? `${vendor.vendorRating}/5` : undefined}
               />
-
               <Item
-                label="State"
-                value={vendor.state}
-              />
-
-              <Item
-                label="City"
-                value={vendor.city}
-              />
-
-              <Item
-                label="Status"
-                value={vendor.status}
+                label="Cities Served"
+                value={vendor.citiesServed?.join(", ")}
               />
             </Section>
 
-            {/* CONTACT INFORMATION */}
             <Section title="Contact Information">
               <Item
-                label="Contact Person"
-                value={vendor.contactPerson}
+                label="Primary Contact"
+                value={vendor.primaryContact?.name}
               />
-
-              <Item
-                label="Mobile"
-                value={vendor.mobile}
-              />
-
               <Item
                 label="Email"
-                value={vendor.email}
+                value={vendor.primaryContact?.email}
               />
-
               <Item
-                label="Address"
-                value={vendor.address}
+                label="Phone"
+                value={vendor.primaryContact?.phone}
               />
             </Section>
 
-            {/* BUSINESS DOCUMENTS */}
             <Section title="Business Documents">
+              <Item label="PAN" value={formatPAN(vendor.panNumber)} />
+              <Item label="GST" value={formatGST(vendor.gstNumber)} />
               <Item
-                label="PAN Number"
-                value={formatPAN(
-                  vendor.panNumber,
-                )}
+                label="MSME Registered"
+                value={vendor.msmeRegistered ? "Yes" : "No"}
               />
-
+              <Item label="MSME Number" value={vendor.msmeNumber} />
               <Item
-                label="MSME Number"
-                value={formatMSME(
-                  vendor.msmeNumber,
-                )}
-              />
-
-              <Item
-                label="GST Number"
-                value={formatGST(
-                  vendor.gstNumber,
-                )}
+                label="UDYAM"
+                value={vendor.udyamRegistration}
               />
             </Section>
 
-            {/* PAYMENT */}
             <Section title="Payment Information">
-              <Item
-                label="Payment Terms"
-                value={vendor.paymentTerms}
-              />
+              <Item label="Payment Terms" value={vendor.paymentTerms} />
             </Section>
 
-            {/* BANK DETAILS */}
             <Section title="Bank Details">
               <Item
-                label="Account Number"
-                value={
-                  vendor.bankAccountNumber
-                }
+                label="Account Holder"
+                value={vendor.bankDetails?.accountHolder}
               />
-
               <Item
-                label="IFSC"
-                value={vendor.ifsc}
+                label="Bank Name"
+                value={vendor.bankDetails?.bankName}
               />
+              <Item
+                label="Account Number"
+                value={vendor.bankDetails?.accountNumber}
+              />
+              <Item label="IFSC" value={vendor.bankDetails?.ifsc} />
+              <Item label="Branch" value={vendor.bankDetails?.branch} />
             </Section>
 
+            <Section title="Documents">
+              <Item
+                label="Attached"
+                value={
+                  vendor.documents?.length
+                    ? `${vendor.documents.length} document(s)`
+                    : "No documents"
+                }
+              />
+            </Section>
           </div>
         </div>
 
-        {/* FOOTER */}
         <div className="border-t border-[#EEEEF3] bg-[#FAFAFB] p-5">
           <button
             type="button"
             onClick={onEdit}
-            className="
-              w-full
-              rounded-xl
-              bg-[#8B2424]
-              px-5 py-3
-              text-sm
-              font-bold
-              text-white
-              shadow-sm
-              transition
-              hover:bg-[#A8383B]
-              focus:outline-none
-              focus:ring-2
-              focus:ring-[#F9DADA]
-              focus:ring-offset-2
-            "
+            className="w-full rounded-xl bg-[#8B2424] px-5 py-3 text-sm font-bold text-white hover:bg-[#A8383B]"
           >
             Edit Vendor
           </button>
@@ -188,10 +132,6 @@ export default function VendorDetails({
   );
 }
 
-/* =========================
-   SECTION
-========================= */
-
 function Section({
   title,
   children,
@@ -200,15 +140,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section
-      className="
-        rounded-2xl
-        border border-[#E8E8EC]
-        bg-white
-        p-5
-        shadow-sm
-      "
-    >
+    <section className="rounded-2xl border border-[#E8E8EC] bg-white p-5 shadow-sm">
       <h3 className="mb-4 flex items-center gap-2 text-sm font-bold text-[#1F2937]">
         <span className="h-5 w-1 rounded-full bg-[#8B2424]" />
         {title}
@@ -221,10 +153,6 @@ function Section({
   );
 }
 
-/* =========================
-   ITEM
-========================= */
-
 function Item({
   label,
   value,
@@ -233,16 +161,7 @@ function Item({
   value?: string;
 }) {
   return (
-    <div
-      className="
-        rounded-lg
-        border border-transparent
-        p-2
-        transition
-        hover:border-[#F0C7C7]
-        hover:bg-[#FFF8F8]
-      "
-    >
+    <div className="rounded-lg p-2 hover:bg-[#FFF8F8]">
       <p className="text-xs font-semibold uppercase tracking-wide text-[#667085]">
         {label}
       </p>

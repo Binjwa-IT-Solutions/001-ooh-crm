@@ -1,88 +1,53 @@
+
 import { Router } from "express";
 
 import {
-  requireAuth,
-} from "../../core/auth/auth-middleware.js";
-
-import {
-  requirePermission,
-} from "../../core/rbac/index.js";
-
-import {
   createSite,
-  getSites,
+  getSitesController,
   getSite,
-  updateSite,
+  updateSiteController,
   importSites,
+  getStates,
+  getCities,
 } from "./site.controller.js";
 
 const router = Router();
 
-router.use(requireAuth);
+/* CREATE ATR */
+router.post("/", createSite);
 
-/* ----------------------------------
-   GET ALL SITES
+/* GET ALL ATR */
+router.get("/", getSitesController);
 
-   GET /api/sites
-
-   Filters:
-   ?city=Mumbai
-   ?type=Airport
-   ?status=Active
------------------------------------ */
-
+/* STATE OPTIONS */
 router.get(
-  "/",
-  requirePermission("sites.view"),
-  getSites
+  "/options/states",
+  getStates
 );
 
-/* ----------------------------------
-   GET SINGLE SITE
-
-   GET /api/sites/:id
------------------------------------ */
-
+/* CITY OPTIONS */
 router.get(
-  "/:id",
-  requirePermission("sites.view"),
-  getSite
+  "/options/cities",
+  getCities
 );
 
-/* ----------------------------------
-   CREATE SITE
-
-   POST /api/sites
------------------------------------ */
-
-router.post(
-  "/",
-  requirePermission("sites.manage"),
-  createSite
-);
-
-/* ----------------------------------
-   UPDATE SITE
-
-   PATCH /api/sites/:id
------------------------------------ */
-
-router.patch(
-  "/:id",
-  requirePermission("sites.manage"),
-  updateSite
-);
-
-/* ----------------------------------
-   CSV IMPORT
-
-   POST /api/sites/import
------------------------------------ */
-
+/* CSV IMPORT */
 router.post(
   "/import",
-  requirePermission("sites.manage"),
   importSites
 );
 
+/* GET ONE ATR */
+router.get(
+  "/:id",
+  getSite
+);
+
+/* UPDATE ATR */
+router.patch(
+  "/:id",
+  updateSiteController
+);
+
 export default router;
+

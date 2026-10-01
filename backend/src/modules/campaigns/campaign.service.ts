@@ -10,7 +10,6 @@ import Campaign, {
 import { Quotation } from "../quotations/quotations.model.js";
 import { Lead } from "../leads/leads.model.js";
 import { AuthUser } from "../../core/auth/auth-model.js";
-import { createBooking, releaseCampaignBookings } from "../bookings/booking.service.js";
 import { checkSitesExist } from "../sites/site.service.js";
 import { generateForCampaign } from "../tasks/task.service.js";
 import { employeeService } from "../employees/employees.service.js";
@@ -996,103 +995,6 @@ export async function updateCampaignStatus(
           ),
           session ?? undefined,
         );
-
-        /*
-         * Pre-check for booking conflicts before writing anything.
-         * Gives a clear error listing the conflicting sites and date
-         * rather than a low-level duplicate key error.
-         */
-        const { SiteBooking } = await import(
-          "../bookings/site-booking.model.js"
-        );
-
-        const conflictingInfo: string[] = [];
-
-        for (const siteId of campaign.siteIds) {
-          const conflicts = await SiteBooking.find({
-            siteId: new Types.ObjectId(String(siteId)),
-            date: {
-              $gte: campaign.startDate,
-              $lte: campaign.endDate,
-            },
-            campaignId: { $ne: campaign._id },
-          })
-            .populate("campaignId", "campaignCode name status")
-            .session(session ?? null)
-            .lean();
-
-          for (const conflict of conflicts) {
-            const ownerCamp = conflict.campaignId as any;
-            if (
-              !ownerCamp ||
-              ownerCamp.status === "Cancelled" ||
-              ownerCamp.status === "Completed"
-            ) {
-              // Stale booking from inactive/completed campaign: clean it up
-              await SiteBooking.deleteMany({
-                _id: conflict._id,
-              }).session(session ?? null);
-              continue;
-            }
-
-            const ownerCode =
-              ownerCamp.campaignCode ||
-              ownerCamp.name ||
-              String(conflict.campaignId);
-            const conflictMsg = `Site ${String(siteId)} is already booked by campaign ${ownerCode} (${ownerCamp.status})`;
-            if (!conflictingInfo.includes(conflictMsg)) {
-              conflictingInfo.push(conflictMsg);
-            }
-          }
-        }
-
-        if (conflictingInfo.length > 0) {
-          throw new Error(
-            `Cannot approve campaign: booking conflicts detected.\n${conflictingInfo.join("\n")}`,
-          );
-        }
-
-        /*
-         * Create bookings one by one.
-         *
-         * This is intentionally sequential.
-         * It avoids Promise.all() creating multiple
-         * independent booking operations while the
-         * campaign itself is inside a transaction.
-         */
-
-        for (const siteId of campaign.siteIds) {
-          await createBooking({
-            siteId: String(siteId),
-
-            campaignId:
-              String(
-                campaign._id,
-              ),
-
-            from:
-              campaign.startDate,
-
-            to:
-              campaign.endDate,
-          });
-        }
-      }
-
-      /* ---- Release bookings when campaign is cancelled or completed ---- */
-
-      if (
-        nextStatus === CampaignStatus.CANCELLED ||
-        nextStatus === CampaignStatus.COMPLETED
-      ) {
-        try {
-          await releaseCampaignBookings(String(campaign._id));
-        } catch (releaseErr) {
-          console.warn(
-            `[Bookings] Could not release bookings for ${nextStatus} campaign ${campaign._id}:`,
-            releaseErr,
-          );
-        }
       }
 
       /* ------------------------- Update Status ---------------------------- */
