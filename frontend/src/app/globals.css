@@ -92,3 +92,14 @@ select option:checked {
   color: #8B2424;
   font-weight: 600;
 }
+
+/* Remove number input stepper / spin buttons (amount badhane/ghatane wale arrow) */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none !important;
+  margin: 0 !important;
+}
+input[type='number'] {
+  -moz-appearance: textfield !important;
+  appearance: textfield !important;
+}

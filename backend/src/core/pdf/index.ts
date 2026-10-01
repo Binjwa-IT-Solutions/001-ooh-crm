@@ -237,14 +237,18 @@ export function keyValueBlock(doc: PDFKit.PDFDocument, rows: Array<[string, stri
   }
 }
 
-function drawFooterOnEveryPage(doc: PDFKit.PDFDocument, brand: PdfBrand) {
+function drawFooterOnEveryPage(doc: PDFKit.PDFDocument, brand: PdfBrand, margin = PAGE_MARGIN) {
   const range = doc.bufferedPageRange();
 
   for (let i = range.start; i < range.start + range.count; i += 1) {
     doc.switchToPage(i);
 
-    const y = doc.page.height - 34;
-    const width = doc.page.width - PAGE_MARGIN * 2;
+    const oldBottomMargin = doc.page.margins.bottom;
+    // Set bottom margin to 0 temporarily so writing footer text does NOT trigger PDFKit auto-pagination
+    doc.page.margins.bottom = 0;
+
+    const y = doc.page.height - 24;
+    const width = doc.page.width - margin * 2;
 
     doc
       .font('Helvetica')
@@ -252,14 +256,17 @@ function drawFooterOnEveryPage(doc: PDFKit.PDFDocument, brand: PdfBrand) {
       .fillColor(MUTED)
       .text(
         `${brand.companyName} · generated ${new Date().toLocaleDateString('en-IN')}`,
-        PAGE_MARGIN,
+        margin,
         y,
-        { width, align: 'left' },
+        { width, align: 'left', lineBreak: false },
       )
-      .text(`Page ${i - range.start + 1} of ${range.count}`, PAGE_MARGIN, y, {
+      .text(`Page ${i - range.start + 1} of ${range.count}`, margin, y, {
         width,
         align: 'right',
+        lineBreak: false,
       });
+
+    doc.page.margins.bottom = oldBottomMargin;
   }
 }
 
@@ -276,6 +283,8 @@ export interface QuotationLineItem {
   dates: string; // e.g. "01/10/2026 - 31/10/2026"
   days: number;
   ratePerDay: number; // in paise
+  discountPercent?: number;
+  taxPercent?: number;
   amount: number; // in paise
 }
 
@@ -306,6 +315,8 @@ export interface QuotationBillBookPdfOptions {
   };
   items: QuotationLineItem[];
   pricing: {
+    grossTotal?: number; // paise
+    discountTotal?: number; // paise
     subtotal: number; // paise
     taxRate?: number; // 0.18
     isInterState?: boolean;
@@ -313,14 +324,19 @@ export interface QuotationBillBookPdfOptions {
     grandTotal: number; // paise
   };
   bankDetails?: {
-    bankName: string;
-    accountName: string;
-    accountNumber: string;
-    ifsc: string;
-    branch: string;
+    bankName?: string;
+    accountName?: string;
+    accountNumber?: string;
+    ifsc?: string;
+    branch?: string;
     upiId?: string;
   };
   terms?: string[];
+  signature?: {
+    image?: string;
+    signatoryName?: string;
+    signatoryDesignation?: string;
+  };
 }
 
 /**
@@ -404,12 +420,15 @@ export function renderQuotationBillBookPdf(options: QuotationBillBookPdfOptions)
   const CARD_BG = '#F8FAFC';
 
   const seller = {
-    companyName: options.seller?.companyName || 'Media Octus Private Limited',
-    addressLines: options.seller?.addressLines || ['501, Apollo Premier, Vijay Nagar', 'Indore, Madhya Pradesh 452010'],
-    gstin: options.seller?.gstin || '23AABCM1234F1Z5',
-    pan: options.seller?.pan || 'AAAPM1234A',
-    email: options.seller?.email || 'contact@mediaoctus.com',
-    phone: options.seller?.phone || '+91 98270 00000',
+    companyName: options.seller?.companyName || 'Media Octus',
+    addressLines: options.seller?.addressLines || [
+      '4th floor Gargi Aura Building near Scheme no114',
+      'Indore, Madhya Pradesh 452010',
+    ],
+    gstin: options.seller?.gstin || '23DRHPS3516P1ZZ',
+    pan: options.seller?.pan || 'DRHPS3516P',
+    email: options.seller?.email || 'mediaoctus005@gmail.com',
+    phone: options.seller?.phone || '',
     website: options.seller?.website || 'www.mediaoctus.com',
   };
 
@@ -433,11 +452,11 @@ export function renderQuotationBillBookPdf(options: QuotationBillBookPdfOptions)
     upiId: options.bankDetails?.upiId || 'mediaoctus@hdfcbank',
   };
 
-  const terms = options.terms || [
-    '50% advance payment along with confirmed Purchase Order. Balance within 15 days of display start.',
-    'Display is subject to municipal permissions, weather and structural clearance.',
-    'Flex/vinyl printing and mounting materials to be provided 3 days prior to display commencement.',
-    'Taxes applicable as per prevailing GST norms. SAC Code: 998361 (Advertising Services).',
+  const terms = (options.terms && options.terms.length > 0) ? options.terms : [
+    'Gst applicable .',
+    'for any query please feel free to call or message any time .',
+    '100%Payment in Advance.',
+    'please visit https://www.mediaoctus.com.',
   ];
 
   return new Promise((resolve, reject) => {
@@ -489,12 +508,13 @@ export function renderQuotationBillBookPdf(options: QuotationBillBookPdfOptions)
         doc.fontSize(8).font('Helvetica').fillColor(BRAND_LIGHT_MUTED).text('Outdoor Media & Advertising Solutions', pageMargin, 42);
       }
 
-      // Seller Contact Details under Logo
-      const sellerY = 72;
-      doc.fontSize(7.5).font('Helvetica').fillColor(BRAND_MUTED);
-      doc.text(seller.addressLines.join(', '), pageMargin, sellerY, { width: 280 });
-      doc.text(`GSTIN: ${seller.gstin} · PAN: ${seller.pan}`, pageMargin, sellerY + 11, { width: 280 });
-      doc.text(`Email: ${seller.email} · Phone: ${seller.phone}`, pageMargin, sellerY + 22, { width: 280 });
+      // Seller Tagline / Subtitle under Logo
+      doc.fontSize(8).font('Helvetica').fillColor(BRAND_LIGHT_MUTED).text(
+        'Outdoor Media & Advertising Solutions',
+        pageMargin,
+        74,
+        { width: 280 },
+      );
 
       // Right Side: Quotation Title & Metadata Box
       const rightX = doc.page.width - pageMargin - 210;
@@ -528,14 +548,13 @@ export function renderQuotationBillBookPdf(options: QuotationBillBookPdfOptions)
       const cardHeight = 72;
       const cardWidth = (usableWidth - 12) / 2;
 
-      // Card 1: Billed By
+      // Card 1: Billed By (Real Media Octus Details)
       doc.roundedRect(pageMargin, cardY, cardWidth, cardHeight, 5).fillAndStroke(CARD_BG, BORDER_COLOR);
       doc.fontSize(7).font('Helvetica-Bold').fillColor(BRAND_BURGUNDY).text('BILLED BY (SUPPLIER)', pageMargin + 10, cardY + 8);
       doc.fontSize(9).font('Helvetica-Bold').fillColor(BRAND_DARK).text(seller.companyName, pageMargin + 10, cardY + 20, { width: cardWidth - 20 });
       doc.fontSize(7.5).font('Helvetica').fillColor(BRAND_MUTED);
-      doc.text(`Email: ${seller.email}`, pageMargin + 10, cardY + 34, { width: cardWidth - 20 });
-      doc.text(`Phone: ${seller.phone}`, pageMargin + 10, cardY + 45, { width: cardWidth - 20 });
-      doc.text(`GSTIN: ${seller.gstin}`, pageMargin + 10, cardY + 56, { width: cardWidth - 20 });
+      doc.text(seller.addressLines.join(', '), pageMargin + 10, cardY + 33, { width: cardWidth - 20 });
+      doc.text(`GSTIN: ${seller.gstin} · Email: ${seller.email}`, pageMargin + 10, cardY + 54, { width: cardWidth - 20 });
 
       // Card 2: Billed To
       const clientCardX = pageMargin + cardWidth + 12;
@@ -548,16 +567,18 @@ export function renderQuotationBillBookPdf(options: QuotationBillBookPdfOptions)
       const clientLoc = [client.city, client.state].filter(Boolean).join(', ') || client.address;
       doc.text(`Location: ${clientLoc} · GSTIN: ${client.gstin}`, clientCardX + 10, cardY + 56, { width: cardWidth - 20 });
 
-      // 4. Line Items Table
+      // 4. Line Items Table (With DISC and TAX columns)
       let tableY = 194;
       const col = {
-        idx: { x: pageMargin + 6, w: 22 },
-        site: { x: pageMargin + 32, w: 180 },
-        dim: { x: pageMargin + 216, w: 78 },
-        period: { x: pageMargin + 298, w: 90 },
-        days: { x: pageMargin + 392, w: 32 },
-        rate: { x: pageMargin + 428, w: 45 },
-        total: { x: pageMargin + 477, w: 42 },
+        idx: { x: pageMargin + 4, w: 16 },
+        site: { x: pageMargin + 24, w: 130 },
+        dim: { x: pageMargin + 158, w: 66 },
+        period: { x: pageMargin + 228, w: 78 },
+        days: { x: pageMargin + 310, w: 24 },
+        rate: { x: pageMargin + 338, w: 42 },
+        disc: { x: pageMargin + 384, w: 34 },
+        tax: { x: pageMargin + 422, w: 32 },
+        total: { x: pageMargin + 458, w: 60 },
       };
 
       // Table Header Row
@@ -569,6 +590,8 @@ export function renderQuotationBillBookPdf(options: QuotationBillBookPdfOptions)
       doc.text('DISPLAY DURATION', col.period.x, tableY + 5, { width: col.period.w, align: 'center' });
       doc.text('DAYS', col.days.x, tableY + 5, { width: col.days.w, align: 'center' });
       doc.text('RATE/DAY', col.rate.x, tableY + 5, { width: col.rate.w, align: 'right' });
+      doc.text('DISC', col.disc.x, tableY + 5, { width: col.disc.w, align: 'center' });
+      doc.text('TAX', col.tax.x, tableY + 5, { width: col.tax.w, align: 'center' });
       doc.text('AMOUNT', col.total.x, tableY + 5, { width: col.total.w, align: 'right' });
 
       tableY += 20;
@@ -593,6 +616,8 @@ export function renderQuotationBillBookPdf(options: QuotationBillBookPdfOptions)
           doc.text('DISPLAY DURATION', col.period.x, tableY + 5, { width: col.period.w, align: 'center' });
           doc.text('DAYS', col.days.x, tableY + 5, { width: col.days.w, align: 'center' });
           doc.text('RATE/DAY', col.rate.x, tableY + 5, { width: col.rate.w, align: 'right' });
+          doc.text('DISC', col.disc.x, tableY + 5, { width: col.disc.w, align: 'center' });
+          doc.text('TAX', col.tax.x, tableY + 5, { width: col.tax.w, align: 'center' });
           doc.text('AMOUNT', col.total.x, tableY + 5, { width: col.total.w, align: 'right' });
           tableY += 20;
         }
@@ -622,6 +647,14 @@ export function renderQuotationBillBookPdf(options: QuotationBillBookPdfOptions)
         // Rate
         const rateFormatted = `Rs. ${(item.ratePerDay / 100).toLocaleString('en-IN')}`;
         doc.text(rateFormatted, col.rate.x, tableY + 7, { width: col.rate.w, align: 'right' });
+
+        // Disc
+        const discText = (item.discountPercent !== undefined && item.discountPercent > 0) ? `${item.discountPercent}%` : '-';
+        doc.fillColor(item.discountPercent ? '#059669' : BRAND_MUTED).font('Helvetica').text(discText, col.disc.x, tableY + 7, { width: col.disc.w, align: 'center' });
+
+        // Tax
+        const taxText = item.taxPercent !== undefined ? `${item.taxPercent}%` : '18%';
+        doc.fillColor(BRAND_MUTED).font('Helvetica').text(taxText, col.tax.x, tableY + 7, { width: col.tax.w, align: 'center' });
 
         // Amount
         const amountFormatted = `Rs. ${(item.amount / 100).toLocaleString('en-IN')}`;
@@ -666,8 +699,32 @@ export function renderQuotationBillBookPdf(options: QuotationBillBookPdfOptions)
       let totalsCursor = summaryY;
       doc.fontSize(8.5).font('Helvetica').fillColor(BRAND_MUTED);
 
-      // Sub Total
-      doc.text('Subtotal:', rightBlockX, totalsCursor);
+      // Gross Total & Discount breakdown (if discount applied)
+      const grossRupees = options.pricing.grossTotal ? options.pricing.grossTotal / 100 : 0;
+      const discountRupees = options.pricing.discountTotal ? options.pricing.discountTotal / 100 : 0;
+
+      if (discountRupees > 0 && grossRupees > 0) {
+        doc.font('Helvetica').fillColor(BRAND_MUTED).text('Gross Total:', rightBlockX, totalsCursor);
+        doc.font('Helvetica-Bold').fillColor(BRAND_DARK).text(
+          `Rs. ${grossRupees.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+          rightBlockX,
+          totalsCursor,
+          { width: rightBlockWidth, align: 'right' },
+        );
+        totalsCursor += 13;
+
+        doc.font('Helvetica').fillColor('#059669').text('Total Discount:', rightBlockX, totalsCursor);
+        doc.font('Helvetica-Bold').fillColor('#059669').text(
+          `- Rs. ${discountRupees.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+          rightBlockX,
+          totalsCursor,
+          { width: rightBlockWidth, align: 'right' },
+        );
+        totalsCursor += 13;
+      }
+
+      // Taxable Subtotal
+      doc.font('Helvetica').fillColor(BRAND_MUTED).text('Taxable Subtotal:', rightBlockX, totalsCursor);
       doc.font('Helvetica-Bold').fillColor(BRAND_DARK).text(
         `Rs. ${subtotalRupees.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
         rightBlockX,
@@ -728,23 +785,55 @@ export function renderQuotationBillBookPdf(options: QuotationBillBookPdfOptions)
       }
 
       // Authorized Signatory (Right side below words)
-      const signY = totalsCursor + 22;
-      doc.roundedRect(rightBlockX + 30, signY, rightBlockWidth - 30, 48, 4).stroke(BORDER_COLOR);
+      const signY = totalsCursor + 20;
+      const signBoxX = rightBlockX + 30;
+      const signBoxWidth = rightBlockWidth - 30;
+      const signBoxHeight = 52;
+      doc.roundedRect(signBoxX, signY, signBoxWidth, signBoxHeight, 4).stroke(BORDER_COLOR);
       doc.fontSize(7).font('Helvetica-Bold').fillColor(BRAND_DARK).text(
         `For ${seller.companyName}`,
-        rightBlockX + 30,
-        signY + 6,
-        { width: rightBlockWidth - 30, align: 'center' },
+        signBoxX,
+        signY + 5,
+        { width: signBoxWidth, align: 'center' },
       );
+
+      let imageRendered = false;
+      if (options.signature?.image) {
+        try {
+          let sigBuf: Buffer | null = null;
+          const sigStr = options.signature.image;
+          if (sigStr.startsWith('data:image/')) {
+            const base64Data = sigStr.replace(/^data:image\/\w+;base64,/, '');
+            sigBuf = Buffer.from(base64Data, 'base64');
+          } else if (fs.existsSync(sigStr)) {
+            sigBuf = fs.readFileSync(sigStr);
+          }
+          if (sigBuf) {
+            const imgWidth = 72;
+            const imgHeight = 24;
+            const imgX = signBoxX + (signBoxWidth - imgWidth) / 2;
+            const imgY = signY + 14;
+            doc.image(sigBuf, imgX, imgY, { fit: [imgWidth, imgHeight], align: 'center' });
+            imageRendered = true;
+          }
+        } catch {
+          // ignore error and render text fallback
+        }
+      }
+
+      const sigName = options.signature?.signatoryName;
+      const sigDesignation = options.signature?.signatoryDesignation || 'Authorized Signatory';
+      const sigText = sigName ? `${sigName} (${sigDesignation})` : `(${sigDesignation})`;
+
       doc.fontSize(6.5).font('Helvetica').fillColor(BRAND_LIGHT_MUTED).text(
-        '(Authorized Signatory)',
-        rightBlockX + 30,
-        signY + 36,
-        { width: rightBlockWidth - 30, align: 'center' },
+        sigText,
+        signBoxX,
+        signY + (imageRendered ? 39 : 36),
+        { width: signBoxWidth, align: 'center' },
       );
 
       // 6. Draw Footer on Every Page
-      drawFooterOnEveryPage(doc, seller);
+      drawFooterOnEveryPage(doc, seller, pageMargin);
 
       doc.end();
     } catch (err) {
