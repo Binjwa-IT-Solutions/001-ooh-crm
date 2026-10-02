@@ -1,423 +1,291 @@
 "use client";
 
-import { useState } from "react";
-
 import type { Site } from "../types";
 
-import {
-  formatCost,
-  formatDate,
-} from "../format";
-
-interface SiteTableProps {
+interface Props {
   sites: Site[];
-  loading?: boolean;
   onEdit: (site: Site) => void;
 }
 
-/* ----------------------------------
-   STATUS BADGE
------------------------------------ */
+function formatDate(value: string | Date) {
+  const date = new Date(value);
 
-function StatusBadge({
-  status,
-}: {
-  status: Site["status"];
-}) {
-  if (status === "Active") {
-    return (
-      <span className="inline-flex whitespace-nowrap rounded-full bg-[#ECF8EF] px-2 py-1 text-[11px] font-medium text-[#2E7D4F]">
-        Active
-      </span>
-    );
+  if (Number.isNaN(date.getTime())) {
+    return "—";
   }
 
-  if (status === "Maintenance") {
-    return (
-      <span className="inline-flex whitespace-nowrap rounded-full bg-[#FFF4E5] px-2 py-1 text-[11px] font-medium text-[#A15C00]">
-        Maintenance
-      </span>
-    );
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function statusClass(status: Site["status"]) {
+  switch (status) {
+    case "Approved":
+      return "bg-green-100 text-green-700";
+
+    case "Pending":
+      return "bg-yellow-100 text-yellow-700";
+
+    case "Rejected":
+      return "bg-red-100 text-red-700";
+
+    default:
+      return "bg-gray-100 text-gray-700";
+  }
+}
+
+function availabilityClass(
+  availability: Site["availability"]
+) {
+  return availability === "Available"
+    ? "bg-green-100 text-green-700"
+    : "bg-red-100 text-red-700";
+}
+
+function canEdit(site: Site) {
+  if (!site.createdAt) {
+    return false;
+  }
+
+  const created = new Date(
+    site.createdAt
+  ).getTime();
+
+  if (Number.isNaN(created)) {
+    return false;
   }
 
   return (
-    <span className="inline-flex whitespace-nowrap rounded-full bg-[#F2F4F7] px-2 py-1 text-[11px] font-medium text-[#667085]">
-      Inactive
-    </span>
+    Date.now() - created <
+    48 * 60 * 60 * 1000
   );
 }
 
-/* ----------------------------------
-   SITE TABLE
------------------------------------ */
-
 export default function SiteTable({
   sites,
-  loading,
   onEdit,
-}: SiteTableProps) {
-  const [selectedImage, setSelectedImage] =
-    useState<string | null>(null);
-
-  /* ----------------------------------
-     LOADING
-  ----------------------------------- */
-
-  if (loading) {
-    return (
-      <div className="rounded-xl border border-[#E8E8EC] bg-white p-10 text-center">
-        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-[#E8E8EC] border-t-[#A8383B]" />
-
-        <p className="mt-3 text-xs text-[#667085]">
-          Loading sites...
-        </p>
-      </div>
-    );
-  }
-
-  /* ----------------------------------
-     EMPTY
-  ----------------------------------- */
-
+}: Props) {
   if (!sites.length) {
     return (
-      <div className="rounded-xl border border-[#E8E8EC] bg-white p-10 text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F9DADA] text-xl text-[#A8383B]">
-          +
-        </div>
+      <div className="rounded-xl border border-gray-200 bg-white px-6 py-14 text-center shadow-sm">
+        <div className="text-3xl">📋</div>
 
-        <h3 className="mt-4 text-sm font-semibold text-[#1F2937]">
-          No sites found
+        <h3 className="mt-3 text-base font-semibold text-gray-800">
+          No ATR found
         </h3>
 
-        <p className="mt-1 text-xs text-[#667085]">
-          Try changing your filters or add a new site.
+        <p className="mt-1 text-sm text-gray-500">
+          Create an ATR or change the filters.
         </p>
       </div>
     );
   }
 
   return (
-    <>
-      {/* =========================================
-          TABLE
-      ========================================== */}
+    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="min-w-[1500px] w-full border-collapse">
 
-      <div className="overflow-hidden rounded-xl border border-[#E8E8EC] bg-white">
-        <div className="overflow-x-auto">
-          <table className="min-w-[1650px] w-full table-auto">
-            <thead>
-              <tr className="border-b border-[#E8E8EC] bg-[#F7F8FA]">
+          {/* HEADER */}
+          <thead>
+            <tr className="border-b border-gray-200 bg-gray-50 text-left">
 
-                {/* IMAGE */}
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                ATR No.
+              </th>
 
-                <th className="w-[100px] px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[#667085]">
-                  Image
-                </th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Client
+              </th>
 
-                {/* SITE ID */}
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Sales Person
+              </th>
 
-                <th className="w-[280px] px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[#667085]">
-                  Site ID
-                </th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Contact
+              </th>
 
-                {/* CODE */}
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                State
+              </th>
 
-                <th className="w-[110px] px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[#667085]">
-                  Code
-                </th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                City
+              </th>
 
-                {/* CITY */}
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Location
+              </th>
 
-                <th className="w-[120px] px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[#667085]">
-                  City
-                </th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Media Type
+              </th>
 
-                {/* TYPE */}
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Qty
+              </th>
 
-                <th className="w-[120px] px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[#667085]">
-                  Type
-                </th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Start
+              </th>
 
-                {/* ADDRESS */}
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                End
+              </th>
 
-                <th className="w-[250px] px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[#667085]">
-                  Address
-                </th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Duration
+              </th>
 
-                {/* SIZE */}
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Vendor
+              </th>
 
-                <th className="w-[120px] px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[#667085]">
-                  Size
-                </th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Availability
+              </th>
 
-                {/* COST */}
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Status
+              </th>
 
-                <th className="w-[130px] px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[#667085]">
-                  Cost / Day
-                </th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Action
+              </th>
 
-                {/* START DATE */}
+            </tr>
+          </thead>
 
-                <th className="w-[120px] px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[#667085]">
-                  Start Date
-                </th>
+          {/* BODY */}
+          <tbody>
+            {sites.map((site) => {
+              const editable = canEdit(site);
 
-                {/* END DATE */}
+              return (
+                <tr
+                  key={site._id}
+                  className="border-b border-gray-100 last:border-0 hover:bg-gray-50"
+                >
 
-                <th className="w-[120px] px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[#667085]">
-                  End Date
-                </th>
+                  {/* ATR NO */}
+                  <td className="px-4 py-4">
+                    <span className="font-semibold text-[#8B2424]">
+                      {site.atrNo || "—"}
+                    </span>
+                  </td>
 
-                {/* STATUS */}
+                  {/* CLIENT */}
+                  <td className="px-4 py-4 text-sm font-medium text-gray-800">
+                    {site.clientName || "—"}
+                  </td>
 
-                <th className="w-[130px] px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[#667085]">
-                  Status
-                </th>
+                  {/* SALES PERSON */}
+                  <td className="px-4 py-4 text-sm text-gray-700">
+                    {site.salesPersonName || "—"}
+                  </td>
 
-                {/* ACTION */}
+                  {/* CONTACT */}
+                  <td className="px-4 py-4 text-sm text-gray-700">
+                    {site.salesPersonContact || "—"}
+                  </td>
 
-                <th className="w-[90px] px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-[#667085]">
-                  Action
-                </th>
-              </tr>
-            </thead>
+                  {/* STATE */}
+                  <td className="px-4 py-4 text-sm text-gray-700">
+                    {site.state || "—"}
+                  </td>
 
-            <tbody>
-              {sites.map((site) => {
-                const imageUrl =
-                  site.photos?.[0];
+                  {/* CITY */}
+                  <td className="px-4 py-4 text-sm text-gray-700">
+                    {site.city || "—"}
+                  </td>
 
-                return (
-                  <tr
-                    key={site._id}
-                    className="border-b border-[#E8E8EC] last:border-0 hover:bg-[#FCFCFD]"
-                  >
+                  {/* LOCATION */}
+                  <td className="px-4 py-4 text-sm text-gray-700">
+                    {site.location || "—"}
+                  </td>
 
-                    {/* =================================
-                        IMAGE
-                    ================================== */}
+                  {/* MEDIA TYPE */}
+                  <td className="px-4 py-4">
+                    <span className="rounded-full bg-[#F9DADA] px-2.5 py-1 text-xs font-medium text-[#8B2424]">
+                      {site.mediaType}
+                    </span>
+                  </td>
 
-                    <td className="px-4 py-3">
-                      {imageUrl ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelectedImage(
-                              imageUrl
-                            )
-                          }
-                          className="group relative block h-12 w-16 overflow-hidden rounded-lg border border-[#E8E8EC] bg-[#F7F8FA]"
-                          title="Click to view image"
-                        >
-                          <img
-                            src={imageUrl}
-                            alt={`${site.code} site`}
-                            className="h-full w-full object-cover transition duration-200 group-hover:scale-110"
-                            onError={(
-                              event
-                            ) => {
-                              event.currentTarget.style.display =
-                                "none";
+                  {/* QUANTITY */}
+                  <td className="px-4 py-4 text-center text-sm font-semibold text-gray-800">
+                    {site.quantity}
+                  </td>
 
-                              const parent =
-                                event.currentTarget
-                                  .parentElement;
+                  {/* START */}
+                  <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-600">
+                    {formatDate(site.startDate)}
+                  </td>
 
-                              if (
-                                parent
-                              ) {
-                                parent.innerHTML =
-                                  `<span class="flex h-full w-full items-center justify-center text-[10px] font-medium text-[#8B2424]">No Image</span>`;
-                              }
-                            }}
-                          />
+                  {/* END */}
+                  <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-600">
+                    {formatDate(site.endDate)}
+                  </td>
 
-                          {/* Hover overlay */}
+                  {/* DURATION */}
+                  <td className="whitespace-nowrap px-4 py-4 text-sm font-medium text-gray-700">
+                    {site.duration} Days
+                  </td>
 
-                          <span className="absolute inset-0 flex items-center justify-center bg-black/0 text-[9px] font-medium text-white opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100">
-                            View
-                          </span>
-                        </button>
-                      ) : (
-                        <div className="flex h-12 w-16 items-center justify-center rounded-lg bg-[#F9DADA] text-[10px] font-medium text-[#8B2424]">
-                          No Image
-                        </div>
-                      )}
-                    </td>
+                  {/* VENDOR */}
+                  <td className="px-4 py-4 text-sm text-gray-700">
+                    {site.vendorName || "—"}
+                  </td>
 
-                    {/* =================================
-                        SITE ID
-                    ================================== */}
+                  {/* AVAILABILITY */}
+                  <td className="px-4 py-4">
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${availabilityClass(
+                        site.availability
+                      )}`}
+                    >
+                      {site.availability}
+                    </span>
+                  </td>
 
-                    <td className="px-4 py-3">
-                      <span
-                        className="whitespace-nowrap font-mono text-[11px] font-medium text-[#667085]"
-                        title={site._id}
-                      >
-                        {site._id}
-                      </span>
-                    </td>
+                  {/* STATUS */}
+                  <td className="px-4 py-4">
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusClass(
+                        site.status
+                      )}`}
+                    >
+                      {site.status}
+                    </span>
+                  </td>
 
-                    {/* =================================
-                        CODE
-                    ================================== */}
-
-                    <td className="px-4 py-3">
-                      <span className="whitespace-nowrap text-xs font-semibold text-[#A8383B]">
-                        {site.code ||
-                          site.siteCode ||
-                          "—"}
-                      </span>
-                    </td>
-
-                    {/* =================================
-                        CITY
-                    ================================== */}
-
-                    <td className="px-4 py-3 text-xs text-[#1F2937]">
-                      {site.city || "—"}
-                    </td>
-
-                    {/* =================================
-                        TYPE
-                    ================================== */}
-
-                    <td className="px-4 py-3">
-                      <span className="whitespace-nowrap rounded-md bg-[#F9DADA] px-2 py-1 text-[11px] font-medium text-[#8B2424]">
-                        {site.type}
-                      </span>
-                    </td>
-
-                    {/* =================================
-                        ADDRESS
-                    ================================== */}
-
-                    <td className="px-4 py-3">
-                      <p
-                        className="max-w-[230px] truncate text-xs text-[#667085]"
-                        title={site.address}
-                      >
-                        {site.address ||
-                          "—"}
-                      </p>
-                    </td>
-
-                    {/* =================================
-                        SIZE
-                    ================================== */}
-
-                    <td className="whitespace-nowrap px-4 py-3 text-xs text-[#1F2937]">
-                      {site.sizeWidth} ×{" "}
-                      {site.sizeHeight} ft
-                    </td>
-
-                    {/* =================================
-                        COST
-                    ================================== */}
-
-                    <td className="whitespace-nowrap px-4 py-3 text-xs font-medium text-[#1F2937]">
-                      {formatCost(
-                        site.baseCostPerDay
-                      )}
-                    </td>
-
-                    {/* =================================
-                        START DATE
-                    ================================== */}
-
-                    <td className="whitespace-nowrap px-4 py-3 text-xs text-[#1F2937]">
-                      {formatDate(
-                        site.startDate
-                      )}
-                    </td>
-
-                    {/* =================================
-                        END DATE
-                    ================================== */}
-
-                    <td className="whitespace-nowrap px-4 py-3 text-xs text-[#1F2937]">
-                      {formatDate(
-                        site.endDate
-                      )}
-                    </td>
-
-                    {/* =================================
-                        STATUS
-                    ================================== */}
-
-                    <td className="px-4 py-3">
-                      <StatusBadge
-                        status={
-                          site.status
-                        }
-                      />
-                    </td>
-
-                    {/* =================================
-                        ACTION
-                    ================================== */}
-
-                    <td className="px-4 py-3 text-right">
+                  {/* ACTION */}
+                  <td className="px-4 py-4">
+                    {editable ? (
                       <button
                         type="button"
-                        onClick={() =>
-                          onEdit(site)
-                        }
-                        className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-[#A8383B] transition hover:bg-[#F9DADA]"
+                        onClick={() => onEdit(site)}
+                        className="rounded-lg border border-[#8B2424] px-3 py-1.5 text-xs font-semibold text-[#8B2424] hover:bg-[#F9DADA]"
                       >
                         Edit
                       </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                    ) : (
+                      <span className="text-xs text-gray-400">
+                        Locked
+                      </span>
+                    )}
+                  </td>
+
+                </tr>
+              );
+            })}
+          </tbody>
+
+        </table>
       </div>
-
-      {/* =========================================
-          IMAGE PREVIEW MODAL
-      ========================================== */}
-
-      {selectedImage && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-6"
-          onClick={() =>
-            setSelectedImage(null)
-          }
-        >
-          <div
-            className="relative max-h-[92vh] max-w-[92vw] rounded-xl bg-white p-3 shadow-2xl"
-            onClick={(event) =>
-              event.stopPropagation()
-            }
-          >
-
-            {/* CLOSE BUTTON */}
-
-            <button
-              type="button"
-              onClick={() =>
-                setSelectedImage(null)
-              }
-              className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-[#8B2424] text-lg font-semibold text-white transition hover:bg-[#F9DADA] hover:text-[#8B2424]"
-              aria-label="Close image"
-            >
-              ×
-            </button>
-
-            {/* LARGE IMAGE */}
-
-            <img
-              src={selectedImage}
-              alt="Site preview"
-              className="max-h-[85vh] max-w-[85vw] rounded-lg object-contain"
-            />
-          </div>
-        </div>
-      )}
-    </>
+    </div>
   );
 }

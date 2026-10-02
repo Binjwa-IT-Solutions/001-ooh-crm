@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '@/shared/auth/auth-context';
+import { Dropdown, DatePicker } from '@/shared/ui';
 import { leadsApi } from '@/modules/leads/api';
 import { useCampaigns } from '../hooks/useCampaigns';
 import type { Campaign, CampaignFilters } from '../types';
@@ -347,27 +348,21 @@ export default function MyCampaignsPage() {
 
           {/* From Date */}
           <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-              From Date
-            </label>
-            <input
-              type="date"
+            <DatePicker
+              label="From Date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+              onChange={setStartDate}
+              triggerClassName="h-10 px-3 text-sm"
             />
           </div>
 
           {/* To Date */}
           <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-              To Date
-            </label>
-            <input
-              type="date"
+            <DatePicker
+              label="To Date"
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+              onChange={setEndDate}
+              triggerClassName="h-10 px-3 text-sm"
             />
           </div>
 
@@ -377,19 +372,20 @@ export default function MyCampaignsPage() {
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
                 Sales Agent
               </label>
-              <select
+              <Dropdown
+                showArrow={false}
                 value={selectedAgentId}
-                onChange={(e) => setSelectedAgentId(e.target.value)}
-                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-              >
-                <option value="">All Team Campaigns (Default)</option>
-                <option value="me">My Campaigns Only</option>
-                {agentOptions.map((a) => (
-                  <option key={a._id} value={a._id}>
-                    {a.name} ({a.role})
-                  </option>
-                ))}
-              </select>
+                onChange={setSelectedAgentId}
+                options={[
+                  { value: '', label: 'All Team Campaigns (Default)' },
+                  { value: 'me', label: 'My Campaigns Only' },
+                  ...agentOptions.map((a) => ({
+                    value: a._id,
+                    label: `${a.name} (${a.role})`,
+                  })),
+                ]}
+                triggerClassName="h-10 px-3 text-sm"
+              />
             </div>
           )}
         </div>

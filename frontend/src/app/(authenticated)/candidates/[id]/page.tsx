@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Loader2, Download, Calendar, Phone, Mail, User, Briefcase, FileText } from 'lucide-react';
-import { Button, Card, cx } from '@/shared/ui';
+import { Button, Card, cx, Dropdown } from '@/shared/ui';
 import { useAuth } from '@/shared/auth/auth-context';
 import { usePageSubTitle } from '@/shared/layout/page-header-context';
 import { candidatesApi } from '@/modules/hr/api';
@@ -187,17 +187,19 @@ export default function CandidateDetailPage() {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">Interview Status</label>
-                  <select
+                  <Dropdown
+                    showArrow={false}
                     value={status}
-                    onChange={(e) => setStatus(e.target.value as CandidateStatus)}
-                    className="w-full h-10 px-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-brand-500/20 outline-none bg-white"
-                  >
-                    <option value="Scheduled">Scheduled</option>
-                    <option value="Interviewed">Interviewed</option>
-                    <option value="Selected">Selected</option>
-                    <option value="Rejected">Rejected</option>
-                    <option value="On Hold">On Hold</option>
-                  </select>
+                    onChange={(val) => setStatus(val as CandidateStatus)}
+                    options={[
+                      { value: 'Scheduled', label: 'Scheduled' },
+                      { value: 'Interviewed', label: 'Interviewed' },
+                      { value: 'Selected', label: 'Selected' },
+                      { value: 'Rejected', label: 'Rejected' },
+                      { value: 'On Hold', label: 'On Hold' },
+                    ]}
+                    triggerClassName="h-10 px-3 text-sm"
+                  />
                 </div>
 
                 <div className="space-y-2">

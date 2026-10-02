@@ -113,21 +113,27 @@ export default function NotificationBell() {
   }, [open]);
 
   async function handleMarkRead(id: string, link?: string) {
-    try {
-      await api.post(`/api/notifications/${id}/read`, {});
-      setNotifications((prev) =>
-        prev.map((n) =>
-          n._id === id ? { ...n, readAt: new Date().toISOString() } : n,
-        ),
-      );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
-    } catch {
-      // ignore
-    }
-
     if (link) {
       setOpen(false);
-      router.push(link);
+      try {
+        router.push(link);
+      } catch (navErr) {
+        console.error("[NotificationBell] Navigation error:", navErr);
+      }
+    }
+
+    try {
+      await api.delete(`/api/notifications/${id}`);
+      setNotifications((prev) => {
+        const target = prev.find((n) => n._id === id);
+        if (target && !target.readAt) {
+          setUnreadCount((count) => Math.max(0, count - 1));
+        }
+        return prev.filter((n) => n._id !== id);
+      });
+      setToastNotification((prev) => (prev?._id === id ? null : prev));
+    } catch (err) {
+      console.error("[NotificationBell] Failed to delete notification:", err);
     }
   }
 

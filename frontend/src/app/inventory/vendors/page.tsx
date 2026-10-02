@@ -33,21 +33,22 @@ export default function VendorsPage() {
   ========================= */
 
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
   const [state, setState] = useState("");
   const [city, setCity] = useState("");
+  const [status, setStatus] = useState("");
+  const [registrationStatus, setRegistrationStatus] =
+    useState("");
 
   /* =========================
      MODAL STATE
   ========================= */
 
-  const [formOpen, setFormOpen] =
-    useState(false);
-
-  const [detailsVendor, setDetailsVendor] =
-    useState<Vendor | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
 
   const [editingVendor, setEditingVendor] =
+    useState<Vendor | null>(null);
+
+  const [detailsVendor, setDetailsVendor] =
     useState<Vendor | null>(null);
 
   const [sitesVendor, setSitesVendor] =
@@ -60,71 +61,273 @@ export default function VendorsPage() {
     useState(false);
 
   /* =========================
-     FILTER VENDORS
+     STATE OPTIONS
+
+     Duplicate state names removed.
+     Comparison is case-insensitive.
   ========================= */
 
-  const filteredVendors = useMemo(() => {
-    const value =
-      search.trim().toLowerCase();
+  const stateOptions = useMemo(() => {
+    const uniqueStates =
+      new Map<string, string>();
 
-    return vendors.filter((vendor) => {
-      const matchesSearch =
-        !value ||
-        vendor.name
-          .toLowerCase()
-          .includes(value) ||
-        vendor.state
-          ?.toLowerCase()
-          .includes(value) ||
-        vendor.city
-          .toLowerCase()
-          .includes(value) ||
-        vendor.contactPerson
-          ?.toLowerCase()
-          .includes(value) ||
-        vendor.panNumber
-          ?.toLowerCase()
-          .includes(value) ||
-        vendor.msmeNumber
-          ?.toLowerCase()
-          .includes(value) ||
-        vendor.gstNumber
-          ?.toLowerCase()
-          .includes(value);
+    vendors.forEach((vendor) => {
+      const stateName =
+        vendor.state?.trim();
 
-      const matchesStatus =
-        !status ||
-        vendor.status === status;
+      if (!stateName) return;
 
-      const matchesState =
-        !state ||
-        vendor.state
-          ?.toLowerCase() ===
-          state.toLowerCase();
+      const key =
+        stateName.toLowerCase();
 
-      const matchesCity =
-        !city ||
-        vendor.city
-          .toLowerCase() ===
-          city.toLowerCase();
-
-      return (
-        matchesSearch &&
-        matchesStatus &&
-        matchesState &&
-        matchesCity
-      );
+      if (!uniqueStates.has(key)) {
+        uniqueStates.set(
+          key,
+          stateName
+        );
+      }
     });
-  }, [
-    vendors,
-    search,
-    status,
-    state,
-    city,
-  ]);
+
+    return Array.from(
+      uniqueStates.values()
+    ).sort((a, b) =>
+      a.localeCompare(b)
+    );
+  }, [vendors]);
 
   /* =========================
-     ADD
+     CITY OPTIONS
+
+     Only selected state's cities.
+     Duplicate city names removed.
+  ========================= */
+
+  const cityOptions = useMemo(() => {
+    if (!state) {
+      return [];
+    }
+
+    const selectedState =
+      state.trim().toLowerCase();
+
+    const uniqueCities =
+      new Map<string, string>();
+
+    vendors
+      .filter((vendor) => {
+        const vendorState =
+          vendor.state
+            ?.trim()
+            .toLowerCase();
+
+        return (
+          vendorState ===
+          selectedState
+        );
+      })
+      .forEach((vendor) => {
+        /* =====================
+           MAIN CITY
+        ===================== */
+
+        const mainCity =
+          vendor.city?.trim();
+
+        if (mainCity) {
+          const key =
+            mainCity.toLowerCase();
+
+          if (
+            !uniqueCities.has(key)
+          ) {
+            uniqueCities.set(
+              key,
+              mainCity
+            );
+          }
+        }
+
+        /* =====================
+           CITIES SERVED
+        ===================== */
+
+        if (
+          Array.isArray(
+            vendor.citiesServed
+          )
+        ) {
+          vendor.citiesServed.forEach(
+            (item) => {
+              const cityName =
+                item.trim();
+
+              if (!cityName) return;
+
+              const key =
+                cityName.toLowerCase();
+
+              if (
+                !uniqueCities.has(
+                  key
+                )
+              ) {
+                uniqueCities.set(
+                  key,
+                  cityName
+                );
+              }
+            }
+          );
+        }
+      });
+
+    return Array.from(
+      uniqueCities.values()
+    ).sort((a, b) =>
+      a.localeCompare(b)
+    );
+  }, [vendors, state]);
+
+  /* =========================
+     FILTERED VENDORS
+  ========================= */
+
+  const filteredVendors =
+    useMemo(() => {
+      const searchValue =
+        search
+          .trim()
+          .toLowerCase();
+
+      const selectedState =
+        state
+          .trim()
+          .toLowerCase();
+
+      const selectedCity =
+        city
+          .trim()
+          .toLowerCase();
+
+      return vendors.filter(
+        (vendor) => {
+          /* =====================
+             SEARCH
+          ===================== */
+
+          const matchesSearch =
+            !searchValue ||
+            vendor.name
+              ?.toLowerCase()
+              .includes(
+                searchValue
+              ) ||
+            vendor.state
+              ?.toLowerCase()
+              .includes(
+                searchValue
+              ) ||
+            vendor.city
+              ?.toLowerCase()
+              .includes(
+                searchValue
+              ) ||
+            vendor.citiesServed?.some(
+              (item) =>
+                item
+                  .toLowerCase()
+                  .includes(
+                    searchValue
+                  )
+            ) ||
+            vendor.contactPerson
+              ?.toLowerCase()
+              .includes(
+                searchValue
+              ) ||
+            vendor.panNumber
+              ?.toLowerCase()
+              .includes(
+                searchValue
+              ) ||
+            vendor.gstNumber
+              ?.toLowerCase()
+              .includes(
+                searchValue
+              ) ||
+            vendor.msmeNumber
+              ?.toLowerCase()
+              .includes(
+                searchValue
+              );
+
+          /* =====================
+             STATUS
+          ===================== */
+
+          const matchesStatus =
+            !status ||
+            vendor.status ===
+              status;
+
+          /* =====================
+             STATE
+          ===================== */
+
+          const matchesState =
+            !selectedState ||
+            vendor.state
+              ?.trim()
+              .toLowerCase() ===
+              selectedState;
+
+          /* =====================
+             CITY
+          ===================== */
+
+          const matchesCity =
+            !selectedCity ||
+            vendor.city
+              ?.trim()
+              .toLowerCase() ===
+              selectedCity ||
+            vendor.citiesServed?.some(
+              (item) =>
+                item
+                  .trim()
+                  .toLowerCase() ===
+                selectedCity
+            );
+
+          /* =====================
+             REGISTRATION
+          ===================== */
+
+          const matchesRegistration =
+            !registrationStatus ||
+            vendor.registrationStatus ===
+              registrationStatus;
+
+          return (
+            matchesSearch &&
+            matchesStatus &&
+            matchesState &&
+            matchesCity &&
+            matchesRegistration
+          );
+        }
+      );
+    }, [
+      vendors,
+      search,
+      state,
+      city,
+      status,
+      registrationStatus,
+    ]);
+
+  /* =========================
+     ADD VENDOR
   ========================= */
 
   function openAdd() {
@@ -133,27 +336,27 @@ export default function VendorsPage() {
   }
 
   /* =========================
-     EDIT
+     EDIT VENDOR
   ========================= */
 
   function openEdit(
-    vendor: Vendor,
+    vendor: Vendor
   ) {
     setEditingVendor(vendor);
     setFormOpen(true);
   }
 
   /* =========================
-     SUBMIT
+     SUBMIT VENDOR
   ========================= */
 
   async function handleSubmit(
-    data: VendorFormData,
+    data: VendorFormData
   ) {
     if (editingVendor) {
       return editVendor(
         editingVendor._id,
-        data,
+        data
       );
     }
 
@@ -161,18 +364,36 @@ export default function VendorsPage() {
   }
 
   /* =========================
+     RATING
+  ========================= */
+
+  async function handleRatingChange(
+    vendor: Vendor,
+    rating: number
+  ) {
+    await editVendor(
+      vendor._id,
+      {
+        vendorRating: rating,
+      }
+    );
+  }
+
+  /* =========================
      VIEW SITES
   ========================= */
 
   async function openSites(
-    vendor: Vendor,
+    vendor: Vendor
   ) {
     setSitesVendor(vendor);
     setSites([]);
     setSitesLoading(true);
 
     const result =
-      await getSites(vendor._id);
+      await getSites(
+        vendor._id
+      );
 
     setSites(result);
     setSitesLoading(false);
@@ -183,11 +404,11 @@ export default function VendorsPage() {
   ========================= */
 
   async function handleDeactivate(
-    vendor: Vendor,
+    vendor: Vendor
   ) {
     const confirmed =
       window.confirm(
-        `Are you sure you want to deactivate ${vendor.name}?`,
+        `Are you sure you want to deactivate ${vendor.name}?`
       );
 
     if (!confirmed) {
@@ -195,7 +416,7 @@ export default function VendorsPage() {
     }
 
     await deactivate(
-      vendor._id,
+      vendor._id
     );
   }
 
@@ -205,21 +426,25 @@ export default function VendorsPage() {
 
   function clearFilters() {
     setSearch("");
-    setStatus("");
     setState("");
     setCity("");
+    setStatus("");
+    setRegistrationStatus("");
   }
 
+  /* =========================
+     RENDER
+  ========================= */
+
   return (
-    <main className="min-h-screen bg-[#F7F8FA] p-4 md:p-6">
+    <main className="min-h-screen bg-white p-4 md:p-6">
       <div className="mx-auto max-w-7xl">
 
-        {/* =========================
+        {/* =====================
             HEADER
-        ========================= */}
+        ===================== */}
 
         <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-
           <div>
             <h1 className="text-3xl font-bold text-[#1F2937]">
               Vendors
@@ -239,15 +464,17 @@ export default function VendorsPage() {
           </button>
         </div>
 
-        {/* =========================
+        {/* =====================
             SUMMARY
-        ========================= */}
+        ===================== */}
 
-        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
 
           <Summary
             title="Total Vendors"
-            value={vendors.length}
+            value={
+              vendors.length
+            }
           />
 
           <Summary
@@ -256,7 +483,7 @@ export default function VendorsPage() {
               vendors.filter(
                 (vendor) =>
                   vendor.status ===
-                  "Active",
+                  "Active"
               ).length
             }
           />
@@ -267,40 +494,78 @@ export default function VendorsPage() {
               vendors.filter(
                 (vendor) =>
                   vendor.status ===
-                  "Inactive",
+                  "Inactive"
+              ).length
+            }
+          />
+
+          <Summary
+            title="Blacklist"
+            value={
+              vendors.filter(
+                (vendor) =>
+                  vendor.status ===
+                  "Blacklist"
               ).length
             }
           />
 
         </div>
 
-        {/* =========================
+        {/* =====================
             FILTERS
-        ========================= */}
+        ===================== */}
 
         <VendorFilters
           search={search}
-          status={status}
           state={state}
           city={city}
-          onSearchChange={setSearch}
-          onStatusChange={setStatus}
-          onStateChange={setState}
-          onCityChange={setCity}
+          status={status}
+          registrationStatus={
+            registrationStatus
+          }
+          states={stateOptions}
+          cities={cityOptions}
+          onSearchChange={
+            setSearch
+          }
+
+          onStateChange={(value) => {
+            setState(value);
+
+            // State change par
+            // city reset hogi.
+            setCity("");
+          }}
+
+          onCityChange={
+            setCity
+          }
+
+          onStatusChange={
+            setStatus
+          }
+
+          onRegistrationStatusChange={
+            setRegistrationStatus
+          }
         />
 
-        {/* =========================
+        {/* =====================
             CLEAR FILTERS
-        ========================= */}
+        ===================== */}
 
         {(search ||
-          status ||
           state ||
-          city) && (
+          city ||
+          status ||
+          registrationStatus) && (
           <div className="mt-3 flex justify-end">
             <button
               type="button"
-              onClick={clearFilters}
+              onClick={
+                clearFilters
+              }
               className="rounded-lg px-4 py-2 text-sm font-semibold text-[#8B2424] transition hover:bg-[#F9DADA]"
             >
               Clear Filters
@@ -308,9 +573,9 @@ export default function VendorsPage() {
           </div>
         )}
 
-        {/* =========================
+        {/* =====================
             ERROR
-        ========================= */}
+        ===================== */}
 
         {error && (
           <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4">
@@ -320,9 +585,9 @@ export default function VendorsPage() {
           </div>
         )}
 
-        {/* =========================
+        {/* =====================
             TABLE
-        ========================= */}
+        ===================== */}
 
         <div className="mt-6">
 
@@ -338,12 +603,24 @@ export default function VendorsPage() {
             </div>
           ) : (
             <VendorTable
-              vendors={filteredVendors}
-              onView={setDetailsVendor}
-              onEdit={openEdit}
-              onSites={openSites}
+              vendors={
+                filteredVendors
+              }
+              loading={loading}
+              onView={
+                setDetailsVendor
+              }
+              onEdit={
+                openEdit
+              }
+              onSites={
+                openSites
+              }
               onDeactivate={
                 handleDeactivate
+              }
+              onRatingChange={
+                handleRatingChange
               }
             />
           )}
@@ -351,20 +628,26 @@ export default function VendorsPage() {
         </div>
       </div>
 
-      {/* =========================
-          FORM
-      ========================= */}
+      {/* =====================
+          VENDOR FORM
+      ===================== */}
 
       {formOpen && (
         <VendorForm
-          vendor={editingVendor}
+          vendor={
+            editingVendor
+          }
           saving={saving}
           onClose={() =>
             setFormOpen(false)
           }
-          onSubmit={async (data) => {
+          onSubmit={async (
+            data
+          ) => {
             const success =
-              await handleSubmit(data);
+              await handleSubmit(
+                data
+              );
 
             if (success) {
               setFormOpen(false);
@@ -375,42 +658,57 @@ export default function VendorsPage() {
         />
       )}
 
-      {/* =========================
-          DETAILS
-      ========================= */}
+      {/* =====================
+          VENDOR DETAILS
+      ===================== */}
 
       {detailsVendor && (
         <VendorDetails
-          vendor={detailsVendor}
+          vendor={
+            detailsVendor
+          }
           onClose={() =>
-            setDetailsVendor(null)
+            setDetailsVendor(
+              null
+            )
           }
           onEdit={() => {
             setEditingVendor(
-              detailsVendor,
+              detailsVendor
             );
 
-            setDetailsVendor(null);
+            setDetailsVendor(
+              null
+            );
+
             setFormOpen(true);
           }}
         />
       )}
 
-      {/* =========================
-          SITES
-      ========================= */}
+      {/* =====================
+          VENDOR SITES
+      ===================== */}
 
       {sitesVendor && (
         <VendorSitesModal
-          vendor={sitesVendor}
+          vendor={
+            sitesVendor
+          }
           sites={sites}
-          loading={sitesLoading}
+          loading={
+            sitesLoading
+          }
           onClose={() => {
-            setSitesVendor(null);
+            setSitesVendor(
+              null
+            );
+
             setSites([]);
           }}
         />
       )}
+
     </main>
   );
 }
@@ -427,9 +725,8 @@ function Summary({
   value: number;
 }) {
   return (
-    <div
-      className="rounded-2xl border border-[#E8E8EC] bg-white p-5 shadow-sm transition hover:border-[#F0C7C7] hover:shadow-md"
-    >
+    <div className="rounded-2xl border border-[#E8E8EC] bg-white p-5 shadow-sm transition hover:border-[#F0C7C7] hover:shadow-md">
+
       <p className="text-sm font-medium text-[#667085]">
         {title}
       </p>
@@ -437,6 +734,7 @@ function Summary({
       <p className="mt-2 text-3xl font-bold text-[#1F2937]">
         {value}
       </p>
+
     </div>
   );
 }

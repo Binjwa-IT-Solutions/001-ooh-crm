@@ -1,7 +1,7 @@
 import { Router } from 'express';
 
 import { requireAuth } from '../auth/auth-middleware.js';
-import { UnauthorizedError } from '../errors/index.js';
+import { NotFoundError, UnauthorizedError } from '../errors/index.js';
 import { asyncHandler } from '../http/asyncHandler.js';
 import { notificationService } from './index.js';
 
@@ -44,6 +44,20 @@ router.post(
 
     const count = await notificationService.markAllRead(req.ctx.user.id);
     res.status(200).json({ message: 'All marked as read', count });
+  }),
+);
+
+router.delete(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    if (!req.ctx) throw new UnauthorizedError();
+
+    const deleted = await notificationService.deleteForUser(req.ctx.user.id, String(req.params.id));
+    if (!deleted) {
+      throw new NotFoundError('Notification not found');
+    }
+
+    res.status(200).json({ message: 'Notification deleted' });
   }),
 );
 

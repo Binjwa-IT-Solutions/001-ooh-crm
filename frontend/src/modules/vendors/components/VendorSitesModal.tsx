@@ -1,9 +1,6 @@
 "use client";
 
-import type {
-  Vendor,
-  VendorSite,
-} from "../types";
+import type { Vendor, VendorSite } from "../types";
 
 interface Props {
   vendor: Vendor;
@@ -22,9 +19,7 @@ export default function VendorSitesModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
 
-        {/* ================= HEADER ================= */}
-
-        <div className="flex items-center justify-between border-b border-[#EEEEF3] bg-white px-6 py-5">
+        <div className="flex items-center justify-between border-b border-[#EEEEF3] px-6 py-5">
           <div>
             <h2 className="text-xl font-bold text-[#1F2937]">
               Linked Sites
@@ -38,62 +33,23 @@ export default function VendorSitesModal({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
-            className="
-              rounded-lg
-              px-3 py-1
-              text-2xl
-              font-bold
-              text-gray-500
-              transition
-              hover:bg-[#F9DADA]
-              hover:text-[#8B2424]
-              focus:outline-none
-              focus:ring-2
-              focus:ring-[#F9DADA]
-            "
+            className="rounded-lg px-3 py-1 text-2xl font-bold text-gray-500 hover:bg-[#F9DADA] hover:text-[#8B2424]"
           >
             ×
           </button>
         </div>
 
-        {/* ================= CONTENT ================= */}
-
         <div className="max-h-[60vh] overflow-y-auto p-6">
-
-          {/* LOADING */}
-
           {loading ? (
             <div className="py-12 text-center">
               <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-[#F9DADA] border-t-[#8B2424]" />
-
-              <p className="mt-4 text-sm font-medium text-[#667085]">
+              <p className="mt-4 text-sm text-[#667085]">
                 Loading sites...
               </p>
             </div>
-          ) : sites.length === 0 ? (
-
-            /* NO SITES */
-
+          ) : !sites.length ? (
             <div className="py-12 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F9DADA]">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="#8B2424"
-                  className="h-6 w-6"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
-                  />
-                </svg>
-              </div>
-
-              <p className="mt-4 font-bold text-[#1F2937]">
+              <p className="font-bold text-[#1F2937]">
                 No linked sites
               </p>
 
@@ -102,25 +58,11 @@ export default function VendorSitesModal({
               </p>
             </div>
           ) : (
-
-            /* SITES */
-
             <div className="space-y-3">
               {sites.map((site) => (
                 <div
                   key={site._id}
-                  className="
-                    flex
-                    items-center
-                    justify-between
-                    rounded-xl
-                    border border-[#E8E8EC]
-                    bg-white
-                    p-4
-                    transition
-                    hover:border-[#F0C7C7]
-                    hover:bg-[#FFF8F8]
-                  "
+                  className="flex items-center justify-between rounded-xl border border-[#E8E8EC] p-4 hover:border-[#F0C7C7] hover:bg-[#FFF8F8]"
                 >
                   <div>
                     <p className="text-sm font-bold text-[#1F2937]">
@@ -132,23 +74,7 @@ export default function VendorSitesModal({
                     </p>
                   </div>
 
-                  {/* STATUS */}
-
-                  <span
-                    className={`
-                      rounded-full
-                      px-3 py-1.5
-                      text-xs
-                      font-bold
-                      ${
-                        site.status === "Active"
-                          ? "bg-green-50 text-green-700"
-                          : site.status === "Maintenance"
-                            ? "bg-yellow-50 text-yellow-700"
-                            : "bg-gray-100 text-gray-600"
-                      }
-                    `}
-                  >
+                  <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-bold text-gray-600">
                     {site.status}
                   </span>
                 </div>
@@ -157,33 +83,15 @@ export default function VendorSitesModal({
           )}
         </div>
 
-        {/* ================= FOOTER ================= */}
-
         <div className="flex justify-end border-t border-[#EEEEF3] bg-[#FAFAFB] px-6 py-4">
           <button
             type="button"
             onClick={onClose}
-            className="
-              rounded-xl
-              border border-[#8B2424]
-              bg-[#F9DADA]
-              px-5 py-2.5
-              text-sm
-              font-bold
-              text-[#8B2424]
-              transition
-              hover:bg-[#8B2424]
-              hover:text-white
-              focus:outline-none
-              focus:ring-2
-              focus:ring-[#F9DADA]
-              focus:ring-offset-2
-            "
+            className="rounded-xl border border-[#8B2424] bg-[#F9DADA] px-5 py-2.5 text-sm font-bold text-[#8B2424] hover:bg-[#8B2424] hover:text-white"
           >
             Close
           </button>
         </div>
-
       </div>
     </div>
   );

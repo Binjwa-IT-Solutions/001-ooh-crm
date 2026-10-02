@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Plus, Search } from 'lucide-react';
 import { useAuth } from '@/shared/auth/auth-context';
+import { Dropdown } from '@/shared/ui';
 import { leadsApi } from '@/modules/leads/api';
 import { quotationsApi } from '@/modules/quotations/api';
 import type { Quotation } from '@/modules/quotations/types';
@@ -116,31 +117,31 @@ export default function QuotationsPage() {
               className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-slate-700 dark:bg-slate-950 dark:text-white"
             />
           </div>
-          <select
+          <Dropdown
+            showArrow={false}
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-          >
-            <option value="">All Statuses</option>
-            <option value="Draft">Draft</option>
-            <option value="Sent">Sent</option>
-            <option value="Accepted">Accepted</option>
-            <option value="Rejected">Rejected</option>
-            <option value="Expired">Expired</option>
-          </select>
+            onChange={setStatusFilter}
+            options={[
+              { value: '', label: 'All Statuses' },
+              { value: 'Draft', label: 'Draft' },
+              { value: 'Sent', label: 'Sent' },
+              { value: 'Accepted', label: 'Accepted' },
+              { value: 'Rejected', label: 'Rejected' },
+              { value: 'Expired', label: 'Expired' },
+            ]}
+            triggerClassName="py-2 px-3 text-sm min-w-[130px]"
+          />
           {isManagerOrAdmin && agentOptions.length > 0 && (
-            <select
+            <Dropdown
+              showArrow={false}
               value={agentFilter}
-              onChange={(e) => setAgentFilter(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-            >
-              <option value="">All Sales Agents</option>
-              {agentOptions.map((a) => (
-                <option key={a._id} value={a._id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+              onChange={setAgentFilter}
+              options={[
+                { value: '', label: 'All Sales Agents' },
+                ...agentOptions.map((a) => ({ value: a._id, label: a.name })),
+              ]}
+              triggerClassName="py-2 px-3 text-sm min-w-[160px]"
+            />
           )}
         </div>
         <span className="text-xs text-slate-500 font-medium whitespace-nowrap">

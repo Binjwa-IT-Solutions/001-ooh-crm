@@ -22,15 +22,15 @@ async function fixCampaign() {
     }
 
     console.log('✅ Available sites:\n');
-    sites.forEach((site, idx) => {
-      console.log(`  ${idx + 1}. ${site.code} - ${site.city} (${site.type})`);
+    sites.forEach((site: any, idx) => {
+      console.log(`  ${idx + 1}. ${site.mediaPlanNo || site.code} - ${site.city} (${site.mediaType || site.type})`);
       console.log(`     ID: ${site._id}`);
     });
 
     // Get the first site
-    const firstSite = sites[0];
+    const firstSite: any = sites[0];
     console.log(
-      `\n🔧 Fixing campaign MO-C-2026-0001 with site: ${firstSite.code}...\n`,
+      `\n🔧 Fixing campaign MO-C-2026-0001 with site: ${firstSite.mediaPlanNo || firstSite.code}...\n`,
     );
 
     // Update the campaign
@@ -41,7 +41,7 @@ async function fixCampaign() {
 
     if (result.modifiedCount > 0) {
       console.log('✅ Campaign fixed successfully!');
-      console.log(`   Site added: ${firstSite.code} (${firstSite.city})\n`);
+      console.log(`   Site added: ${firstSite.mediaPlanNo || firstSite.code} (${firstSite.city})\n`);
     } else {
       console.log('⚠️  Campaign not found or already up to date.\n');
     }

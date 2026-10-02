@@ -16,6 +16,9 @@ export interface AuthUser {
   status: 'Active' | 'Inactive';
   permissions: string[];
   lastLoginAt: string | null;
+  phone?: string;
+  designation?: string;
+  gender?: 'Male' | 'Female' | null;
 }
 
 /** Returned by POST /api/auth/login — step 1 of the two-step sign-in. */

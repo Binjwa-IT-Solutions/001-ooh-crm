@@ -14,56 +14,73 @@
 .trigger {
   display: flex;
   width: 100%;
-  height: 2.75rem;
+  min-height: 2.625rem;
   align-items: center;
   justify-content: space-between;
-  border: 1px solid rgb(203 213 225);
+  border: 1px solid #D1D5DB;
   border-radius: 0.5rem;
   background: white;
-  padding: 0 0.75rem;
-  color: rgb(15 23 42);
+  padding: 0.625rem 1rem;
+  color: #111827;
   font-size: 0.875rem;
   text-align: left;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+}
+
+.trigger:hover {
+  border-color: #8B2424;
 }
 
 .trigger:focus-visible {
-  outline: 2px solid #6E1D1D;
-  outline-offset: 2px;
+  border-color: #8B2424;
+  outline: none;
+  box-shadow: 0 0 0 2px #F9DADA;
 }
 
 .triggerError { border-color: rgb(248 113 113); }
-.placeholder { color: rgb(100 116 139); }
-.chevron { color: rgb(100 116 139); font-size: 1.25rem; line-height: 1; }
+.placeholder { color: #6B7280; }
+.chevron { color: #6B7280; font-size: 1rem; line-height: 1; user-select: none; }
 
 .menu {
   position: absolute;
-  z-index: 20;
+  z-index: 50;
   top: calc(100% + 0.25rem);
   width: 100%;
-  overflow: hidden;
-  border: 1px solid rgb(203 213 225);
+  max-height: 15rem;
+  overflow-y: auto;
+  border: 1px solid #E5E7EB;
   border-radius: 0.5rem;
   background: white;
-  box-shadow: 0 10px 15px -3px rgb(15 23 42 / 0.12);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
 }
 
 .option {
   display: block;
   width: 100%;
-  padding: 0.625rem 0.75rem;
+  padding: 0.625rem 1rem;
   border: 0;
   background: white;
-  color: #1F2937;
+  color: #111827;
   font-size: 0.875rem;
   text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .option:hover,
 .option:focus-visible,
-.optionActive,
-.optionSelected {
+.optionActive {
   background-color: #F9DADA;
-  color: #1F2937;
+  color: #8B2424;
+  outline: none;
+}
+
+.optionSelected {
+  background-color: #FFF5F5;
+  color: #8B2424;
+  font-weight: 600;
   outline: none;
 }
 

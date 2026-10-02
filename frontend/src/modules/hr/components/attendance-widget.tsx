@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Card, Button, Badge, Spinner, Alert, SelectField } from '@/shared/ui';
+import { Card, Button, Badge, Spinner, Alert, SelectField, Dropdown } from '@/shared/ui';
 import { useMyAttendance } from '../hooks/use-attendance';
 import { attendanceApi } from '../api';
 import { WorkType } from '../types';
@@ -297,14 +297,18 @@ export function AttendanceWidget() {
           <div className="space-y-1.5 opacity-60">
             <label className="block text-sm font-medium text-slate-700">Break</label>
             <div className="flex gap-2">
-              <select
+              <Dropdown
+                showArrow={false}
                 disabled
-                className="h-11 flex-1 rounded-lg border border-slate-200 bg-slate-100 px-3 text-sm text-slate-400 cursor-not-allowed"
-              >
-                <option>Lunch</option>
-                <option>Tea</option>
-                <option>Other</option>
-              </select>
+                value="Lunch"
+                options={[
+                  { value: 'Lunch', label: 'Lunch' },
+                  { value: 'Tea', label: 'Tea' },
+                  { value: 'Other', label: 'Other' },
+                ]}
+                triggerClassName="h-11 flex-1 px-3 text-sm cursor-not-allowed bg-slate-100 text-slate-400"
+                className="flex-1"
+              />
               <Button
                 type="button"
                 variant="secondary"
@@ -363,15 +367,18 @@ export function AttendanceWidget() {
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-slate-700">Break</label>
               <div className="flex gap-2">
-                <select
+                <Dropdown
+                  showArrow={false}
                   value={selectedBreakType}
-                  onChange={(e) => setSelectedBreakType(e.target.value as BreakType)}
-                  className="h-11 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-primary transition-colors"
-                >
-                  <option value="Lunch">Lunch Break</option>
-                  <option value="Tea">Tea Break</option>
-                  <option value="Other">Other Break</option>
-                </select>
+                  onChange={(val) => setSelectedBreakType(val as BreakType)}
+                  options={[
+                    { value: 'Lunch', label: 'Lunch Break' },
+                    { value: 'Tea', label: 'Tea Break' },
+                    { value: 'Other', label: 'Other Break' },
+                  ]}
+                  triggerClassName="h-11 flex-1 px-3 text-sm"
+                  className="flex-1"
+                />
                 <Button
                   type="button"
                   variant="secondary"

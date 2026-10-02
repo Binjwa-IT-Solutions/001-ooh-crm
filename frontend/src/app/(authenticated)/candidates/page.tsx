@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Plus, Search, Filter, Loader2, FileText, ChevronRight } from 'lucide-react';
-import { Button, cx, Card } from '@/shared/ui';
+import { Button, cx, Card, Dropdown } from '@/shared/ui';
 import { useAuth } from '@/shared/auth/auth-context';
 import { usePageSubTitle } from '@/shared/layout/page-header-context';
 import { candidatesApi } from '@/modules/hr/api';
@@ -73,18 +73,20 @@ export default function CandidatesListPage() {
           <span className="text-sm font-medium text-slate-700">Filters:</span>
         </div>
 
-        <select
-          className="h-9 px-3 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500/20"
+        <Dropdown
+          showArrow={false}
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as CandidateStatus | '')}
-        >
-          <option value="">All Statuses</option>
-          <option value="Scheduled">Scheduled</option>
-          <option value="Interviewed">Interviewed</option>
-          <option value="Selected">Selected</option>
-          <option value="Rejected">Rejected</option>
-          <option value="On Hold">On Hold</option>
-        </select>
+          onChange={(val) => setStatusFilter(val as CandidateStatus | '')}
+          options={[
+            { value: '', label: 'All Statuses' },
+            { value: 'Scheduled', label: 'Scheduled' },
+            { value: 'Interviewed', label: 'Interviewed' },
+            { value: 'Selected', label: 'Selected' },
+            { value: 'Rejected', label: 'Rejected' },
+            { value: 'On Hold', label: 'On Hold' },
+          ]}
+          triggerClassName="h-9 px-3 text-sm min-w-[130px]"
+        />
 
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />

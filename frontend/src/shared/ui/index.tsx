@@ -227,9 +227,15 @@ export function Badge({ children }: { children: ReactNode }) {
   );
 }
 
+import { Dropdown } from './Dropdown';
+export { Dropdown, type DropdownProps, type DropdownOption } from './Dropdown';
+
+import { DatePicker } from './DatePicker';
+export { DatePicker, type DatePickerProps } from './DatePicker';
+
 // ---------------------------------------------------------------- Select
 
-export interface SelectFieldProps extends ComponentProps<'select'> {
+export interface SelectFieldProps extends Omit<ComponentProps<'select'>, 'options'> {
   label: string;
   error?: string;
   hint?: ReactNode;
@@ -245,49 +251,44 @@ export function SelectField({
   placeholder,
   className,
   id,
+  value,
+  defaultValue,
+  onChange,
+  disabled,
+  required,
+  name,
   ...props
 }: SelectFieldProps) {
-  const generatedId = useId();
-  const selectId = id ?? generatedId;
-  const describedBy = error ? `${selectId}-error` : hint ? `${selectId}-hint` : undefined;
+  const handleChange = (val: string) => {
+    if (onChange) {
+      const syntheticEvent = {
+        target: { value: val, name: name || id || '' },
+        currentTarget: { value: val, name: name || id || '' },
+        type: 'change',
+      } as unknown as React.ChangeEvent<HTMLSelectElement>;
+      onChange(syntheticEvent);
+    }
+  };
+
+  const stringValue = value !== undefined ? String(value) : undefined;
+  const stringDefaultValue = defaultValue !== undefined ? String(defaultValue) : undefined;
 
   return (
-    <div className="space-y-1.5">
-      <label
-        htmlFor={selectId}
-        className="block text-sm font-medium text-slate-700 dark:text-slate-300"
-      >
-        {label}
-      </label>
-      <select
-        {...props}
-        id={selectId}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy}
-        className={cx(
-          'h-11 w-full rounded-lg border bg-white px-3 text-sm text-slate-900 outline-none transition-colors',
-          'focus:border-primary dark:bg-slate-900 dark:text-slate-100 dark:focus:border-slate-300',
-          error ? 'border-red-400' : 'border-slate-300 dark:border-slate-700',
-          className,
-        )}
-      >
-        {placeholder !== undefined && <option value="">{placeholder}</option>}
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      {error ? (
-        <p id={`${selectId}-error`} className="text-xs text-red-600 dark:text-red-400">
-          {error}
-        </p>
-      ) : hint ? (
-        <p id={`${selectId}-hint`} className="text-xs text-slate-500 dark:text-slate-400">
-          {hint}
-        </p>
-      ) : null}
-    </div>
+    <Dropdown
+      id={id}
+      name={name}
+      label={label}
+      error={error}
+      hint={hint}
+      options={options}
+      placeholder={placeholder}
+      className={className}
+      value={stringValue}
+      defaultValue={stringDefaultValue}
+      onChange={handleChange}
+      disabled={disabled}
+      required={required}
+    />
   );
 }
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Modal, Button, Field, TextAreaField, SelectField, Spinner, Badge } from '@/shared/ui';
+import { Modal, Button, Field, TextAreaField, SelectField, Spinner, Badge, DatePicker } from '@/shared/ui';
 import { leadsApi } from '../api';
 import {
   Lead,
@@ -575,12 +575,12 @@ export default function QuickLogActionModal({
               />
 
               {/* Next Action Date */}
-              <Field
+              <DatePicker
                 label="Next Action Date"
-                type="date"
                 min={new Date().toISOString().slice(0, 10)}
                 value={nextActionDate}
-                onChange={(e) => setNextActionDate(e.target.value)}
+                onChange={setNextActionDate}
+                triggerClassName="h-11"
               />
 
               {/* Toggle Profile Updates */}

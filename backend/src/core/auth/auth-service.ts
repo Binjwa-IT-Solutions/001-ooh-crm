@@ -45,6 +45,9 @@ export interface PublicUser {
   createdAt?: Date | null;
   reportingManager?: { id: string; fullName: string; designation: string } | null;
   reportingManagerId?: string | null;
+  phone?: string;
+  designation?: string;
+  gender?: 'Male' | 'Female' | null;
 }
 
 export interface LoginChallenge {
@@ -110,6 +113,10 @@ export class AuthService {
       }
     }
 
+    const phone = user.phone || employeeDoc?.mobile || '';
+    const designation = user.designation || employeeDoc?.designation || '';
+    const gender = user.gender ?? null;
+
     return {
       id: String(user._id),
       name: user.name,
@@ -119,6 +126,9 @@ export class AuthService {
       permissions: permissionsForRole(user.role),
       lastLoginAt: user.lastLoginAt ?? null,
       createdAt: user.createdAt ?? null,
+      phone,
+      designation,
+      gender,
       reportingManager,
       reportingManagerId,
     };

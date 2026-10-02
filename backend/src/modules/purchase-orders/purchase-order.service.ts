@@ -65,47 +65,33 @@ function calculateDays(
 }
 
 function buildLineItems(
-  items: CreatePurchaseOrderInput["lineItems"],
+  items?: CreatePurchaseOrderInput["lineItems"],
 ): IPurchaseOrderLineItem[] {
   if (!items || items.length === 0) {
-    throw new Error(
-      "At least one line item is required",
-    );
+    return [];
   }
 
   return items.map((item) => {
-    if (!mongoose.isValidObjectId(item.siteId)) {
-      throw new Error(
-        `Invalid site ID: ${item.siteId}`,
-      );
+    const from = item.from ? new Date(item.from) : undefined;
+    const to = item.to ? new Date(item.to) : undefined;
+
+    let days = item.days || 1;
+    if (from && to && !Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime())) {
+      days = calculateDays(from, to);
     }
 
-    const from = new Date(item.from);
-    const to = new Date(item.to);
-
-    const days = calculateDays(from, to);
-
-    if (
-      typeof item.negotiatedRatePerDay !==
-        "number" ||
-      item.negotiatedRatePerDay < 0
-    ) {
-      throw new Error(
-        "Negotiated rate per day must be a valid non-negative number",
-      );
-    }
-
-    const amount =
-      item.negotiatedRatePerDay * days;
+    const rate = Number(item.negotiatedRatePerDay) || 0;
+    const amount = item.amount ?? rate * days;
 
     return {
-      siteId: new mongoose.Types.ObjectId(
-        item.siteId,
-      ),
+      siteId: item.siteId && mongoose.isValidObjectId(item.siteId)
+        ? new mongoose.Types.ObjectId(item.siteId)
+        : undefined,
+      city: item.city,
+      spaceType: item.spaceType,
       from,
       to,
-      negotiatedRatePerDay:
-        item.negotiatedRatePerDay,
+      negotiatedRatePerDay: rate,
       days,
       amount,
     };
@@ -117,7 +103,7 @@ function calculateTotal(
 ): number {
   return items.reduce(
     (total, item) =>
-      total + item.amount,
+      total + (item.amount || 0),
     0,
   );
 }
@@ -158,6 +144,10 @@ export async function listPurchaseOrders(
     query.vendorId = new mongoose.Types.ObjectId(filters.vendorId);
   }
 
+  if (filters.city && filters.city.trim()) {
+    query.city = { $regex: filters.city.trim(), $options: "i" };
+  }
+
   if (filters.search?.trim()) {
     const searchRegex = new RegExp(filters.search.trim(), "i");
 
@@ -187,6 +177,10 @@ export async function listPurchaseOrders(
 
     const orConditions: any[] = [
       { poNumber: searchRegex },
+      { pricingId: searchRegex },
+      { city: searchRegex },
+      { spaceType: searchRegex },
+      { approvedBy: searchRegex },
     ];
 
     if (vendorIds.length > 0) {
@@ -211,7 +205,7 @@ export async function listPurchaseOrders(
     )
     .populate(
       "lineItems.siteId",
-      "code name city type baseCostPerDay",
+      "mediaPlanNo code name city mediaType type baseCostPerDay",
     )
     .sort({
       createdAt: -1,
@@ -244,7 +238,7 @@ export async function getPurchaseOrderById(
       )
       .populate(
         "lineItems.siteId",
-        "code name city type baseCostPerDay",
+        "mediaPlanNo code name city mediaType type baseCostPerDay",
       )
       .lean();
 
@@ -288,21 +282,6 @@ export async function createPurchaseOrder(
   ctx: RequestContext,
 ) {
   /* -------------------------------------------------------
-     CAMPAIGN VALIDATION
-  ------------------------------------------------------- */
-
-  if (
-    !input.campaignId ||
-    !mongoose.isValidObjectId(
-      input.campaignId,
-    )
-  ) {
-    throw new Error(
-      `Invalid campaign ID: ${input.campaignId}`,
-    );
-  }
-
-  /* -------------------------------------------------------
      VENDOR VALIDATION
   ------------------------------------------------------- */
 
@@ -317,9 +296,6 @@ export async function createPurchaseOrder(
     );
   }
 
-  /*
-   * Find vendor and make sure it is Active.
-   */
   const vendor =
     await findActiveVendorById(
       input.vendorId,
@@ -338,98 +314,132 @@ export async function createPurchaseOrder(
   }
 
   /* -------------------------------------------------------
-     SITE VALIDATION
+     CAMPAIGN (OPTIONAL)
   ------------------------------------------------------- */
 
-  for (const item of input.lineItems) {
-    if (
-      !mongoose.isValidObjectId(
-        item.siteId,
-      )
-    ) {
-      throw new Error(
-        `Invalid site ID: ${item.siteId}`,
-      );
-    }
-
-    const sites =
-      await getSitesByIds([
-        item.siteId,
-      ]);
-
-    const site = sites[0];
-
-    if (!site) {
-      throw new Error(
-        `Site not found: ${item.siteId}`,
-      );
-    }
-
-    if (site.status !== "Active") {
-      throw new Error(
-        `Site ${site.code} is inactive`,
-      );
-    }
+  let campaignObjectId: mongoose.Types.ObjectId | null = null;
+  if (input.campaignId && mongoose.isValidObjectId(input.campaignId)) {
+    campaignObjectId = new mongoose.Types.ObjectId(input.campaignId);
   }
 
   /* -------------------------------------------------------
-     BUILD LINE ITEMS
+     LINE ITEMS (OPTIONAL)
   ------------------------------------------------------- */
 
-  const lineItems =
-    buildLineItems(
-      input.lineItems,
-    );
+  let lineItems: IPurchaseOrderLineItem[] = [];
+  if (input.lineItems && input.lineItems.length > 0) {
+    lineItems = buildLineItems(input.lineItems);
+  }
 
   /* -------------------------------------------------------
-     CALCULATE TOTAL
+     PRICING FORMULAS & CALCULATIONS
   ------------------------------------------------------- */
 
-  const totalAmount =
-    calculateTotal(lineItems);
+  const cardRate = Number(input.cardRate) || 0;
+  const negotiatedRate = Number(input.negotiatedRate) || 0;
 
-  /* -------------------------------------------------------
-     GENERATE PO NUMBER
-  ------------------------------------------------------- */
+  // Discount Given = Card Rate - Negotiated Rate
+  const discountGiven =
+    typeof input.discountGiven === "number"
+      ? input.discountGiven
+      : Math.max(0, cardRate - negotiatedRate);
 
-  const poNumber =
-    await generatePONumber();
+  // Discount % = (Discount Given / Card Rate) * 100
+  const discountPercent =
+    typeof input.discountPercent === "number"
+      ? input.discountPercent
+      : cardRate > 0
+        ? Number(((discountGiven / cardRate) * 100).toFixed(2))
+        : 0;
 
-  /* -------------------------------------------------------
-     USER
-  ------------------------------------------------------- */
+  // Company Cost Price defaults to Negotiated Rate
+  const companyCostPrice =
+    typeof input.companyCostPrice === "number" && input.companyCostPrice >= 0
+      ? input.companyCostPrice
+      : negotiatedRate;
 
-  const userId =
-    getUserId(ctx);
+  const companySellingPrice = Number(input.companySellingPrice) || 0;
 
-  /* -------------------------------------------------------
-     CREATE DRAFT
-  ------------------------------------------------------- */
+  // Profit Per Unit = Selling Price - Cost Price
+  const profitPerUnit =
+    typeof input.profitPerUnit === "number"
+      ? input.profitPerUnit
+      : companySellingPrice - companyCostPrice;
 
-  const po =
-    await PurchaseOrder.create({
-      poNumber,
+  // Profit Margin % = (Profit Per Unit / Cost Price) * 100
+  const profitMarginPercent =
+    typeof input.profitMarginPercent === "number"
+      ? input.profitMarginPercent
+      : companyCostPrice > 0
+        ? Number(((profitPerUnit / companyCostPrice) * 100).toFixed(2))
+        : 0;
 
-      campaignId:
-        new mongoose.Types.ObjectId(
-          input.campaignId,
-        ),
+  const validityFrom = input.validityFrom ? new Date(input.validityFrom) : undefined;
+  const validityTo = input.validityTo ? new Date(input.validityTo) : undefined;
 
-      vendorId:
-        new mongoose.Types.ObjectId(
-          input.vendorId,
-        ),
+  let durationDays = Number(input.durationDays) || 30;
+  if (
+    validityFrom &&
+    validityTo &&
+    !Number.isNaN(validityFrom.getTime()) &&
+    !Number.isNaN(validityTo.getTime())
+  ) {
+    const diff = Math.floor((validityTo.getTime() - validityFrom.getTime()) / 86400000) + 1;
+    if (diff > 0 && !input.durationDays) {
+      durationDays = diff;
+    }
+  }
 
-      lineItems,
+  let totalAmount = Number(input.totalAmount) || 0;
+  if (!totalAmount) {
+    if (lineItems.length > 0) {
+      totalAmount = calculateTotal(lineItems);
+    } else {
+      totalAmount = negotiatedRate;
+    }
+  }
 
-      totalAmount,
+  const poNumber = await generatePONumber();
+  const pricingId =
+    input.pricingId ||
+    `PR-${poNumber.replace(/^MO-PO-/i, "")}`;
 
-      status: "Draft",
+  const userId = getUserId(ctx);
 
-      createdBy: userId,
+  const po = await PurchaseOrder.create({
+    poNumber,
+    pricingId,
+    campaignId: campaignObjectId,
+    vendorId: new mongoose.Types.ObjectId(input.vendorId),
 
-      updatedBy: userId,
-    });
+    city: input.city || (vendor as any).city || vendor.citiesServed?.[0] || "",
+    spaceType: input.spaceType || "Billboard",
+
+    cardRate,
+    negotiatedRate,
+    discountGiven,
+    discountPercent,
+
+    companyCostPrice,
+    companySellingPrice,
+    profitPerUnit,
+    profitMarginPercent,
+
+    durationDays,
+    validityFrom,
+    validityTo,
+
+    negotiationRounds: Number(input.negotiationRounds) || 1,
+    negotiationNotes: input.negotiationNotes || "",
+    approvedBy: input.approvedBy || "",
+
+    lineItems,
+    totalAmount,
+    status: "Draft",
+
+    createdBy: userId,
+    updatedBy: userId,
+  });
 
   return getPurchaseOrderById(po._id.toString());
 }
@@ -464,92 +474,79 @@ export async function updatePurchaseOrder(
     );
   }
 
-  /* -------------------------------------------------------
-     UPDATE VENDOR
-  ------------------------------------------------------- */
-
+  /* UPDATE VENDOR */
   if (input.vendorId) {
-    if (
-      !mongoose.isValidObjectId(
-        input.vendorId,
-      )
-    ) {
-      throw new Error(
-        `Invalid vendor ID: ${input.vendorId}`,
-      );
+    if (!mongoose.isValidObjectId(input.vendorId)) {
+      throw new Error(`Invalid vendor ID: ${input.vendorId}`);
     }
 
-    const vendor =
-      await findActiveVendorById(
-        input.vendorId,
-      );
-
-    if (!vendor) {
-      throw new Error(
-        `Active vendor not found: ${input.vendorId}`,
-      );
+    const vendor = await findActiveVendorById(input.vendorId);
+    if (!vendor || vendor.status !== "Active") {
+      throw new Error("Active vendor not found");
     }
 
-    if (vendor.status !== "Active") {
-      throw new Error(
-        `Vendor "${vendor.name}" is not Active`,
-      );
-    }
-
-    existing.vendorId =
-      new mongoose.Types.ObjectId(
-        input.vendorId,
-      );
+    existing.vendorId = new mongoose.Types.ObjectId(input.vendorId);
   }
 
-  /* -------------------------------------------------------
-     UPDATE LINE ITEMS
-  ------------------------------------------------------- */
+  if (input.campaignId !== undefined) {
+    existing.campaignId =
+      input.campaignId && mongoose.isValidObjectId(input.campaignId)
+        ? new mongoose.Types.ObjectId(input.campaignId)
+        : null;
+  }
+
+  if (input.city !== undefined) existing.city = input.city;
+  if (input.spaceType !== undefined) existing.spaceType = input.spaceType;
+  if (input.pricingId !== undefined) existing.pricingId = input.pricingId;
+
+  if (input.cardRate !== undefined) existing.cardRate = Number(input.cardRate) || 0;
+  if (input.negotiatedRate !== undefined) existing.negotiatedRate = Number(input.negotiatedRate) || 0;
+
+  const cardRate = existing.cardRate || 0;
+  const negotiatedRate = existing.negotiatedRate || 0;
+  const discountGiven = Math.max(0, cardRate - negotiatedRate);
+  existing.discountGiven = discountGiven;
+  existing.discountPercent =
+    cardRate > 0 ? Number(((discountGiven / cardRate) * 100).toFixed(2)) : 0;
+
+  if (input.companyCostPrice !== undefined) {
+    existing.companyCostPrice = Number(input.companyCostPrice) || 0;
+  } else if (!existing.companyCostPrice) {
+    existing.companyCostPrice = negotiatedRate;
+  }
+
+  if (input.companySellingPrice !== undefined) {
+    existing.companySellingPrice = Number(input.companySellingPrice) || 0;
+  }
+
+  const cost = existing.companyCostPrice || 0;
+  const sell = existing.companySellingPrice || 0;
+  existing.profitPerUnit = sell - cost;
+  existing.profitMarginPercent =
+    cost > 0 ? Number((((sell - cost) / cost) * 100).toFixed(2)) : 0;
+
+  if (input.durationDays !== undefined) existing.durationDays = Number(input.durationDays) || 30;
+  if (input.validityFrom !== undefined) existing.validityFrom = input.validityFrom ? new Date(input.validityFrom) : undefined;
+  if (input.validityTo !== undefined) existing.validityTo = input.validityTo ? new Date(input.validityTo) : undefined;
+  if (input.negotiationRounds !== undefined) existing.negotiationRounds = Number(input.negotiationRounds) || 1;
+  if (input.negotiationNotes !== undefined) existing.negotiationNotes = input.negotiationNotes;
+  if (input.approvedBy !== undefined) existing.approvedBy = input.approvedBy;
+  if (input.status !== undefined) existing.status = input.status;
 
   if (input.lineItems) {
-    const lineItems =
-      buildLineItems(
-        input.lineItems,
-      );
-
-    for (const item of lineItems) {
-      const sites =
-        await getSitesByIds([
-          String(item.siteId),
-        ]);
-
-      const site = sites[0];
-
-      if (!site) {
-        throw new Error(
-          `Site not found: ${item.siteId}`,
-        );
-      }
-
-      if (site.status !== "Active") {
-        throw new Error(
-          `Site ${site.code} is inactive`,
-        );
-      }
-    }
-
-    existing.lineItems =
-      lineItems;
-
-    existing.totalAmount =
-      calculateTotal(lineItems);
+    existing.lineItems = buildLineItems(input.lineItems);
+    existing.totalAmount = calculateTotal(existing.lineItems);
+  } else if (input.totalAmount !== undefined) {
+    existing.totalAmount = Number(input.totalAmount) || 0;
+  } else if (!existing.totalAmount) {
+    existing.totalAmount = negotiatedRate;
   }
 
-  /* -------------------------------------------------------
-     UPDATED BY
-  ------------------------------------------------------- */
-
-  existing.updatedBy =
-    getUserId(ctx);
+  existing.updatedBy = getUserId(ctx);
 
   await existing.save();
 
-  return getPurchaseOrderById(existing._id.toString());
+  return getPurchaseOrderById(id);
 }
 
 /* =========================================================
@@ -577,47 +574,17 @@ export async function issuePurchaseOrder(
 
   if (po.status !== "Draft") {
     throw new Error(
-      "Only Draft purchase orders can be issued",
+      `Cannot issue a purchase order with status "${po.status}"`,
     );
   }
 
-  /* -------------------------------------------------------
-     RECALCULATE TOTAL
-  ------------------------------------------------------- */
-
-  let total = 0;
-
-  po.lineItems.forEach(
-    (item) => {
-      const days =
-        calculateDays(
-          item.from,
-          item.to,
-        );
-
-      const amount =
-        item.negotiatedRatePerDay *
-        days;
-
-      item.days = days;
-      item.amount = amount;
-
-      total += amount;
-    },
-  );
-
-  po.totalAmount = total;
-
   po.status = "Issued";
-
   po.issuedAt = new Date();
-
-  po.updatedBy =
-    getUserId(ctx);
+  po.updatedBy = getUserId(ctx);
 
   await po.save();
 
-  return getPurchaseOrderById(po._id.toString());
+  return getPurchaseOrderById(id);
 }
 
 /* =========================================================
@@ -644,24 +611,15 @@ export async function cancelPurchaseOrder(
   }
 
   if (po.status === "Cancelled") {
-    return getPurchaseOrderById(po._id.toString());
-  }
-
-  if (
-    po.status !== "Draft" &&
-    po.status !== "Issued"
-  ) {
     throw new Error(
-      `Cannot cancel purchase order with status ${po.status}`,
+      "Purchase order is already cancelled",
     );
   }
 
   po.status = "Cancelled";
-
-  po.updatedBy =
-    getUserId(ctx);
+  po.updatedBy = getUserId(ctx);
 
   await po.save();
 
-  return getPurchaseOrderById(po._id.toString());
+  return getPurchaseOrderById(id);
 }

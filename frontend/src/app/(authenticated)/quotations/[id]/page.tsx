@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { quotationsApi } from '@/modules/quotations/api';
 import { api } from '@/shared/api/client';
 import { sessionStore } from '@/shared/auth/session-store';
+import { DatePicker, Dropdown } from '@/shared/ui';
 import type { Quotation } from '@/modules/quotations/types';
 import { Pencil, Upload, FileText, X } from 'lucide-react';
 
@@ -525,12 +526,11 @@ export default function QuotationDetailPage() {
                   />
                 </div>
                 <div>
-                  <label className="font-medium text-slate-700 dark:text-slate-300">Valid Until Date</label>
-                  <input
-                    type="date"
+                  <DatePicker
+                    label="Valid Until Date"
                     value={editValidUntil}
-                    onChange={(e) => setEditValidUntil(e.target.value)}
-                    className="mt-1 w-full rounded border border-slate-300 bg-white p-2 text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                    onChange={setEditValidUntil}
+                    triggerClassName="mt-1 p-2 text-xs"
                   />
                 </div>
               </div>
@@ -571,18 +571,17 @@ export default function QuotationDetailPage() {
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
-                          <label className="text-[11px] text-slate-500">Select Media Site</label>
-                          <select
+                          <label className="text-[11px] text-slate-500 mb-1 block">Select Media Site</label>
+                          <Dropdown
+                            showArrow={false}
                             value={item.siteId}
-                            onChange={(e) => handleLineItemChange(idx, 'siteId', e.target.value)}
-                            className="mt-1 w-full rounded border border-slate-300 bg-white p-1.5 text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                          >
-                            {availableSites.map((s) => (
-                              <option key={s._id} value={s._id}>
-                                {s.siteCode} {s.city ? `(${s.city})` : ''}
-                              </option>
-                            ))}
-                          </select>
+                            onChange={(val) => handleLineItemChange(idx, 'siteId', val)}
+                            options={availableSites.map((s) => ({
+                              value: s._id,
+                              label: `${s.siteCode} ${s.city ? `(${s.city})` : ''}`,
+                            }))}
+                            triggerClassName="w-full h-[30px] p-1.5 text-xs"
+                          />
                         </div>
                         <div>
                           <label className="text-[11px] text-slate-500">Daily Rate (₹ Rupees)</label>
@@ -596,21 +595,19 @@ export default function QuotationDetailPage() {
                           />
                         </div>
                         <div>
-                          <label className="text-[11px] text-slate-500">Start Date</label>
-                          <input
-                            type="date"
+                          <DatePicker
+                            label="Start Date"
                             value={item.startDate}
-                            onChange={(e) => handleLineItemChange(idx, 'startDate', e.target.value)}
-                            className="mt-1 w-full rounded border border-slate-300 bg-white p-1.5 text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                            onChange={(val) => handleLineItemChange(idx, 'startDate', val)}
+                            triggerClassName="p-1.5 text-xs h-[30px]"
                           />
                         </div>
                         <div>
-                          <label className="text-[11px] text-slate-500">End Date</label>
-                          <input
-                            type="date"
+                          <DatePicker
+                            label="End Date"
                             value={item.endDate}
-                            onChange={(e) => handleLineItemChange(idx, 'endDate', e.target.value)}
-                            className="mt-1 w-full rounded border border-slate-300 bg-white p-1.5 text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                            onChange={(val) => handleLineItemChange(idx, 'endDate', val)}
+                            triggerClassName="p-1.5 text-xs h-[30px]"
                           />
                         </div>
                       </div>

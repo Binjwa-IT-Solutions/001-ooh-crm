@@ -35,7 +35,7 @@ export default function AttendanceContainerPage() {
 
   if (tabs.length === 0) {
     return (
-      <div className="flex flex-col h-full bg-slate-50/50 p-4 md:p-6 lg:p-8">
+      <div className="flex flex-col h-full bg-white p-4 md:p-6 lg:p-8">
         <div className="max-w-7xl mx-auto space-y-6 w-full text-center py-12">
           <p className="text-slate-500">You do not have permission to view attendance records.</p>
         </div>
@@ -44,7 +44,7 @@ export default function AttendanceContainerPage() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-50/50">
+    <div className="flex flex-col h-full bg-white">
       <div className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
         <div className="max-w-7xl mx-auto space-y-4">
           <div className="flex flex-col gap-1">

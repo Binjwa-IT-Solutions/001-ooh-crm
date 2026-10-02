@@ -7,6 +7,7 @@ import authRoutes from './core/auth/auth-routes.js';
 import fileRoutes from './core/files/files-routes.js';
 import { errorHandler, notFoundHandler } from './core/http/error-middleware.js';
 import notificationRoutes from './core/notifications/notifications-routes.js';
+import profileRoutes from './core/profile/profile-routes.js';
 import employeeRoutes from './modules/employees/employees.routes.js';
 import { attendanceRoutes } from './modules/HR/routes/attendance.routes.js';
 import leaveTypeRoutes, {
@@ -66,16 +67,17 @@ app.get('/api/health', (_req: Request, res: Response) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/files', fileRoutes);
+app.use('/api/profile', profileRoutes);
 
 import { leadRoutes } from './modules/leads/leads.routes.js';
 
 import vendorRoutes from './modules/vendors/vendor.routes.js';
 import siteRoutes from './modules/sites/site.routes.js';
 import campaignRoutes from './modules/campaigns/campaign.routes.js';
-import bookingRoutes from './modules/bookings/booking.routes.js';
 import taskRoutes from './modules/tasks/task.routes.js';
 import escalationRoutes from './modules/escalations/escalation.routes.js';
 import purchaseOrderRoutes from "./modules/purchase-orders/purchase-order.routes.js";
+import proofRoutes from './modules/proofs/proof.routes.js';
 
 
 import quotationsRoutes, { publicQuotationsRoutes } from './modules/quotations/quotations.routes.js';
@@ -96,7 +98,7 @@ app.use('/api/tasks',taskRoutes);
 app.use('/api', escalationRoutes);
 
 app.use('/api/purchase-orders', purchaseOrderRoutes);
-app.use('/api/bookings', bookingRoutes);
+app.use('/api/proofs', proofRoutes);
 app.use('/api/quotations', quotationsRoutes);
 
 //attendance & shift configs

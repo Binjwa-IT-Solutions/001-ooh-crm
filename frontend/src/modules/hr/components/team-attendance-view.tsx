@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Card, Spinner, Field } from '@/shared/ui';
+import { Card, Spinner, DatePicker } from '@/shared/ui';
 import { useTeamAttendance } from '@/modules/hr/hooks/use-attendance';
 import { TeamAttendanceTable } from '@/modules/hr/components/team-attendance-table';
 
@@ -18,11 +18,11 @@ export function TeamAttendanceView() {
           <p className="text-sm text-slate-500">Monitor daily attendance for all employees.</p>
         </div>
         <div className="w-48">
-          <Field
-            type="date"
+          <DatePicker
             label="Date"
             value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
+            onChange={setDateFilter}
+            triggerClassName="h-10 px-3 text-sm"
           />
         </div>
       </div>

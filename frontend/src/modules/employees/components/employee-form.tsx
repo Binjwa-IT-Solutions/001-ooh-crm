@@ -5,7 +5,7 @@ import { useState, type FormEvent } from 'react';
 
 import { ApiError, toErrorMessage } from '@/shared/api/errors';
 import { useAuth } from '@/shared/auth/auth-context';
-import { Alert, Button, Card, Field, SelectField, TextAreaField } from '@/shared/ui';
+import { Alert, Button, Card, Field, SelectField, TextAreaField, DatePicker } from '@/shared/ui';
 
 import { employeesApi } from '../api';
 import { useManagerOptions } from '../hooks/use-employees';
@@ -189,12 +189,11 @@ export function EmployeeForm({ employee }: { employee?: Employee }) {
           error={fieldErrors.personalEmail}
           onChange={(e) => set('personalEmail', e.target.value)}
         />
-        <Field
+        <DatePicker
           label="Date of birth"
-          type="date"
           value={values.dateOfBirth}
           error={fieldErrors.dateOfBirth}
-          onChange={(e) => set('dateOfBirth', e.target.value)}
+          onChange={(val) => set('dateOfBirth', val)}
         />
         <Field
           label="Work location"
@@ -243,21 +242,18 @@ export function EmployeeForm({ employee }: { employee?: Employee }) {
           error={fieldErrors.status}
           onChange={(e) => set('status', e.target.value as EmployeeFormValues['status'])}
         />
-        <Field
+        <DatePicker
           label="Date of joining"
-          type="date"
           value={values.dateOfJoining}
           error={fieldErrors.dateOfJoining}
-          onChange={(e) => set('dateOfJoining', e.target.value)}
+          onChange={(val) => set('dateOfJoining', val)}
           required
         />
-        <Field
+        <DatePicker
           label="Date of exit"
-          type="date"
           value={values.dateOfExit}
           error={fieldErrors.dateOfExit}
-          hint="Leave blank for current employees"
-          onChange={(e) => set('dateOfExit', e.target.value)}
+          onChange={(val) => set('dateOfExit', val)}
         />
         <SelectField
           label="Reports to"

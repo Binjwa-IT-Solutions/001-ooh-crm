@@ -70,6 +70,9 @@ export default function PurchaseOrdersPage() {
       const searchMatch =
         !value ||
         poNumber.toLowerCase().includes(value) ||
+        (order.pricingId ?? "").toLowerCase().includes(value) ||
+        (order.city ?? "").toLowerCase().includes(value) ||
+        (order.spaceType ?? "").toLowerCase().includes(value) ||
         vendor.toLowerCase().includes(value) ||
         campaign.toLowerCase().includes(value);
 
@@ -139,7 +142,7 @@ export default function PurchaseOrdersPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F7F8FA] p-4 md:p-6">
+    <main className="min-h-screen bg-white p-4 md:p-6">
       <div className="mx-auto max-w-7xl">
 
         {/* Header */}

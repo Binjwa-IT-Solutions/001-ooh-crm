@@ -16,7 +16,7 @@ import {
   type LeadDocument,
   type LeadDocumentType,
 } from '@/modules/leads/types';
-import { Card, Badge, Spinner, Button, Field, Alert, Modal, TextAreaField } from '@/shared/ui';
+import { Card, Badge, Spinner, Button, Field, Alert, Modal, TextAreaField, DatePicker, Dropdown } from '@/shared/ui';
 import { LeadsSelect } from '@/modules/leads/components/leads-select';
 import LogCallModal from '@/modules/leads/component/log-call-modal';
 import EditLeadModal from '@/modules/leads/component/edit-lead-modal';
@@ -566,26 +566,22 @@ export default function LeadDetailPage() {
             </Button>
           ) : (
             availableNextStatuses.length > 0 && (
-              <div className="h-9 flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-700 shadow-xs hover:border-slate-400 hover:bg-slate-50 focus-within:border-[#8B2424] focus-within:ring-1 focus-within:ring-[#8B2424] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors">
-                <ArrowRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                <span className="text-slate-500 whitespace-nowrap">Move to:</span>
-                <select
-                  id="nextStatus"
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-500 whitespace-nowrap text-xs">Move to:</span>
+                <Dropdown
+                  showArrow={false}
                   value=""
                   disabled={isUpdatingStatus}
-                  onChange={(e) => {
-                    if (e.target.value) handleStatusSelect(e.target.value as LeadStatus);
+                  onChange={(val) => {
+                    if (val) handleStatusSelect(val as LeadStatus);
                   }}
-                  aria-label="Next lead status transition"
-                  className="bg-transparent font-semibold text-slate-800 dark:text-slate-100 outline-none cursor-pointer pr-1"
-                >
-                  <option value="" disabled className="text-slate-400">Select stage...</option>
-                  {availableNextStatuses.map((s) => (
-                    <option key={s} value={s} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-white">
-                      {s}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Select stage..."
+                  options={availableNextStatuses.map((s) => ({
+                    value: s,
+                    label: s,
+                  }))}
+                  triggerClassName="h-9 px-2.5 text-xs font-semibold"
+                />
               </div>
             )
           )}
@@ -952,20 +948,18 @@ export default function LeadDetailPage() {
                 defaultValue={lead.qualification?.locationPreference}
                 placeholder="Select location..."
               />
-              <Field
+              <DatePicker
                 label="Target Start Date"
                 name="startDate"
-                type="date"
                 defaultValue={
                   lead.qualification?.startDate
                     ? new Date(lead.qualification.startDate).toISOString().split('T')[0]
                     : ''
                 }
               />
-              <Field
+              <DatePicker
                 label="Target End Date"
                 name="endDate"
-                type="date"
                 defaultValue={
                   lead.qualification?.endDate
                     ? new Date(lead.qualification.endDate).toISOString().split('T')[0]
@@ -1856,30 +1850,32 @@ export default function LeadDetailPage() {
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                   Select Sales Agent / User
                 </label>
-                <select
+                <Dropdown
+                  showArrow={false}
                   value={selectedAgentId}
-                  onChange={(e) => setSelectedAgentId(e.target.value)}
-                  className="w-full rounded border border-slate-300 bg-white p-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                >
-                  <option value="">-- Unassigned (Move to Unclaimed Pool) --</option>
-                  {agentsList
-                    .filter((agent) =>
-                      ['sales_agent', 'manager', 'admin'].includes(agent.role.toLowerCase()),
-                    )
-                    .map((agent) => {
-                      const roleLabel =
-                        agent.role.toLowerCase() === 'sales_agent'
-                          ? 'Sales Agent'
-                          : agent.role.toLowerCase() === 'manager'
-                          ? 'Manager'
-                          : 'Admin';
-                      return (
-                        <option key={agent._id} value={agent._id}>
-                          {agent.name} ({roleLabel})
-                        </option>
-                      );
-                    })}
-                </select>
+                  onChange={setSelectedAgentId}
+                  placeholder="-- Unassigned (Move to Unclaimed Pool) --"
+                  options={[
+                    { value: '', label: '-- Unassigned (Move to Unclaimed Pool) --' },
+                    ...agentsList
+                      .filter((agent) =>
+                        ['sales_agent', 'manager', 'admin'].includes(agent.role.toLowerCase()),
+                      )
+                      .map((agent) => {
+                        const roleLabel =
+                          agent.role.toLowerCase() === 'sales_agent'
+                            ? 'Sales Agent'
+                            : agent.role.toLowerCase() === 'manager'
+                            ? 'Manager'
+                            : 'Admin';
+                        return {
+                          value: agent._id,
+                          label: `${agent.name} (${roleLabel})`,
+                        };
+                      }),
+                  ]}
+                  triggerClassName="w-full h-9 p-2 text-xs"
+                />
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
@@ -1941,17 +1937,16 @@ export default function LeadDetailPage() {
             <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
               Document Type <span className="text-rose-500">*</span>
             </label>
-            <select
+            <Dropdown
+              showArrow={false}
               value={docType}
-              onChange={(e) => setDocType(e.target.value as LeadDocumentType)}
-              className="w-full rounded-md border border-slate-300 bg-white p-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-            >
-              {LEAD_DOCUMENT_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setDocType(val as LeadDocumentType)}
+              options={LEAD_DOCUMENT_TYPES.map((type) => ({
+                value: type,
+                label: type,
+              }))}
+              triggerClassName="w-full h-9 p-2 text-xs"
+            />
           </div>
 
           <Field
