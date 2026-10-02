@@ -1,17 +1,10 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 
-import type {
-  Vendor,
-  VendorFormData,
-  VendorDocument,
-} from "../types";
+import type { Vendor, VendorFormData, VendorDocument } from '../types';
 
-import {
-  getEmptyVendorForm,
-  vendorToForm,
-} from "../format";
+import { getEmptyVendorForm, vendorToForm } from '../format';
 
 interface Props {
   vendor: Vendor | null;
@@ -21,20 +14,12 @@ interface Props {
   onSubmit: (data: VendorFormData) => Promise<boolean>;
 }
 
-export default function VendorForm({
-  vendor,
-  saving,
-  loading,
-  onClose,
-  onSubmit,
-}: Props) {
+export default function VendorForm({ vendor, saving, loading, onClose, onSubmit }: Props) {
   const isSubmitting = saving ?? loading ?? false;
 
-  const [form, setForm] = useState<VendorFormData>(
-    getEmptyVendorForm()
-  );
+  const [form, setForm] = useState<VendorFormData>(getEmptyVendorForm());
 
-  const [manualCity, setManualCity] = useState("");
+  const [manualCity, setManualCity] = useState('');
 
   const [documents, setDocuments] = useState<VendorDocument[]>([]);
 
@@ -44,18 +29,15 @@ export default function VendorForm({
 
       setForm(data);
       setDocuments(data.documents || []);
-      setManualCity("");
+      setManualCity('');
     } else {
       setForm(getEmptyVendorForm());
       setDocuments([]);
-      setManualCity("");
+      setManualCity('');
     }
   }, [vendor]);
 
-  function update<K extends keyof VendorFormData>(
-    key: K,
-    value: VendorFormData[K]
-  ) {
+  function update<K extends keyof VendorFormData>(key: K, value: VendorFormData[K]) {
     setForm((prev) => ({
       ...prev,
       [key]: value,
@@ -66,57 +48,43 @@ export default function VendorForm({
     const city = manualCity.trim();
 
     if (!city) {
-      alert("Enter city name");
+      alert('Enter city name');
       return;
     }
 
-    if (
-      form.citiesServed.some(
-        (item) => item.toLowerCase() === city.toLowerCase()
-      )
-    ) {
-      alert("City already added");
+    if (form.citiesServed.some((item) => item.toLowerCase() === city.toLowerCase())) {
+      alert('City already added');
       return;
     }
 
-    update("citiesServed", [
-      ...form.citiesServed,
-      city,
-    ]);
+    update('citiesServed', [...form.citiesServed, city]);
 
-    setManualCity("");
+    setManualCity('');
   }
 
-  function handlePaymentChange(
-    value: VendorFormData["paymentTerms"]
-  ) {
-    update("paymentTerms", value);
+  function handlePaymentChange(value: VendorFormData['paymentTerms']) {
+    update('paymentTerms', value);
 
-    if (value !== "Manual") {
-      update("manualPaymentTerms", "");
+    if (value !== 'Manual') {
+      update('manualPaymentTerms', '');
     }
   }
 
-  async function handleSubmit(
-    e: React.FormEvent
-  ) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
     if (!form.name.trim()) {
-      alert("Vendor name is required");
+      alert('Vendor name is required');
       return;
     }
 
     if (!form.primaryContact.name.trim()) {
-      alert("Contact name is required");
+      alert('Contact name is required');
       return;
     }
 
-    if (
-      form.paymentTerms === "Manual" &&
-      !form.manualPaymentTerms?.trim()
-    ) {
-      alert("Enter manual payment terms");
+    if (form.paymentTerms === 'Manual' && !form.manualPaymentTerms?.trim()) {
+      alert('Enter manual payment terms');
       return;
     }
 
@@ -125,10 +93,7 @@ export default function VendorForm({
     let citiesServed = [...form.citiesServed];
 
     if (typedCity) {
-      const exists = citiesServed.some(
-        (item) =>
-          item.toLowerCase() === typedCity.toLowerCase()
-      );
+      const exists = citiesServed.some((item) => item.toLowerCase() === typedCity.toLowerCase());
 
       if (!exists) {
         citiesServed.push(typedCity);
@@ -148,36 +113,28 @@ export default function VendorForm({
 
   function addDocument(file: File) {
     const newDocument: VendorDocument = {
-      type: "Other",
+      type: 'Other',
       name: file.name,
     };
 
-    setDocuments((prev) => [
-      ...prev,
-      newDocument,
-    ]);
+    setDocuments((prev) => [...prev, newDocument]);
   }
 
   function removeDocument(index: number) {
-    setDocuments((prev) =>
-      prev.filter((_, i) => i !== index)
-    );
+    setDocuments((prev) => prev.filter((_, i) => i !== index));
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-[22px] bg-white shadow-2xl">
-
         {/* HEADER */}
         <div className="flex shrink-0 items-start justify-between border-b border-[#E8EAF0] px-7 py-5">
           <div>
             <h2 className="text-[22px] font-bold leading-7 text-[#172033]">
-              {vendor ? "Edit Vendor" : "Add Vendor"}
+              {vendor ? 'Edit Vendor' : 'Add Vendor'}
             </h2>
             <p className="mt-1 text-[15px] text-[#667085]">
-              {vendor
-                ? "Update vendor information"
-                : "Manage vendor information"}
+              {vendor ? 'Update vendor information' : 'Manage vendor information'}
             </p>
           </div>
 
@@ -194,72 +151,49 @@ export default function VendorForm({
         {/* FORM */}
         <form onSubmit={handleSubmit} className="min-h-0 flex-1 overflow-y-auto">
           <div className="grid grid-cols-1 gap-x-6 gap-y-5 px-7 py-7 md:grid-cols-2">
-
             {/* VENDOR NAME */}
             <Input
               label="Vendor Name *"
               value={form.name}
               placeholder="Enter vendor name"
-              onChange={(value) => update("name", value)}
+              onChange={(value) => update('name', value)}
             />
-
-           
 
             {/* VENDOR TYPE */}
             <Select
               label="Vendor Type"
               value={form.vendorType}
-              options={[
-                "Individual",
-                "Partnership",
-                "Company",
-                "MSME",
-                "Others",
-              ]}
-              onChange={(value) =>
-                update(
-                  "vendorType",
-                  value as VendorFormData["vendorType"]
-                )
-              }
+              options={['Individual', 'Partnership', 'Company', 'MSME', 'Others']}
+              onChange={(value) => update('vendorType', value as VendorFormData['vendorType'])}
             />
 
             {/* REGISTRATION STATUS */}
             <Select
               label="Registration Status"
               value={form.registrationStatus}
-              options={[
-                "Registered",
-                "Unregistered",
-                "Pending",
-              ]}
+              options={['Registered', 'Unregistered', 'Pending']}
               onChange={(value) =>
-                update(
-                  "registrationStatus",
-                  value as VendorFormData["registrationStatus"]
-                )
+                update('registrationStatus', value as VendorFormData['registrationStatus'])
               }
             />
 
-             {/* STATE */}
+            {/* STATE */}
             <Input
               label="State *"
               value={form.state}
               placeholder="Enter state"
-              onChange={(value) => update("state", value)}
+              onChange={(value) => update('state', value)}
             />
 
             {/* CITY SERVED - SINGLE BOX */}
             <div>
-              <label className="mb-2 block text-[15px] font-semibold text-[#344054]">
-                City
-              </label>
+              <label className="mb-2 block text-[15px] font-semibold text-[#344054]">City</label>
 
               <input
                 value={manualCity}
                 onChange={(e) => setManualCity(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") {
+                  if (e.key === 'Enter') {
                     e.preventDefault();
                     addCity();
                   }
@@ -325,7 +259,7 @@ export default function VendorForm({
               label="PAN Number"
               value={form.panNumber}
               placeholder="Enter pan number"
-              onChange={(value) => update("panNumber", value)}
+              onChange={(value) => update('panNumber', value)}
             />
 
             {/* MSME REGISTERED */}
@@ -339,10 +273,10 @@ export default function VendorForm({
                   checked={form.msmeRegistered}
                   onChange={(e) => {
                     const checked = e.target.checked;
-                    update("msmeRegistered", checked);
+                    update('msmeRegistered', checked);
 
                     if (!checked) {
-                      update("msmeNumber", "");
+                      update('msmeNumber', '');
                     }
                   }}
                   className="h-4 w-4 accent-[#8B2424]"
@@ -357,7 +291,7 @@ export default function VendorForm({
                 label="MSME Number"
                 value={form.msmeNumber}
                 placeholder="Enter msme number"
-                onChange={(value) => update("msmeNumber", value)}
+                onChange={(value) => update('msmeNumber', value)}
               />
             )}
 
@@ -366,7 +300,7 @@ export default function VendorForm({
               label="GST Number"
               value={form.gstNumber}
               placeholder="Enter gst number"
-              onChange={(value) => update("gstNumber", value)}
+              onChange={(value) => update('gstNumber', value)}
             />
 
             {/* UDYAM */}
@@ -374,7 +308,7 @@ export default function VendorForm({
               label="UDYAM Registration"
               value={form.udyamRegistration}
               placeholder="Enter udyam registration"
-              onChange={(value) => update("udyamRegistration", value)}
+              onChange={(value) => update('udyamRegistration', value)}
             />
 
             {/* PAYMENT TERMS */}
@@ -386,9 +320,7 @@ export default function VendorForm({
                 <select
                   value={form.paymentTerms}
                   onChange={(e) =>
-                    handlePaymentChange(
-                      e.target.value as VendorFormData["paymentTerms"]
-                    )
+                    handlePaymentChange(e.target.value as VendorFormData['paymentTerms'])
                   }
                   className="w-full rounded-[14px] border border-[#D0D5DD] bg-white px-4 py-3 text-[15px] text-[#344054] outline-none focus:border-[#8B2424] focus:ring-1 focus:ring-[#8B2424]"
                 >
@@ -400,14 +332,12 @@ export default function VendorForm({
             </div>
 
             {/* MANUAL PAYMENT TERMS */}
-            {form.paymentTerms === "Manual" && (
+            {form.paymentTerms === 'Manual' && (
               <Input
                 label="Manual Payment Terms *"
-                value={form.manualPaymentTerms || ""}
+                value={form.manualPaymentTerms || ''}
                 placeholder="Enter payment terms"
-                onChange={(value) =>
-                  update("manualPaymentTerms", value)
-                }
+                onChange={(value) => update('manualPaymentTerms', value)}
               />
             )}
 
@@ -493,17 +423,10 @@ export default function VendorForm({
 
             {/* STATUS */}
             <div>
-              <label className="mb-2 block text-[15px] font-semibold text-[#344054]">
-                Status
-              </label>
+              <label className="mb-2 block text-[15px] font-semibold text-[#344054]">Status</label>
               <select
                 value={form.status}
-                onChange={(e) =>
-                  update(
-                    "status",
-                    e.target.value as VendorFormData["status"]
-                  )
-                }
+                onChange={(e) => update('status', e.target.value as VendorFormData['status'])}
                 className="w-full rounded-[14px] border border-[#D0D5DD] bg-white px-4 py-3 text-[15px] text-[#344054] outline-none focus:border-[#8B2424] focus:ring-1 focus:ring-[#8B2424]"
               >
                 <option value="Active">Active</option>
@@ -523,7 +446,7 @@ export default function VendorForm({
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) addDocument(file);
-                  e.currentTarget.value = "";
+                  e.currentTarget.value = '';
                 }}
                 className="block w-full rounded-[14px] border border-[#D0D5DD] bg-white p-3 text-sm text-[#344054]"
               />
@@ -539,9 +462,7 @@ export default function VendorForm({
                         <p className="truncate text-sm font-semibold text-[#344054]">
                           {document.name}
                         </p>
-                        <p className="text-xs text-[#667085]">
-                          {document.type}
-                        </p>
+                        <p className="text-xs text-[#667085]">{document.type}</p>
                       </div>
 
                       <button
@@ -553,63 +474,9 @@ export default function VendorForm({
                       </button>
                     </div>
                   ))}
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() =>
-                  setStatusOpen(
-                    !statusOpen,
-                  )
-                }
-                className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-sm text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <span>
-                  {form.status}
-                </span>
-
-                <span className="text-gray-500">
-                  ▾
-                </span>
-              </button>
-
-              {statusOpen && (
-                <div className="absolute left-0 right-0 z-40 mt-1 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
-
-                  {/* ACTIVE */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      update("status", "Active");
-                      setStatusOpen(false);
-                    }}
-                    className={`block w-full cursor-pointer px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
-                      form.status === "Active"
-                        ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
-                        : "text-gray-900"
-                    }`}
-                  >
-                    Active
-                  </button>
-
-                  {/* INACTIVE */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      update("status", "Inactive");
-                      setStatusOpen(false);
-                    }}
-                    className={`block w-full cursor-pointer px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
-                      form.status === "Inactive"
-                        ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
-                        : "text-gray-900"
-                    }`}
-                  >
-                    Inactive
-                  </button>
                 </div>
               )}
             </div>
-
           </div>
 
           {/* FOOTER */}
@@ -627,11 +494,7 @@ export default function VendorForm({
               disabled={isSubmitting}
               className="rounded-[12px] bg-[#8B2424] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#A8383B] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSubmitting
-                ? "Saving..."
-                : vendor
-                ? "Update Vendor"
-                : "Create Vendor"}
+              {isSubmitting ? 'Saving...' : vendor ? 'Update Vendor' : 'Create Vendor'}
             </button>
           </div>
         </form>
@@ -657,16 +520,12 @@ function Input({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-semibold text-[#344054]">
-        {label}
-      </label>
+      <label className="mb-1.5 block text-sm font-semibold text-[#344054]">{label}</label>
 
       <input
         value={value}
         placeholder={placeholder}
-        onChange={(e) =>
-          onChange(e.target.value)
-        }
+        onChange={(e) => onChange(e.target.value)}
         className="w-full rounded-xl border border-[#D0D5DD] px-3 py-2.5 text-sm outline-none focus:border-[#8B2424]"
       />
     </div>
@@ -690,22 +549,15 @@ function Select({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-semibold text-[#344054]">
-        {label}
-      </label>
+      <label className="mb-1.5 block text-sm font-semibold text-[#344054]">{label}</label>
 
       <select
         value={value}
-        onChange={(e) =>
-          onChange(e.target.value)
-        }
+        onChange={(e) => onChange(e.target.value)}
         className="w-full rounded-xl border border-[#D0D5DD] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#8B2424]"
       >
         {options.map((option) => (
-          <option
-            key={option}
-            value={option}
-          >
+          <option key={option} value={option}>
             {option}
           </option>
         ))}

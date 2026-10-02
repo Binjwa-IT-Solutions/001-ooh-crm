@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from 'react';
 import {
   TrendingUp,
   Building2,
@@ -10,61 +10,52 @@ import {
   Layers,
   ShieldCheck,
   FileText,
-} from "lucide-react";
+} from 'lucide-react';
 
 import type {
   CampaignOption,
   PurchaseOrder,
   PurchaseOrderFormData,
+  PurchaseOrderLineItem,
   VendorOption,
-} from "../types";
+} from '../types';
 
-import {
-  getCampaignOptionsForPO,
-  getVendorOptionsForPO,
-} from "../api";
-import { getVendors } from "@/modules/vendors/api";
-import { DatePicker } from "@/shared/ui";
+import { getCampaignOptionsForPO, getVendorOptionsForPO } from '../api';
+import { getVendors } from '@/modules/vendors/api';
+import { DatePicker } from '@/shared/ui';
 
 interface Props {
   order: PurchaseOrder | null;
   saving: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  onSubmit: (
-    data: PurchaseOrderFormData,
-  ) => Promise<boolean>;
+  onSubmit: (data: PurchaseOrderFormData) => Promise<boolean>;
 }
 
 const SPACE_TYPES = [
-  "Billboard",
-  "Hoarding",
-  "Transit",
-  "Unipole",
-  "Gantry",
-  "Bus Shelter",
-  "Metro",
-  "Mall",
-  "Airport",
-  "Digital",
-  "Other",
+  'Billboard',
+  'Hoarding',
+  'Transit',
+  'Unipole',
+  'Gantry',
+  'Bus Shelter',
+  'Metro',
+  'Mall',
+  'Airport',
+  'Digital',
+  'Other',
 ];
 
-export default function PurchaseOrderForm({
-  order,
-  saving,
-  onClose,
-  onSuccess,
-  onSubmit,
-}: Props) {
-  const [vendorId, setVendorId] = useState("");
-  const [campaignId, setCampaignId] = useState("");
-  const [city, setCity] = useState("");
-  const [spaceType, setSpaceType] = useState("Billboard");
+export default function PurchaseOrderForm({ order, saving, onClose, onSuccess, onSubmit }: Props) {
+  const [vendorId, setVendorId] = useState('');
+  const [campaignId, setCampaignId] = useState('');
+  const [city, setCity] = useState('');
+  const [spaceType, setSpaceType] = useState('Billboard');
 
   // Rates
   const [cardRate, setCardRate] = useState<number>(0);
   const [negotiatedRate, setNegotiatedRate] = useState<number>(0);
+  const [lineItems, setLineItems] = useState<PurchaseOrderLineItem[]>([]);
 
   // Company prices
   const [companyCostPrice, setCompanyCostPrice] = useState<number>(0);
@@ -72,20 +63,20 @@ export default function PurchaseOrderForm({
 
   // Duration & Validity
   const [durationDays, setDurationDays] = useState<number>(30);
-  const [validityFrom, setValidityFrom] = useState("");
-  const [validityTo, setValidityTo] = useState("");
+  const [validityFrom, setValidityFrom] = useState('');
+  const [validityTo, setValidityTo] = useState('');
 
   // Negotiation & Approval
   const [negotiationRounds, setNegotiationRounds] = useState<number>(1);
-  const [negotiationNotes, setNegotiationNotes] = useState("");
-  const [approvedBy, setApprovedBy] = useState("");
-  const [pricingId, setPricingId] = useState("");
+  const [negotiationNotes, setNegotiationNotes] = useState('');
+  const [approvedBy, setApprovedBy] = useState('');
+  const [pricingId, setPricingId] = useState('');
 
   const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
   const [vendors, setVendors] = useState<VendorOption[]>([]);
   const [loadingCampaigns, setLoadingCampaigns] = useState(false);
   const [loadingVendors, setLoadingVendors] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
 
   // Load options
   useEffect(() => {
@@ -98,27 +89,26 @@ export default function PurchaseOrderForm({
 
         const [campaignRes, vendorRes] = await Promise.allSettled([
           getCampaignOptionsForPO(),
-          getVendorOptionsForPO().catch(() =>
-            getVendors({ status: "Active" }),
-          ),
+          getVendorOptionsForPO().catch(() => getVendors({ status: 'Active' })),
         ]);
 
         if (!mounted) return;
 
-        if (campaignRes.status === "fulfilled" && campaignRes.value?.data) {
+        if (campaignRes.status === 'fulfilled' && campaignRes.value?.data) {
           setCampaigns(Array.isArray(campaignRes.value.data) ? campaignRes.value.data : []);
         }
 
-        if (vendorRes.status === "fulfilled" && vendorRes.value?.data) {
+        if (vendorRes.status === 'fulfilled' && vendorRes.value?.data) {
           const rawVendors = Array.isArray(vendorRes.value.data) ? vendorRes.value.data : [];
           const activeVendors: VendorOption[] = rawVendors
-            .filter((vendor: any) => !vendor.status || vendor.status === "Active")
+            .filter((vendor: any) => !vendor.status || vendor.status === 'Active')
             .map((vendor: any) => ({
               _id: String(vendor._id),
-              name: vendor.name || "Unnamed Vendor",
+              name: vendor.name || 'Unnamed Vendor',
               state: vendor.state,
-              city: vendor.city || (Array.isArray(vendor.citiesServed) ? vendor.citiesServed[0] : ""),
-              status: vendor.status || "Active",
+              city:
+                vendor.city || (Array.isArray(vendor.citiesServed) ? vendor.citiesServed[0] : ''),
+              status: vendor.status || 'Active',
               contactPerson: vendor.contactPerson,
               mobile: vendor.mobile,
             }));
@@ -126,7 +116,7 @@ export default function PurchaseOrderForm({
           setVendors(activeVendors);
         }
       } catch (err) {
-        console.error("Failed to load options for PO:", err);
+        console.error('Failed to load options for PO:', err);
       } finally {
         if (mounted) {
           setLoadingCampaigns(false);
@@ -145,58 +135,58 @@ export default function PurchaseOrderForm({
   // Populate when editing
   useEffect(() => {
     if (!order) {
-      setVendorId("");
-      setCampaignId("");
-      setCity("");
-      setSpaceType("Billboard");
+      setVendorId('');
+      setCampaignId('');
+      setCity('');
+      setSpaceType('Billboard');
       setCardRate(0);
       setNegotiatedRate(0);
+      setLineItems([]);
       setCompanyCostPrice(0);
       setCompanySellingPrice(0);
       setDurationDays(30);
-      setValidityFrom("");
-      setValidityTo("");
+      setValidityFrom('');
+      setValidityTo('');
       setNegotiationRounds(1);
-      setNegotiationNotes("");
-      setApprovedBy("");
-      setPricingId("");
-      setError("");
+      setNegotiationNotes('');
+      setApprovedBy('');
+      setPricingId('');
+      setError('');
       return;
     }
 
-    const resolvedVendorId =
-      !order.vendorId
-        ? ""
-        : typeof order.vendorId === "string"
-          ? order.vendorId
-          : String((order.vendorId as any)._id || "");
+    const resolvedVendorId = !order.vendorId
+      ? ''
+      : typeof order.vendorId === 'string'
+        ? order.vendorId
+        : String((order.vendorId as any)._id || '');
 
-    const resolvedCampaignId =
-      !order.campaignId
-        ? ""
-        : typeof order.campaignId === "string"
-          ? order.campaignId
-          : String((order.campaignId as any)._id || "");
+    const resolvedCampaignId = !order.campaignId
+      ? ''
+      : typeof order.campaignId === 'string'
+        ? order.campaignId
+        : String((order.campaignId as any)._id || '');
 
     setVendorId(resolvedVendorId);
     setCampaignId(resolvedCampaignId);
-    setCity(order.city || "");
-    setSpaceType(order.spaceType || "Billboard");
+    setCity(order.city || '');
+    setSpaceType(order.spaceType || 'Billboard');
 
     setCardRate(Number(order.cardRate) || 0);
     setNegotiatedRate(Number(order.negotiatedRate) || Number(order.totalAmount) || 0);
+    setLineItems(order.lineItems || []);
     setCompanyCostPrice(Number(order.companyCostPrice) || Number(order.negotiatedRate) || 0);
     setCompanySellingPrice(Number(order.companySellingPrice) || 0);
 
     setDurationDays(Number(order.durationDays) || 30);
-    setValidityFrom(order.validityFrom ? String(order.validityFrom).slice(0, 10) : "");
-    setValidityTo(order.validityTo ? String(order.validityTo).slice(0, 10) : "");
+    setValidityFrom(order.validityFrom ? String(order.validityFrom).slice(0, 10) : '');
+    setValidityTo(order.validityTo ? String(order.validityTo).slice(0, 10) : '');
 
     setNegotiationRounds(Number(order.negotiationRounds) || 1);
-    setNegotiationNotes(order.negotiationNotes || "");
-    setApprovedBy(order.approvedBy || "");
-    setPricingId(order.pricingId || order.poNumber || "");
-    setError("");
+    setNegotiationNotes(order.negotiationNotes || '');
+    setApprovedBy(order.approvedBy || '');
+    setPricingId(order.pricingId || order.poNumber || '');
+    setError('');
   }, [order]);
 
   // When vendor changes, auto-fill city if empty
@@ -222,6 +212,42 @@ export default function PurchaseOrderForm({
     }
   };
 
+  function updateItem(
+    index: number,
+    key: 'siteId' | 'from' | 'to' | 'negotiatedRatePerDay',
+    value: string | number,
+  ) {
+    setLineItems((current) =>
+      current.map((item, itemIndex) => {
+        if (itemIndex !== index) return item;
+
+        const updated = { ...item };
+        if (key === 'negotiatedRatePerDay') {
+          updated.negotiatedRatePerDay = Number(value) || 0;
+        } else {
+          updated[key] = String(value);
+        }
+
+        let days = 0;
+        if (updated.from && updated.to) {
+          const from = new Date(updated.from);
+          const to = new Date(updated.to);
+          if (!Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime()) && to >= from) {
+            days = Math.floor((to.getTime() - from.getTime()) / 86400000) + 1;
+          }
+        }
+
+        updated.days = days;
+        updated.amount = (Number(updated.negotiatedRatePerDay) || 0) * days;
+        return updated;
+      }),
+    );
+  }
+
+  function removeItem(index: number) {
+    setLineItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  }
+
   // When negotiated rate changes, auto-suggest company cost price
   const handleNegotiatedRateChange = (rate: number) => {
     setNegotiatedRate(rate);
@@ -232,32 +258,29 @@ export default function PurchaseOrderForm({
 
   // Calculations
   const discountGiven = Math.max(0, cardRate - negotiatedRate);
-  const discountPercent =
-    cardRate > 0 ? Number(((discountGiven / cardRate) * 100).toFixed(2)) : 0;
+  const discountPercent = cardRate > 0 ? Number(((discountGiven / cardRate) * 100).toFixed(2)) : 0;
 
   const profitPerUnit = companySellingPrice - companyCostPrice;
   const profitMarginPercent =
-    companyCostPrice > 0
-      ? Number(((profitPerUnit / companyCostPrice) * 100).toFixed(2))
-      : 0;
+    companyCostPrice > 0 ? Number(((profitPerUnit / companyCostPrice) * 100).toFixed(2)) : 0;
 
   // Submit form
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError("");
+    setError('');
 
     if (!vendorId.trim()) {
-      setError("Vendor is required");
+      setError('Vendor is required');
       return;
     }
 
     if (!city.trim()) {
-      setError("City is required");
+      setError('City is required');
       return;
     }
 
     if (cardRate < 0 || negotiatedRate < 0) {
-      setError("Rates cannot be negative");
+      setError('Rates cannot be negative');
       return;
     }
 
@@ -282,6 +305,18 @@ export default function PurchaseOrderForm({
       negotiationNotes: negotiationNotes.trim(),
       approvedBy: approvedBy.trim(),
       totalAmount: negotiatedRate,
+      lineItems: lineItems
+        .filter(
+          (item) => item.siteId || item.from || item.to || Number(item.negotiatedRatePerDay) > 0,
+        )
+        .map((item) => ({
+          siteId: item.siteId || undefined,
+          city: city.trim() || undefined,
+          spaceType,
+          from: item.from || undefined,
+          to: item.to || undefined,
+          negotiatedRatePerDay: Number(item.negotiatedRatePerDay) || 0,
+        })),
     };
 
     const success = await onSubmit(payload);
@@ -302,13 +337,11 @@ export default function PurchaseOrderForm({
                 Purchase Order / Pricing
               </span>
               {pricingId && (
-                <span className="font-mono text-xs text-gray-500 font-semibold">
-                  #{pricingId}
-                </span>
+                <span className="font-mono text-xs text-gray-500 font-semibold">#{pricingId}</span>
               )}
             </div>
             <h2 className="mt-1.5 text-xl font-bold text-[#1F2937]">
-              {order ? "Edit Purchase Order & Pricing" : "New Purchase Order & Pricing"}
+              {order ? 'Edit Purchase Order & Pricing' : 'New Purchase Order & Pricing'}
             </h2>
             <p className="text-xs text-[#667085]">
               Configure vendor rates, discounts, cost margins and approval workflow
@@ -338,10 +371,12 @@ export default function PurchaseOrderForm({
             {/* LIVE KPI METRICS BANNER */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 rounded-xl border border-[#E8E8EC] bg-[#FAFAFB] p-4">
               <div className="rounded-lg bg-white p-3 border border-gray-100 shadow-xs">
-                <div className="text-[11px] font-semibold uppercase text-gray-500">Discount Given</div>
+                <div className="text-[11px] font-semibold uppercase text-gray-500">
+                  Discount Given
+                </div>
                 <div className="mt-1 flex items-baseline gap-1">
                   <span className="text-lg font-bold text-emerald-600">
-                    ₹{discountGiven.toLocaleString("en-IN")}
+                    ₹{discountGiven.toLocaleString('en-IN')}
                   </span>
                   <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
                     {discountPercent}%
@@ -352,24 +387,32 @@ export default function PurchaseOrderForm({
               <div className="rounded-lg bg-white p-3 border border-gray-100 shadow-xs">
                 <div className="text-[11px] font-semibold uppercase text-gray-500">Cost Price</div>
                 <div className="mt-1 text-lg font-bold text-gray-900">
-                  ₹{companyCostPrice.toLocaleString("en-IN")}
+                  ₹{companyCostPrice.toLocaleString('en-IN')}
                 </div>
               </div>
 
               <div className="rounded-lg bg-white p-3 border border-gray-100 shadow-xs">
-                <div className="text-[11px] font-semibold uppercase text-gray-500">Selling Price</div>
+                <div className="text-[11px] font-semibold uppercase text-gray-500">
+                  Selling Price
+                </div>
                 <div className="mt-1 text-lg font-bold text-[#8B2424]">
-                  ₹{companySellingPrice.toLocaleString("en-IN")}
+                  ₹{companySellingPrice.toLocaleString('en-IN')}
                 </div>
               </div>
 
               <div className="rounded-lg bg-white p-3 border border-gray-100 shadow-xs">
-                <div className="text-[11px] font-semibold uppercase text-gray-500">Profit / Margin</div>
+                <div className="text-[11px] font-semibold uppercase text-gray-500">
+                  Profit / Margin
+                </div>
                 <div className="mt-1 flex items-baseline gap-1">
-                  <span className={`text-lg font-bold ${profitPerUnit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                    ₹{profitPerUnit.toLocaleString("en-IN")}
+                  <span
+                    className={`text-lg font-bold ${profitPerUnit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}
+                  >
+                    ₹{profitPerUnit.toLocaleString('en-IN')}
                   </span>
-                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${profitMarginPercent >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
+                  <span
+                    className={`text-xs font-bold px-1.5 py-0.5 rounded ${profitMarginPercent >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}
+                  >
                     {profitMarginPercent}%
                   </span>
                 </div>
@@ -392,9 +435,7 @@ export default function PurchaseOrderForm({
                     loading={loadingVendors}
                     disabled={saving}
                     fallbackName={
-                      typeof order?.vendorId === "object"
-                        ? order.vendorId?.name
-                        : undefined
+                      typeof order?.vendorId === 'object' ? order.vendorId?.name : undefined
                     }
                     onChange={handleVendorSelect}
                   />
@@ -443,9 +484,7 @@ export default function PurchaseOrderForm({
                     loading={loadingCampaigns}
                     disabled={saving}
                     fallbackName={
-                      typeof order?.campaignId === "object"
-                        ? order.campaignId?.name
-                        : undefined
+                      typeof order?.campaignId === 'object' ? order.campaignId?.name : undefined
                     }
                     onChange={setCampaignId}
                   />
@@ -518,13 +557,15 @@ export default function PurchaseOrderForm({
                 <div>
                   <label className="mb-1.5 block text-xs font-bold text-gray-700">
                     Card Rate (₹)
-                    <span className="block text-[11px] font-normal text-gray-400">Vendor standard rate</span>
+                    <span className="block text-[11px] font-normal text-gray-400">
+                      Vendor standard rate
+                    </span>
                   </label>
                   <input
                     type="number"
                     min="0"
                     step="0.01"
-                    value={cardRate || ""}
+                    value={cardRate || ''}
                     onChange={(e) => setCardRate(Number(e.target.value) || 0)}
                     placeholder="0.00"
                     className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 outline-none transition focus:border-[#8B2424] focus:ring-2 focus:ring-[#8B2424]/10"
@@ -535,14 +576,16 @@ export default function PurchaseOrderForm({
                 <div>
                   <label className="mb-1.5 block text-xs font-bold text-gray-700">
                     Negotiated Rate (₹) <span className="text-[#8B2424]">*</span>
-                    <span className="block text-[11px] font-normal text-gray-400">Final negotiated rate</span>
+                    <span className="block text-[11px] font-normal text-gray-400">
+                      Final negotiated rate
+                    </span>
                   </label>
                   <input
                     type="number"
                     min="0"
                     step="0.01"
                     required
-                    value={negotiatedRate || ""}
+                    value={negotiatedRate || ''}
                     onChange={(e) => handleNegotiatedRateChange(Number(e.target.value) || 0)}
                     placeholder="0.00"
                     className="w-full rounded-xl border border-[#8B2424]/30 bg-white px-3.5 py-2.5 text-sm font-bold text-[#8B2424] outline-none transition focus:border-[#8B2424] focus:ring-2 focus:ring-[#8B2424]/10"
@@ -553,10 +596,12 @@ export default function PurchaseOrderForm({
                 <div>
                   <label className="mb-1.5 block text-xs font-bold text-gray-700">
                     Discount Given (₹)
-                    <span className="block text-[11px] font-normal text-gray-400">Card - Negotiated Rate</span>
+                    <span className="block text-[11px] font-normal text-gray-400">
+                      Card - Negotiated Rate
+                    </span>
                   </label>
                   <div className="rounded-xl border border-gray-200 bg-gray-50/70 px-3.5 py-2.5 text-sm font-bold text-emerald-600">
-                    ₹{discountGiven.toLocaleString("en-IN")}
+                    ₹{discountGiven.toLocaleString('en-IN')}
                   </div>
                 </div>
 
@@ -564,27 +609,29 @@ export default function PurchaseOrderForm({
                 <div>
                   <label className="mb-1.5 block text-xs font-bold text-gray-700">
                     Discount %
-                    <span className="block text-[11px] font-normal text-gray-400">(Discount / Card) * 100</span>
+                    <span className="block text-[11px] font-normal text-gray-400">
+                      (Discount / Card) * 100
+                    </span>
                   </label>
                   <div className="rounded-xl border border-gray-200 bg-gray-50/70 px-3.5 py-2.5 text-sm font-bold text-emerald-600">
                     {discountPercent}%
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-4">
                 {lineItems.map((item, index) => (
                   <div
-                    key={`${item.siteId || "new-site"}-${index}`}
+                    key={`${item.siteId || 'new-site'}-${index}`}
                     className="rounded-xl border border-[#E8E8EC] bg-[#FAFAFB] p-4"
                   >
                     <div className="mb-4 flex items-center justify-between">
-                      <p className="text-sm font-bold text-[#1F2937]">
-                        Site {index + 1}
-                      </p>
+                      <p className="text-sm font-bold text-[#1F2937]">Site {index + 1}</p>
 
                       {lineItems.length > 1 && (
                         <button
                           type="button"
-                          onClick={() =>
-                            removeItem(index)
-                          }
+                          onClick={() => removeItem(index)}
                           disabled={saving}
                           className="text-xs font-bold text-[#8B2424] hover:underline disabled:opacity-50"
                         >
@@ -597,58 +644,33 @@ export default function PurchaseOrderForm({
                       {/* Site ID */}
                       <Field
                         label="Site ID"
-                        value={item.siteId}
+                        value={item.siteId || ''}
                         placeholder="Site ID"
-                        onChange={(value) =>
-                          updateItem(
-                            index,
-                            "siteId",
-                            value,
-                          )
-                        }
+                        onChange={(value) => updateItem(index, 'siteId', value)}
                       />
 
                       {/* From */}
                       <DatePicker
                         label="From Date"
                         value={item.from}
-                        onChange={(value) =>
-                          updateItem(
-                            index,
-                            "from",
-                            value,
-                          )
-                        }
+                        onChange={(value) => updateItem(index, 'from', value)}
                       />
 
                       {/* To */}
                       <DatePicker
                         label="To Date"
                         value={item.to}
-                        onChange={(value) =>
-                          updateItem(
-                            index,
-                            "to",
-                            value,
-                          )
-                        }
+                        onChange={(value) => updateItem(index, 'to', value)}
                       />
 
                       {/* Rate */}
                       <Field
                         label="Rate / Day"
                         type="number"
-                        value={String(
-                          item.negotiatedRatePerDay ||
-                            "",
-                        )}
+                        value={String(item.negotiatedRatePerDay || '')}
                         placeholder="0"
                         onChange={(value) =>
-                          updateItem(
-                            index,
-                            "negotiatedRatePerDay",
-                            Number(value),
-                          )
+                          updateItem(index, 'negotiatedRatePerDay', Number(value))
                         }
                       />
 
@@ -659,29 +681,21 @@ export default function PurchaseOrderForm({
                         </label>
 
                         <div className="rounded-xl border border-[#E8E8EC] bg-white px-4 py-3 text-sm font-bold text-[#8B2424]">
-                          ₹
-                          {item.amount.toLocaleString(
-                            "en-IN",
-                          )}
+                          ₹{Number(item.amount || 0).toLocaleString('en-IN')}
                         </div>
                       </div>
                     </div>
 
                     {/* Days calculation */}
-                    {item.days > 0 && (
+                    {(item.days || 0) > 0 && (
                       <p className="mt-3 text-xs font-semibold text-[#667085]">
-                        {item.days} day
-                        {item.days !== 1
-                          ? "s"
-                          : ""}{" "}
-                        × ₹
-                        {item.negotiatedRatePerDay.toLocaleString(
-                          "en-IN",
-                        )}
+                        {item.days || 0} day
+                        {item.days !== 1 ? 's' : ''} × ₹
+                        {Number(item.negotiatedRatePerDay || 0).toLocaleString('en-IN')}
                       </p>
                     )}
                   </div>
-                </div>
+                ))}
               </div>
             </section>
 
@@ -697,13 +711,15 @@ export default function PurchaseOrderForm({
                 <div>
                   <label className="mb-1.5 block text-xs font-bold text-gray-700">
                     Company Cost Price (₹)
-                    <span className="block text-[11px] font-normal text-gray-400">Our unit cost</span>
+                    <span className="block text-[11px] font-normal text-gray-400">
+                      Our unit cost
+                    </span>
                   </label>
                   <input
                     type="number"
                     min="0"
                     step="0.01"
-                    value={companyCostPrice || ""}
+                    value={companyCostPrice || ''}
                     onChange={(e) => setCompanyCostPrice(Number(e.target.value) || 0)}
                     placeholder="0.00"
                     className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 outline-none transition focus:border-[#8B2424] focus:ring-2 focus:ring-[#8B2424]/10"
@@ -714,13 +730,15 @@ export default function PurchaseOrderForm({
                 <div>
                   <label className="mb-1.5 block text-xs font-bold text-gray-700">
                     Company Selling Price (₹)
-                    <span className="block text-[11px] font-normal text-gray-400">Client offer price</span>
+                    <span className="block text-[11px] font-normal text-gray-400">
+                      Client offer price
+                    </span>
                   </label>
                   <input
                     type="number"
                     min="0"
                     step="0.01"
-                    value={companySellingPrice || ""}
+                    value={companySellingPrice || ''}
                     onChange={(e) => setCompanySellingPrice(Number(e.target.value) || 0)}
                     placeholder="0.00"
                     className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 outline-none transition focus:border-[#8B2424] focus:ring-2 focus:ring-[#8B2424]/10"
@@ -731,10 +749,14 @@ export default function PurchaseOrderForm({
                 <div>
                   <label className="mb-1.5 block text-xs font-bold text-gray-700">
                     Profit Per Unit (₹)
-                    <span className="block text-[11px] font-normal text-gray-400">Selling - Cost Price</span>
+                    <span className="block text-[11px] font-normal text-gray-400">
+                      Selling - Cost Price
+                    </span>
                   </label>
-                  <div className={`rounded-xl border border-gray-200 bg-gray-50/70 px-3.5 py-2.5 text-sm font-bold ${profitPerUnit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                    ₹{profitPerUnit.toLocaleString("en-IN")}
+                  <div
+                    className={`rounded-xl border border-gray-200 bg-gray-50/70 px-3.5 py-2.5 text-sm font-bold ${profitPerUnit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}
+                  >
+                    ₹{profitPerUnit.toLocaleString('en-IN')}
                   </div>
                 </div>
 
@@ -742,9 +764,13 @@ export default function PurchaseOrderForm({
                 <div>
                   <label className="mb-1.5 block text-xs font-bold text-gray-700">
                     Profit Margin %
-                    <span className="block text-[11px] font-normal text-gray-400">(Profit / Cost) * 100</span>
+                    <span className="block text-[11px] font-normal text-gray-400">
+                      (Profit / Cost) * 100
+                    </span>
                   </label>
-                  <div className={`rounded-xl border border-gray-200 bg-gray-50/70 px-3.5 py-2.5 text-sm font-bold ${profitMarginPercent >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                  <div
+                    className={`rounded-xl border border-gray-200 bg-gray-50/70 px-3.5 py-2.5 text-sm font-bold ${profitMarginPercent >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}
+                  >
                     {profitMarginPercent}%
                   </div>
                 </div>
@@ -813,7 +839,7 @@ export default function PurchaseOrderForm({
             <div>
               <span className="text-xs text-gray-500 font-medium">Final Purchase Amount: </span>
               <span className="text-lg font-bold text-[#8B2424]">
-                ₹{negotiatedRate.toLocaleString("en-IN")}
+                ₹{negotiatedRate.toLocaleString('en-IN')}
               </span>
             </div>
 
@@ -832,16 +858,39 @@ export default function PurchaseOrderForm({
                 disabled={saving || !vendorId || !city}
                 className="rounded-xl bg-[#8B2424] px-6 py-2.5 text-sm font-bold text-white shadow-xs hover:bg-[#A8383B] transition disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {saving
-                  ? "Saving..."
-                  : order
-                    ? "Update Purchase Order"
-                    : "Save Purchase Order"}
+                {saving ? 'Saving...' : order ? 'Update Purchase Order' : 'Save Purchase Order'}
               </button>
             </div>
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  placeholder,
+  type = 'text',
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder?: string;
+  type?: 'text' | 'number';
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-bold text-gray-700">{label}</label>
+      <input
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 outline-none transition focus:border-[#8B2424] focus:ring-2 focus:ring-[#8B2424]/10"
+      />
     </div>
   );
 }
@@ -865,7 +914,7 @@ function CampaignSelector({
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -874,8 +923,8 @@ function CampaignSelector({
         setOpen(false);
       }
     };
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
   const selectedCampaign = campaigns.find((c) => c._id === value);
@@ -884,35 +933,18 @@ function CampaignSelector({
     if (!search.trim()) return true;
     const term = search.toLowerCase();
     return (
-      (c.name || "").toLowerCase().includes(term) ||
-      (c.campaignCode || "").toLowerCase().includes(term) ||
-      (c.city || "").toLowerCase().includes(term)
+      (c.name || '').toLowerCase().includes(term) ||
+      (c.campaignCode || '').toLowerCase().includes(term) ||
+      (c.city || '').toLowerCase().includes(term)
     );
   });
 
   return (
     <div ref={dropdownRef} className="relative">
-      <label className="mb-1.5 block text-xs font-bold text-gray-700">
-        Campaign (Optional)
-      </label>
+      <label className="mb-1.5 block text-xs font-bold text-gray-700">Campaign (Optional)</label>
 
       <button
         type="button"
-        disabled={disabled}
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-left text-sm text-gray-900 outline-none transition focus:border-[#8B2424] focus:ring-2 focus:ring-[#8B2424]/10 disabled:opacity-50"
-      >
-        <span className={selectedCampaign ? "font-medium text-gray-900" : "text-gray-400"}>
-          {selectedCampaign
-            ? `${selectedCampaign.name} (${selectedCampaign.campaignCode || "No Code"})`
-            : fallbackName || "Select Campaign..."}
-        </span>
-        <span className="text-gray-400 text-xs">▼</span>
-      </button>
-
-      {open && (
-        <div className="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl">
-          <div className="p-2 border-b border-gray-100">
         disabled={disabled || loading}
         onClick={() => setOpen((prev) => !prev)}
         className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-sm text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA] disabled:cursor-not-allowed disabled:bg-[#F7F8FA]"
@@ -927,9 +959,7 @@ function CampaignSelector({
                 </span>
               )}
               {selectedCampaign.city && (
-                <span className="ml-2 text-xs text-[#667085]">
-                  • {selectedCampaign.city}
-                </span>
+                <span className="ml-2 text-xs text-[#667085]">• {selectedCampaign.city}</span>
               )}
             </div>
           ) : fallbackName ? (
@@ -938,7 +968,7 @@ function CampaignSelector({
             <span className="text-gray-700">Campaign #{value.slice(-6)}</span>
           ) : (
             <span className="text-gray-400">
-              {loading ? "Loading campaigns..." : "Select Campaign"}
+              {loading ? 'Loading campaigns...' : 'Select Campaign'}
             </span>
           )}
         </div>
@@ -961,7 +991,7 @@ function CampaignSelector({
             <button
               type="button"
               onClick={() => {
-                onChange("");
+                onChange('');
                 setOpen(false);
               }}
               className="w-full px-3 py-2 text-left text-xs font-medium text-gray-500 hover:bg-gray-50 rounded-lg"
@@ -971,63 +1001,39 @@ function CampaignSelector({
             {loading && <div className="p-3 text-center text-xs text-gray-400">Loading...</div>}
             {!loading && filteredCampaigns.length === 0 && (
               <div className="p-3 text-center text-xs text-gray-400">No campaigns found</div>
-          <div className="max-h-48 overflow-y-auto divide-y divide-gray-50">
-            {filteredCampaigns.map((c) => {
-              const isSelected = c._id === value;
-              return (
-                <button
-                  key={c._id}
-                  type="button"
-                  onClick={() => {
-                    onChange(c._id);
-                    setOpen(false);
-                    setSearch("");
-                  }}
-                  className={`block w-full px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
-                    isSelected
-                      ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
-                      : "text-gray-900"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold">{c.name}</span>
-                    {c.campaignCode && (
-                      <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">
-                        {c.campaignCode}
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-0.5 text-xs text-[#667085]">
-                    {c.city || "No city specified"}
-                    {c.status ? ` • ${c.status}` : ""}
-                  </div>
-                </button>
-              );
-            })}
-
-            {filteredCampaigns.length === 0 && (
-              <div className="px-4 py-4 text-center text-xs text-gray-500">
-                {campaigns.length === 0
-                  ? "No campaigns found"
-                  : "No matching campaigns found"}
-              </div>
             )}
-            {filteredCampaigns.map((c) => (
-              <button
-                key={c._id}
-                type="button"
-                onClick={() => {
-                  onChange(c._id);
-                  setOpen(false);
-                }}
-                className={`w-full px-3 py-2 text-left text-xs rounded-lg transition ${
-                  c._id === value ? "bg-[#F9DADA] font-bold text-[#8B2424]" : "text-gray-800 hover:bg-gray-50"
-                }`}
-              >
-                <div>{c.name}</div>
-                <div className="text-[10px] text-gray-400">{c.campaignCode} • {c.city || "No City"}</div>
-              </button>
-            ))}
+            <div className="max-h-48 overflow-y-auto divide-y divide-gray-50">
+              {filteredCampaigns.map((c) => {
+                const isSelected = c._id === value;
+                return (
+                  <button
+                    key={c._id}
+                    type="button"
+                    onClick={() => {
+                      onChange(c._id);
+                      setOpen(false);
+                      setSearch('');
+                    }}
+                    className={`block w-full px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
+                      isSelected ? 'bg-[#FFF5F5] font-semibold text-[#8B2424]' : 'text-gray-900'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold">{c.name}</span>
+                      {c.campaignCode && (
+                        <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">
+                          {c.campaignCode}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-0.5 text-xs text-[#667085]">
+                      {c.city || 'No city specified'}
+                      {c.status ? ` • ${c.status}` : ''}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
@@ -1054,7 +1060,7 @@ function VendorSelector({
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1063,8 +1069,8 @@ function VendorSelector({
         setOpen(false);
       }
     };
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
   const selectedVendor = vendors.find((v) => v._id === value);
@@ -1073,9 +1079,9 @@ function VendorSelector({
     if (!search.trim()) return true;
     const term = search.toLowerCase();
     return (
-      (v.name || "").toLowerCase().includes(term) ||
-      (v.city || "").toLowerCase().includes(term) ||
-      (v.contactPerson || "").toLowerCase().includes(term)
+      (v.name || '').toLowerCase().includes(term) ||
+      (v.city || '').toLowerCase().includes(term) ||
+      (v.contactPerson || '').toLowerCase().includes(term)
     );
   });
 
@@ -1087,21 +1093,6 @@ function VendorSelector({
 
       <button
         type="button"
-        disabled={disabled}
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-left text-sm text-gray-900 outline-none transition focus:border-[#8B2424] focus:ring-2 focus:ring-[#8B2424]/10 disabled:opacity-50"
-      >
-        <span className={selectedVendor ? "font-medium text-gray-900" : "text-gray-400"}>
-          {selectedVendor
-            ? `${selectedVendor.name} (${selectedVendor.city || selectedVendor.state || "No City"})`
-            : fallbackName || "Select Vendor..."}
-        </span>
-        <span className="text-gray-400 text-xs">▼</span>
-      </button>
-
-      {open && (
-        <div className="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl">
-          <div className="p-2 border-b border-gray-100">
         disabled={disabled || loading}
         onClick={() => setOpen((prev) => !prev)}
         className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-sm text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA] disabled:cursor-not-allowed disabled:bg-[#F7F8FA]"
@@ -1113,7 +1104,7 @@ function VendorSelector({
               {selectedVendor.city && (
                 <span className="ml-2 text-xs text-[#667085]">
                   — {selectedVendor.city}
-                  {selectedVendor.state ? `, ${selectedVendor.state}` : ""}
+                  {selectedVendor.state ? `, ${selectedVendor.state}` : ''}
                 </span>
               )}
             </div>
@@ -1123,7 +1114,7 @@ function VendorSelector({
             <span className="text-gray-700">Vendor #{value.slice(-6)}</span>
           ) : (
             <span className="text-gray-400">
-              {loading ? "Loading vendors..." : "Select Active Vendor"}
+              {loading ? 'Loading vendors...' : 'Select Active Vendor'}
             </span>
           )}
         </div>
@@ -1146,58 +1137,32 @@ function VendorSelector({
             {loading && <div className="p-3 text-center text-xs text-gray-400">Loading...</div>}
             {!loading && filteredVendors.length === 0 && (
               <div className="p-3 text-center text-xs text-gray-400">No vendors found</div>
-          <div className="max-h-48 overflow-y-auto divide-y divide-gray-50">
-            {filteredVendors.map((v) => {
-              const isSelected = v._id === value;
-              return (
-                <button
-                  key={v._id}
-                  type="button"
-                  onClick={() => {
-                    onChange(v._id);
-                    setOpen(false);
-                    setSearch("");
-                  }}
-                  className={`block w-full px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
-                    isSelected
-                      ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
-                      : "text-gray-900"
-                  }`}
-                >
-                  <div className="text-sm font-bold">{v.name}</div>
-                  <div className="mt-0.5 text-xs text-[#667085]">
-                    {v.contactPerson ? `${v.contactPerson} • ` : ""}
-                    {v.city ? `${v.city}${v.state ? `, ${v.state}` : ""}` : "No location"}
-                  </div>
-                </button>
-              );
-            })}
-
-            {filteredVendors.length === 0 && (
-              <div className="px-4 py-4 text-center text-xs text-gray-500">
-                {vendors.length === 0
-                  ? "No active vendors found"
-                  : "No matching vendors found"}
-              </div>
             )}
-            {filteredVendors.map((v) => (
-              <button
-                key={v._id}
-                type="button"
-                onClick={() => {
-                  onChange(v._id);
-                  setOpen(false);
-                }}
-                className={`w-full px-3 py-2 text-left text-xs rounded-lg transition ${
-                  v._id === value ? "bg-[#F9DADA] font-bold text-[#8B2424]" : "text-gray-800 hover:bg-gray-50"
-                }`}
-              >
-                <div className="font-semibold text-gray-900">{v.name}</div>
-                <div className="text-[10px] text-gray-500">
-                  {v.city ? `${v.city}, ` : ""}{v.state || ""} {v.contactPerson ? `• ${v.contactPerson}` : ""}
-                </div>
-              </button>
-            ))}
+            <div className="max-h-48 overflow-y-auto divide-y divide-gray-50">
+              {filteredVendors.map((v) => {
+                const isSelected = v._id === value;
+                return (
+                  <button
+                    key={v._id}
+                    type="button"
+                    onClick={() => {
+                      onChange(v._id);
+                      setOpen(false);
+                      setSearch('');
+                    }}
+                    className={`block w-full px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
+                      isSelected ? 'bg-[#FFF5F5] font-semibold text-[#8B2424]' : 'text-gray-900'
+                    }`}
+                  >
+                    <div className="text-sm font-bold">{v.name}</div>
+                    <div className="mt-0.5 text-xs text-[#667085]">
+                      {v.contactPerson ? `${v.contactPerson} • ` : ''}
+                      {v.city ? `${v.city}${v.state ? `, ${v.state}` : ''}` : 'No location'}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
