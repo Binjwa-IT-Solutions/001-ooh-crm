@@ -23,6 +23,18 @@ function formatDate(value: string | Date) {
 
 function statusClass(status: Site["status"]) {
   switch (status) {
+    case "On Call":
+      return "bg-blue-100 text-blue-700";
+
+    case "On Mail":
+      return "bg-indigo-100 text-indigo-700";
+
+    case "WhatsApp":
+      return "bg-emerald-100 text-emerald-700";
+
+    case "Manual":
+      return "bg-purple-100 text-purple-700";
+
     case "Approved":
       return "bg-green-100 text-green-700";
 
@@ -40,9 +52,27 @@ function statusClass(status: Site["status"]) {
 function availabilityClass(
   availability: Site["availability"]
 ) {
-  return availability === "Available"
-    ? "bg-green-100 text-green-700"
-    : "bg-red-100 text-red-700";
+  switch (availability) {
+    case "Available":
+      return "bg-green-100 text-green-700";
+    case "Plan Received":
+      return "bg-blue-100 text-blue-700";
+    case "On Boarding":
+      return "bg-purple-100 text-purple-700";
+    case "Media Booking":
+      return "bg-emerald-100 text-emerald-700";
+    case "Negotiation":
+      return "bg-amber-100 text-amber-700";
+    case "Request Send":
+    case "Request":
+      return "bg-orange-100 text-orange-700";
+    case "Send":
+      return "bg-cyan-100 text-cyan-700";
+    case "Booked":
+      return "bg-red-100 text-red-700";
+    default:
+      return "bg-gray-100 text-gray-700";
+  }
 }
 
 function canEdit(site: Site) {
@@ -106,7 +136,7 @@ export default function SiteTable({
               </th>
 
               <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Contact
+                Vendor
               </th>
 
               <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -142,15 +172,11 @@ export default function SiteTable({
               </th>
 
               <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Vendor
-              </th>
-
-              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Availability
               </th>
 
               <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Status
+                Follow Up
               </th>
 
               <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -188,9 +214,16 @@ export default function SiteTable({
                     {site.salesPersonName || "—"}
                   </td>
 
-                  {/* CONTACT */}
+                  {/* VENDOR */}
                   <td className="px-4 py-4 text-sm text-gray-700">
-                    {site.salesPersonContact || "—"}
+                    <div className="font-medium text-gray-800">
+                      {site.vendorName || "—"}
+                    </div>
+                    {Boolean(site.vendorContact || site.salesPersonContact) && (
+                      <div className="text-xs text-gray-500">
+                        {site.vendorContact || site.salesPersonContact}
+                      </div>
+                    )}
                   </td>
 
                   {/* STATE */}
@@ -233,11 +266,6 @@ export default function SiteTable({
                   {/* DURATION */}
                   <td className="whitespace-nowrap px-4 py-4 text-sm font-medium text-gray-700">
                     {site.duration} Days
-                  </td>
-
-                  {/* VENDOR */}
-                  <td className="px-4 py-4 text-sm text-gray-700">
-                    {site.vendorName || "—"}
                   </td>
 
                   {/* AVAILABILITY */}

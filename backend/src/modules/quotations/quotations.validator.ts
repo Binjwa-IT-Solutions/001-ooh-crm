@@ -23,7 +23,7 @@ export const updateQuotationSchema = createQuotationSchema.partial();
 
 export const listQuotationsSchema = z.object({
   page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(25),
+  limit: z.coerce.number().min(1).max(500).default(25),
   search: z.string().trim().optional(),
   status: z.string().trim().optional(),
   leadId: objectId.optional(),
