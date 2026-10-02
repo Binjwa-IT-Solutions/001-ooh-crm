@@ -1,8 +1,43 @@
 import { Request, Response } from 'express';
 import { auditService } from '../../core/audit/index.js';
 import { listAuditQuerySchema, entityAuditQuerySchema } from './audit.validator.js';
+import { ComplianceAuditService } from './compliance.service.js';
 
 export class AuditController {
+  /**
+   * Run automated compliance checks across all campaigns or for a specific campaign.
+   * POST /api/audit/run
+   * Body: { campaignId?: string }
+   */
+  static async runAudit(req: Request, res: Response): Promise<void> {
+    const { campaignId } = req.body || {};
+
+    if (campaignId) {
+      const results = await ComplianceAuditService.runForCampaign(campaignId);
+      res.status(200).json({
+        data: results,
+        message: `Compliance audit completed for campaign with ${results.length} checks evaluated.`,
+      });
+      return;
+    }
+
+    const summary = await ComplianceAuditService.runAllCampaigns();
+    res.status(200).json({
+      data: summary,
+      message: `Compliance audit completed across ${summary.totalCampaignsAudited} campaigns (${summary.totalChecksRun} total checks, ${summary.failingChecksCount} failing).`,
+    });
+  }
+
+  /**
+   * Fetch compliance check results for a specific campaign.
+   * GET /api/audit/campaigns/:id
+   */
+  static async getCampaignAudit(req: Request, res: Response): Promise<void> {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const results = await ComplianceAuditService.getCampaignAudit(String(id));
+    res.status(200).json({ data: results });
+  }
+
   /**
    * List global audit logs with filtering and pagination.
    */

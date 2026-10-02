@@ -1,7 +1,13 @@
 import { api } from '@/shared/api/client';
 import { sessionStore } from '@/shared/auth/session-store';
 import { appConfig } from '@/shared/config';
-import type { AuditFilters, AuditListResponse, AuditLogEntry } from './types';
+import type {
+  AuditFilters,
+  AuditListResponse,
+  AuditLogEntry,
+  ComplianceCheckResult,
+  ComplianceRunSummary,
+} from './types';
 
 export const auditApi = {
   /**
@@ -27,6 +33,22 @@ export const auditApi = {
    */
   async getEntityLogs(entity: string, id: string, limit = 50): Promise<{ data: AuditLogEntry[] }> {
     return api.get<{ data: AuditLogEntry[] }>(`/api/audit/${encodeURIComponent(entity)}/${encodeURIComponent(id)}?limit=${limit}`);
+  },
+
+  /**
+   * Fetch compliance check audit results for a campaign.
+   */
+  async getCampaignAudit(campaignId: string): Promise<{ data: ComplianceCheckResult[] }> {
+    return api.get<{ data: ComplianceCheckResult[] }>(`/api/audit/campaigns/${encodeURIComponent(campaignId)}`);
+  },
+
+  /**
+   * Run automated compliance checks (for all campaigns or a specific campaign).
+   */
+  async runComplianceAudit(campaignId?: string): Promise<{ data: ComplianceRunSummary | ComplianceCheckResult[]; message: string }> {
+    return api.post<{ data: ComplianceRunSummary | ComplianceCheckResult[]; message: string }>('/api/audit/run', {
+      campaignId,
+    });
   },
 
   /**
@@ -65,3 +87,4 @@ export const auditApi = {
     window.URL.revokeObjectURL(blobUrl);
   },
 };
+

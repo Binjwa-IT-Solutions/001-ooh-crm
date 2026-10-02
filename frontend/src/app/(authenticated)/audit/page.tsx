@@ -19,6 +19,7 @@ import { RequireAuth } from '@/shared/auth/require-auth';
 import { auditApi } from '@/modules/audit/api';
 import type { AuditFilters, AuditLogEntry } from '@/modules/audit/types';
 import { AuditDetailModal } from '@/modules/audit/components/AuditDetailModal';
+import { ComplianceViewerTab } from '@/modules/audit/components/ComplianceViewerTab';
 
 const ENTITY_OPTIONS = [
   { value: 'ALL', label: 'All Modules' },
@@ -53,6 +54,7 @@ export default function AuditPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [activeTab, setActiveTab] = useState<'logs' | 'compliance'>('logs');
 
   // Filters state
   const [entity, setEntity] = useState('ALL');
@@ -169,30 +171,65 @@ export default function AuditPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            <button
-              type="button"
-              onClick={() => fetchLogs()}
-              disabled={loading}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 disabled:opacity-50 transition"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-              <span>Refresh</span>
-            </button>
+          {activeTab === 'logs' && (
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => fetchLogs()}
+                disabled={loading}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 disabled:opacity-50 transition"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={handleExportCsv}
-              disabled={exporting || loading}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-[#8B2424] px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-[#721c1c] disabled:opacity-50 transition"
-            >
-              <Download className="h-3.5 w-3.5" />
-              <span>{exporting ? 'Exporting...' : 'Export Audit CSV'}</span>
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                disabled={exporting || loading}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[#8B2424] px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-[#721c1c] disabled:opacity-50 transition"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span>{exporting ? 'Exporting...' : 'Export Audit CSV'}</span>
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* KPI Summary Cards */}
+        {/* Navigation Tabs */}
+        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800">
+          <button
+            type="button"
+            onClick={() => setActiveTab('logs')}
+            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-semibold transition ${
+              activeTab === 'logs'
+                ? 'border-[#8B2424] text-[#8B2424] dark:border-rose-500 dark:text-rose-400'
+                : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+            }`}
+          >
+            <Layers className="h-4 w-4" />
+            <span>Activity Ledger (Logs)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('compliance')}
+            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-semibold transition ${
+              activeTab === 'compliance'
+                ? 'border-[#8B2424] text-[#8B2424] dark:border-rose-500 dark:text-rose-400'
+                : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+            }`}
+          >
+            <ShieldCheck className="h-4 w-4" />
+            <span>Campaign Compliance Cross-Checks (Track H1)</span>
+          </button>
+        </div>
+
+        {activeTab === 'compliance' ? (
+          <ComplianceViewerTab />
+        ) : (
+          <>
+            {/* KPI Summary Cards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between">
@@ -467,6 +504,8 @@ export default function AuditPage() {
 
         {/* Detail Inspection Modal */}
         <AuditDetailModal entry={selectedEntry} onClose={() => setSelectedEntry(null)} />
+          </>
+        )}
       </div>
     </RequireAuth>
   );

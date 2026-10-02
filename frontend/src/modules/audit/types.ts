@@ -51,3 +51,33 @@ export interface AuditListResponse {
     totalPages: number;
   };
 }
+
+export type ComplianceCheckType =
+  | 'executed_on_time'
+  | 'deadlines_met'
+  | 'proofs_complete'
+  | 'gps_match'
+  | 'payments_in_reconciled'
+  | 'payments_out_reconciled';
+
+export interface ComplianceCheckResult {
+  _id: string;
+  campaignId: string;
+  checkType: ComplianceCheckType;
+  passed: boolean;
+  details: {
+    summary: string;
+    message?: string;
+    failingItems?: Array<{ id: string; name?: string; reason?: string }>;
+    metadata?: Record<string, unknown>;
+  };
+  checkedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ComplianceRunSummary {
+  totalCampaignsAudited: number;
+  totalChecksRun: number;
+  failingChecksCount: number;
+}
