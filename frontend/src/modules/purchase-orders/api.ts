@@ -125,6 +125,19 @@ export async function cancelPurchaseOrder(
   );
 }
 
+/**
+ * Update payment and invoice tracking (Step 5)
+ */
+export async function updatePurchaseOrderPayment(
+  id: string,
+  data: Record<string, any>,
+): Promise<PurchaseOrderResponse> {
+  return api.patch<PurchaseOrderResponse>(
+    `/api/purchase-orders/${id}/payment`,
+    data,
+  );
+}
+
 export const purchaseOrdersApi = {
   list: getPurchaseOrders,
   get: getPurchaseOrder,
@@ -132,6 +145,7 @@ export const purchaseOrdersApi = {
   update: updatePurchaseOrder,
   issue: issuePurchaseOrder,
   cancel: cancelPurchaseOrder,
+  updatePayment: updatePurchaseOrderPayment,
   campaignOptions: getCampaignOptionsForPO,
   vendorOptions: getVendorOptionsForPO,
   updateStatus: async (id: string, status: "Issued" | "Accepted" | "Cancelled") => {

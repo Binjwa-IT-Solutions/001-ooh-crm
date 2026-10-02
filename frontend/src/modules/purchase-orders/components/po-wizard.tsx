@@ -13,12 +13,11 @@ export function POWizard() {
   const handleSubmit = async (data: PurchaseOrderFormData) => {
     setSaving(true);
     try {
-      await createPurchaseOrder(data);
-      router.push('/purchase-orders');
-      return true;
+      const res = await createPurchaseOrder(data);
+      return res.data;
     } catch (err: any) {
       alert(err.message || 'Failed to create Purchase Order');
-      return false;
+      return null;
     } finally {
       setSaving(false);
     }
@@ -29,7 +28,7 @@ export function POWizard() {
       <PurchaseOrderForm
         order={null}
         saving={saving}
-        onClose={() => router.push('/purchase-orders')}
+        onBack={() => router.push('/purchase-orders')}
         onSuccess={() => router.push('/purchase-orders')}
         onSubmit={handleSubmit}
       />

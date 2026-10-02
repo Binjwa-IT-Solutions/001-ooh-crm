@@ -16,7 +16,14 @@ export enum MediaType {
 }
 
 export enum AvailabilityStatus {
+  PLAN_RECEIVED = "Plan Received",
+  ON_BOARDING = "On Boarding",
+  MEDIA_BOOKING = "Media Booking",
+  NEGOTIATION = "Negotiation",
   AVAILABLE = "Available",
+  REQUEST_SEND = "Request Send",
+  REQUEST = "Request",
+  SEND = "Send",
   BOOKED = "Booked",
 }
 
@@ -25,6 +32,10 @@ export enum ATRStatus {
   PENDING = "Pending",
   APPROVED = "Approved",
   REJECTED = "Rejected",
+  ON_CALL = "On Call",
+  ON_MAIL = "On Mail",
+  WHATSAPP = "WhatsApp",
+  MANUAL = "Manual",
 }
 
 export interface ISite extends Document {
@@ -33,7 +44,7 @@ export interface ISite extends Document {
   clientName: string;
 
   salesPersonName: string;
-  salesPersonContact: string;
+  salesPersonContact?: string;
 
   state: string;
   city: string;
@@ -48,9 +59,10 @@ export interface ISite extends Document {
   duration: number;
 
   vendorName: string;
+  vendorContact?: string;
 
-  availability: AvailabilityStatus;
-  status: ATRStatus;
+  availability: AvailabilityStatus | string;
+  status: ATRStatus | string;
 
   createdAt: Date;
   updatedAt: Date;
@@ -83,8 +95,9 @@ const siteSchema =
 
       salesPersonContact: {
         type: String,
-        required: true,
+        required: false,
         trim: true,
+        default: "",
       },
 
       state: {
@@ -116,7 +129,7 @@ const siteSchema =
       quantity: {
         type: Number,
         required: true,
-        min: 1,
+        min: 0,
       },
 
       startDate: {
@@ -141,19 +154,21 @@ const siteSchema =
         trim: true,
       },
 
+      vendorContact: {
+        type: String,
+        required: false,
+        trim: true,
+        default: "",
+      },
+
       availability: {
         type: String,
-        enum: Object.values(
-          AvailabilityStatus
-        ),
-        default:
-          AvailabilityStatus.AVAILABLE,
+        default: AvailabilityStatus.AVAILABLE,
       },
 
       status: {
         type: String,
-        enum: Object.values(ATRStatus),
-        default: ATRStatus.DRAFT,
+        default: ATRStatus.ON_CALL,
       },
 
       deletedAt: {

@@ -1,8 +1,13 @@
 export type CampaignStatus =
+  | "In Progress"
+  | "Campaign Live"
+  | "Campaign End"
+  | "Rejected"
   | "Draft"
   | "Approved"
   | "InProgress"
   | "Completed"
+  | "Complete"
   | "Cancelled";
 
 export interface CampaignLead {
@@ -62,6 +67,14 @@ export interface Campaign {
     | CampaignQuotation
     | null;
 
+  quotationNo?: string;
+
+  quotationName?: string;
+
+  piNo?: string;
+
+  state?: string;
+
   city: string;
 
   startDate: string;
@@ -90,6 +103,7 @@ export interface CampaignFilters {
   search?: string;
   leadId?: string;
   status?: CampaignStatus;
+  state?: string;
   city?: string;
   manager?: string;
   startDate?: string;
@@ -120,10 +134,15 @@ export interface CreateCampaignPayload {
 
   leadId: string;
 
-  /*
-   * Optional quotation.
-   */
   quotationId?: string;
+
+  quotationNo?: string;
+
+  quotationName?: string;
+
+  piNo?: string;
+
+  state?: string;
 
   city: string;
 
@@ -131,7 +150,7 @@ export interface CreateCampaignPayload {
 
   endDate: string;
 
-  siteIds: string[];
+  siteIds?: string[];
 
   contractedValue: number;
 
