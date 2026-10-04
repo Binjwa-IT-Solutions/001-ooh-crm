@@ -646,8 +646,15 @@ export class LeadsService {
     const rawContact = payload.contactPerson || payload.name || combinedName || emailContactPerson || 'Prospective Client';
     const prefix = payload.prefix ? `${payload.prefix.trim()} ` : '';
     const contactPerson = payload.prefix && !rawContact.startsWith(prefix) ? `${prefix}${rawContact}` : rawContact;
-
-    const companyName = payload.company || payload.company_name || payload.companyName || emailCompanyName || contactPerson || 'Web Lead';
+    let rawCompany = (payload.company || payload.company_name || payload.companyName || emailCompanyName || '').trim();
+    if (
+      rawCompany &&
+      (source.toLowerCase() === 'justdial' || payload.leadid || payload.parentid) &&
+      rawCompany.toLowerCase().includes('media octus')
+    ) {
+      rawCompany = '';
+    }
+    const companyName = rawCompany || contactPerson || 'Web Lead';
     const email = payload.email ? String(payload.email).trim().toLowerCase() : (emailAddress || undefined);
     const city = payload.city || payload.Area || payload.area || payload.brancharea || emailCity || undefined;
 
