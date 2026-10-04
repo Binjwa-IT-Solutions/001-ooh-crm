@@ -7,7 +7,6 @@ import CampaignFilters from "./CampaignFilters";
 import CampaignForm from "./CampaignForm";
 import CampaignStatusTimeline from "./CampaignStatusTimeline";
 import CampaignTable from "./CampaignTable";
-import CampaignComplianceCard from "@/modules/audit/components/CampaignComplianceCard";
 
 import {
   useCampaigns,
@@ -317,16 +316,12 @@ useEffect(() => {
           </div>
         ) : (
           <>
-            {/* TIMELINE & COMPLIANCE */}
+            {/* TIMELINE */}
             {activeCampaign && (
-              <div className="mb-6 space-y-4">
+              <div className="mb-6">
                 <CampaignStatusTimeline
                   status={activeCampaign.status}
                   campaignCode={activeCampaign.campaignCode}
-                  campaignName={activeCampaign.name}
-                />
-                <CampaignComplianceCard
-                  campaignId={activeCampaign._id}
                   campaignName={activeCampaign.name}
                 />
               </div>

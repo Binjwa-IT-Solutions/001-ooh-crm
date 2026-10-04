@@ -69,6 +69,7 @@ export interface AuthSession {
 
 interface SessionMeta {
   userAgent?: string;
+  ip?: string;
 }
 
 function sha256(value: string): string {
@@ -276,7 +277,11 @@ export class AuthService {
   // ------------------------------------------------------------- login flow
 
   /** Step 1 — verify the password, then issue an OTP. No session token yet. */
-  static async startLogin(email: string, passwordPlain: string): Promise<LoginChallenge> {
+  static async startLogin(
+    email: string,
+    passwordPlain: string,
+    meta?: SessionMeta,
+  ): Promise<LoginChallenge> {
     const user = await AuthUser.findOne({ email: email.trim().toLowerCase() }).select(
       '+passwordHash',
     );
@@ -286,6 +291,11 @@ export class AuthService {
         action: 'login_failed',
         entity: 'Auth',
         actorEmail: email,
+        method: 'POST',
+        path: '/api/auth/login',
+        statusCode: 401,
+        ip: meta?.ip,
+        userAgent: meta?.userAgent,
       });
     };
 
@@ -392,7 +402,14 @@ export class AuthService {
     void auditService.record({
       action: 'login',
       entity: 'Auth',
+      actorId: String(user._id),
       actorEmail: user.email,
+      actorRole: user.role,
+      method: 'POST',
+      path: '/api/auth/verify-otp',
+      statusCode: 200,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
     });
 
     return AuthService.createSession(user, meta);

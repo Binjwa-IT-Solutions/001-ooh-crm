@@ -30,6 +30,7 @@ const SKIP_PATHS = [
   '/api/auth/verify-otp',
   '/api/auth/resend-otp',
   '/api/auth/refresh',
+  '/api/auth/logout',
 ];
 
 /**
@@ -87,8 +88,10 @@ export function extractEntityId(body: unknown): string | null {
 
 export function auditMiddleware(req: Request, res: Response, next: NextFunction) {
   const action = METHOD_TO_ACTION[req.method];
+  const reqPath = req.path?.replace(/\/+$/, '') ?? '';
+  const origPath = req.originalUrl?.split('?')[0]?.replace(/\/+$/, '') ?? '';
 
-  if (!action || SKIP_PATHS.includes(req.path)) {
+  if (!action || SKIP_PATHS.includes(reqPath) || SKIP_PATHS.includes(origPath)) {
     next();
     return;
   }

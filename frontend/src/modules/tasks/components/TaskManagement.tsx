@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useTask } from "../hooks/useTask";
 import type { Task } from "../types";
@@ -20,7 +20,18 @@ export default function TaskManagement() {
 
   const [status, setStatus] = useState("");
   const [type, setType] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedEscalationTask, setSelectedEscalationTask] = useState<Task | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      const s = p.get('search');
+      if (s) {
+        setSearchQuery(s);
+      }
+    }
+  }, []);
 
   const filteredTasks = useMemo(
     () =>
@@ -28,9 +39,13 @@ export default function TaskManagement() {
         (task) =>
           (!status ||
             getStatus(task) === status) &&
-          (!type || task.type === type),
+          (!type || task.type === type) &&
+          (!searchQuery.trim() ||
+            task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (task.campaignId as any)?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (task.campaignId as any)?.campaignCode?.toLowerCase().includes(searchQuery.toLowerCase())),
       ),
-    [tasks, status, type],
+    [tasks, status, type, searchQuery],
   );
 
   const today = new Date();
@@ -121,6 +136,19 @@ export default function TaskManagement() {
           </div>
         </div>
       </div>
+
+      {searchQuery && (
+        <div className="flex items-center justify-between rounded-xl bg-amber-50 px-4 py-2.5 text-xs text-amber-800 border border-amber-200">
+          <span>Filtering tasks matching: <strong>&quot;{searchQuery}&quot;</strong></span>
+          <button
+            type="button"
+            onClick={() => setSearchQuery("")}
+            className="font-semibold underline hover:text-amber-900 ml-4 cursor-pointer"
+          >
+            Clear Filter
+          </button>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

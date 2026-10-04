@@ -89,7 +89,16 @@ export class ComplianceAuditService {
   static async runAllCampaigns(): Promise<{ totalCampaignsAudited: number; totalChecksRun: number; failingChecksCount: number }> {
     const campaigns = await Campaign.find({
       deletedAt: null,
-      status: { $in: [CampaignStatus.IN_PROGRESS, CampaignStatus.COMPLETED, CampaignStatus.APPROVED] },
+      status: {
+        $in: [
+          CampaignStatus.IN_PROGRESS,
+          CampaignStatus.COMPLETED,
+          CampaignStatus.APPROVED,
+          'Campaign Live',
+          'Campaign End',
+          'Live',
+        ] as any[],
+      },
     }).select('_id');
 
     let totalChecksRun = 0;
@@ -131,8 +140,13 @@ export class ComplianceAuditService {
     const now = new Date();
     const endDate = new Date(campaign.endDate);
     const startDate = new Date(campaign.startDate);
+    const statusNormalized = (campaign.status || '').trim();
+    const isCompleted =
+      statusNormalized === CampaignStatus.COMPLETED ||
+      statusNormalized.toLowerCase() === 'campaign end' ||
+      statusNormalized.toLowerCase() === 'completed';
 
-    if (campaign.status === CampaignStatus.COMPLETED) {
+    if (isCompleted) {
       const completedAt = campaign.updatedAt ? new Date(campaign.updatedAt) : now;
       if (completedAt.getTime() > endDate.getTime() + 24 * 60 * 60 * 1000) {
         return {
@@ -188,7 +202,7 @@ export class ComplianceAuditService {
         passed: true,
         details: {
           summary: 'No operational tasks assigned to this campaign yet.',
-          metadata: { taskCount: 0 },
+          metadata: { taskCount: 0, notApplicable: true, reason: 'No operational tasks assigned' },
         },
       };
     }
@@ -255,7 +269,7 @@ export class ComplianceAuditService {
         passed: true,
         details: {
           summary: 'No tasks with mandatory proof required for this campaign.',
-          metadata: { proofTasksCount: 0 },
+          metadata: { proofTasksCount: 0, notApplicable: true, reason: 'No mandatory proof tasks' },
         },
       };
     }
@@ -308,15 +322,15 @@ export class ComplianceAuditService {
     }
 
     const sites = await Site.find({ _id: { $in: siteIds }, deletedAt: null });
-    const sitesWithoutGps = sites.filter((s) => !s.gps || typeof s.gps.lat !== 'number' || typeof s.gps.lng !== 'number');
+    const sitesWithoutGps = sites.filter((s: any) => !s.gps || typeof s.gps?.lat !== 'number' || typeof s.gps?.lng !== 'number');
 
     if (sitesWithoutGps.length > 0) {
       return {
         checkType: 'gps_match',
         passed: false,
         details: {
-          summary: `${sitesWithoutGps.length} sites missing benchmark GPS coordinates: ${sitesWithoutGps.map((s) => s.code || s.city || String(s._id)).join(', ')}`,
-          failingItems: sitesWithoutGps.map((s) => ({ id: String(s._id), name: s.code || s.city || String(s._id), reason: 'Site GPS coordinates missing in inventory' })),
+          summary: `${sitesWithoutGps.length} sites missing benchmark GPS coordinates: ${sitesWithoutGps.map((s: any) => s.atrNo || s.location || s.city || String(s._id)).join(', ')}`,
+          failingItems: sitesWithoutGps.map((s: any) => ({ id: String(s._id), name: s.atrNo || s.location || s.city || String(s._id), reason: 'Site GPS coordinates missing in inventory' })),
           metadata: { totalSites: sites.length, missingGps: sitesWithoutGps.length },
         },
       };
@@ -406,7 +420,7 @@ export class ComplianceAuditService {
         passed: true,
         details: {
           summary: 'No vendor purchase orders (POs) required or issued for this campaign.',
-          metadata: { poCount: 0 },
+          metadata: { poCount: 0, notApplicable: true, reason: 'No vendor POs issued' },
         },
       };
     }

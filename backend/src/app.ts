@@ -124,6 +124,9 @@ app.use('/api/candidates', candidateRoutes);
 import auditRoutes from './modules/audit/audit.routes.js';
 app.use('/api/audit', auditRoutes);
 
+import exceptionsRoutes from './modules/exceptions/exceptions.routes.js';
+app.use('/api/exceptions', exceptionsRoutes);
+
 
 // 404 then the central error handler — both must stay last.
 app.use(notFoundHandler);

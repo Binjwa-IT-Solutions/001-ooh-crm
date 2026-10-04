@@ -13,6 +13,7 @@ import {
   Layers,
   Activity,
   AlertTriangle,
+  RotateCw,
 } from 'lucide-react';
 
 import { RequireAuth } from '@/shared/auth/require-auth';
@@ -20,6 +21,7 @@ import { auditApi } from '@/modules/audit/api';
 import type { AuditFilters, AuditLogEntry } from '@/modules/audit/types';
 import { AuditDetailModal } from '@/modules/audit/components/AuditDetailModal';
 import { ComplianceViewerTab } from '@/modules/audit/components/ComplianceViewerTab';
+import { getBusinessActivityInfo } from '@/modules/audit/audit-helpers';
 
 const ENTITY_OPTIONS = [
   { value: 'ALL', label: 'All Modules' },
@@ -95,6 +97,15 @@ export default function AuditPage() {
   };
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      if (p.get('tab') === 'compliance') {
+        setActiveTab('compliance');
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     fetchLogs(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entity, action, from, to, pageSize]);
@@ -158,8 +169,8 @@ export default function AuditPage() {
         {/* Page Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#8B2424] text-white shadow-sm">
                 <ShieldCheck className="h-5 w-5" />
               </span>
               <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
@@ -167,7 +178,7 @@ export default function AuditPage() {
               </h1>
             </div>
             <p className="mt-1 text-sm text-slate-500">
-              Immutable activity ledger recording every system mutation, state transition, and user login.
+              Digital activity ledger recording every business transaction, status change, and user activity.
             </p>
           </div>
 
@@ -221,7 +232,7 @@ export default function AuditPage() {
             }`}
           >
             <ShieldCheck className="h-4 w-4" />
-            <span>Campaign Compliance Cross-Checks (Track H1)</span>
+            <span>Campaign Compliance Checks</span>
           </button>
         </div>
 
@@ -233,29 +244,29 @@ export default function AuditPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-500">Total Audit Records</span>
+              <span className="text-xs font-medium text-slate-500">Total Activity Records</span>
               <Layers className="h-4 w-4 text-slate-400" />
             </div>
             <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">{total.toLocaleString('en-IN')}</p>
-            <p className="mt-1 text-[11px] text-slate-400">Append-only immutable events</p>
+            <p className="mt-1 text-[11px] text-slate-400">Permanent tamper-proof history</p>
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-500">Protected Entities</span>
+              <span className="text-xs font-medium text-slate-500">Tracked Modules</span>
               <Activity className="h-4 w-4 text-emerald-500" />
             </div>
             <p className="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-400">10+ Modules</p>
-            <p className="mt-1 text-[11px] text-slate-400">Leads, Quotes, Campaigns, HR</p>
+            <p className="mt-1 text-[11px] text-slate-400">Leads, Quotes, Campaigns, Finance</p>
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-500">Data Redaction</span>
+              <span className="text-xs font-medium text-slate-500">Data Privacy</span>
               <ShieldCheck className="h-4 w-4 text-blue-500" />
             </div>
-            <p className="mt-2 text-2xl font-bold text-blue-600 dark:text-blue-400">Masked</p>
-            <p className="mt-1 text-[11px] text-slate-400">Passwords, OTPs, PAN & Bank numbers</p>
+            <p className="mt-2 text-2xl font-bold text-blue-600 dark:text-blue-400">Protected</p>
+            <p className="mt-1 text-[11px] text-slate-400">Passwords & Banking masked</p>
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
@@ -264,31 +275,31 @@ export default function AuditPage() {
               <ShieldCheck className="h-4 w-4 text-purple-500" />
             </div>
             <p className="mt-2 text-2xl font-bold text-purple-600 dark:text-purple-400">Admin & Finance</p>
-            <p className="mt-1 text-[11px] text-slate-400">Enforced by RBAC audit.view</p>
+            <p className="mt-1 text-[11px] text-slate-400">Restricted role authorization</p>
           </div>
         </div>
 
         {/* Filters Bar */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
-          <form onSubmit={handleSearchSubmit} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+          <form onSubmit={handleSearchSubmit} className="flex flex-col gap-2.5 lg:flex-row lg:items-center">
             {/* Search Input */}
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="text"
                 placeholder="Search actor email..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-xs text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-400"
+                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-slate-900 focus:bg-white focus:outline-hidden dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-400 transition"
               />
             </div>
 
             {/* Entity Module Dropdown */}
-            <div>
+            <div className="w-full sm:w-44 shrink-0">
               <select
                 value={entity}
                 onChange={(e) => setEntity(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden dark:border-slate-700 dark:bg-slate-950 dark:text-white transition"
               >
                 {ENTITY_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -299,11 +310,11 @@ export default function AuditPage() {
             </div>
 
             {/* Action Type Dropdown */}
-            <div>
+            <div className="w-full sm:w-40 shrink-0">
               <select
                 value={action}
                 onChange={(e) => setAction(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden dark:border-slate-700 dark:bg-slate-950 dark:text-white transition"
               >
                 {ACTION_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -313,35 +324,35 @@ export default function AuditPage() {
               </select>
             </div>
 
-            {/* From Date */}
-            <div>
+            {/* Date Range Inputs */}
+            <div className="flex items-center gap-2 shrink-0">
               <input
                 type="date"
                 value={from}
                 onChange={(e) => setFrom(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                className="h-10 w-36 sm:w-40 rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden dark:border-slate-700 dark:bg-slate-950 dark:text-white transition"
                 title="Filter records from date"
               />
-            </div>
-
-            {/* To Date */}
-            <div className="flex gap-2">
+              <span className="text-xs text-slate-400 font-medium">to</span>
               <input
                 type="date"
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                className="h-10 w-36 sm:w-40 rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden dark:border-slate-700 dark:bg-slate-950 dark:text-white transition"
                 title="Filter records to date"
               />
-              <button
-                type="button"
-                onClick={handleResetFilters}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 transition shrink-0"
-                title="Reset all filters"
-              >
-                Reset
-              </button>
             </div>
+
+            {/* Reset Button */}
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="h-10 inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-600 shadow-2xs hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 transition shrink-0"
+              title="Reset all filters"
+            >
+              <RotateCw className="h-3.5 w-3.5 text-slate-400" />
+              <span>Reset</span>
+            </button>
           </form>
         </div>
 
@@ -362,8 +373,8 @@ export default function AuditPage() {
                   <th className="px-5 py-3">Timestamp (IST)</th>
                   <th className="px-5 py-3">Actor / User</th>
                   <th className="px-5 py-3">Action</th>
-                  <th className="px-5 py-3">Target Entity</th>
-                  <th className="px-5 py-3">Endpoint / Path</th>
+                  <th className="px-5 py-3">Module & Record</th>
+                  <th className="px-5 py-3">Business Activity & Channel</th>
                   <th className="px-5 py-3 text-right">Details</th>
                 </tr>
               </thead>
@@ -388,51 +399,60 @@ export default function AuditPage() {
                     </td>
                   </tr>
                 ) : (
-                  logs.map((entry) => (
-                    <tr key={entry._id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition">
-                      {/* Timestamp */}
-                      <td className="px-5 py-3.5 whitespace-nowrap text-slate-500">
-                        {new Date(entry.createdAt).toLocaleString('en-IN', {
-                          dateStyle: 'medium',
-                          timeStyle: 'short',
-                        })}
-                      </td>
+                  logs.map((entry) => {
+                    const activity = getBusinessActivityInfo(entry);
+                    return (
+                      <tr key={entry._id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition">
+                        {/* Timestamp */}
+                        <td className="px-5 py-3.5 whitespace-nowrap text-slate-500">
+                          {new Date(entry.createdAt).toLocaleString('en-IN', {
+                            dateStyle: 'medium',
+                            timeStyle: 'short',
+                          })}
+                        </td>
 
-                      {/* Actor */}
-                      <td className="px-5 py-3.5">
-                        <div className="font-medium text-slate-900 dark:text-white">
-                          {entry.actorEmail || 'System / Automated'}
-                        </div>
-                        {entry.actorRole && (
-                          <span className="text-[10px] text-slate-400 font-mono uppercase tracking-wider">
-                            {entry.actorRole}
+                        {/* Actor */}
+                        <td className="px-5 py-3.5">
+                          <div className="font-medium text-slate-900 dark:text-white">
+                            {entry.actorEmail || 'System / Automated'}
+                          </div>
+                          {entry.actorRole && (
+                            <span className="text-[10px] text-slate-400 font-mono uppercase tracking-wider">
+                              {entry.actorRole}
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Action */}
+                        <td className="px-5 py-3.5 whitespace-nowrap">
+                          <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${getActionBadge(entry.action)}`}>
+                            {entry.action}
                           </span>
-                        )}
-                      </td>
+                        </td>
 
-                      {/* Action */}
-                      <td className="px-5 py-3.5 whitespace-nowrap">
-                        <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${getActionBadge(entry.action)}`}>
-                          {entry.action}
-                        </span>
-                      </td>
-
-                      {/* Entity */}
-                      <td className="px-5 py-3.5">
-                        <span className="font-medium capitalize text-slate-800 dark:text-slate-200">
-                          {entry.entity}
-                        </span>
-                        {entry.entityId && (
-                          <span className="block font-mono text-[10px] text-slate-400 truncate max-w-30" title={entry.entityId}>
-                            {entry.entityId}
+                        {/* Module & Record */}
+                        <td className="px-5 py-3.5">
+                          <span className="font-semibold capitalize text-slate-800 dark:text-slate-200">
+                            {entry.entity}
                           </span>
-                        )}
-                      </td>
+                          {entry.entityId && (
+                            <span className="block font-mono text-[10px] text-slate-400 truncate max-w-32" title={entry.entityId}>
+                              #{entry.entityId.slice(-8)}
+                            </span>
+                          )}
+                        </td>
 
-                      {/* Path & Method */}
-                      <td className="px-5 py-3.5 font-mono text-[11px] text-slate-600 dark:text-slate-400 max-w-30 truncate" title={`${entry.method} ${entry.path}`}>
-                        <span className="font-semibold text-slate-800 dark:text-slate-200">{entry.method}</span> {entry.path}
-                      </td>
+                        {/* Business Activity & Channel */}
+                        <td className="px-5 py-3.5 max-w-[260px]" title={entry.method || entry.path ? `Technical: ${entry.method ?? ''} ${entry.path ?? ''}`.trim() : 'N/A'}>
+                          <div className="font-medium text-slate-900 dark:text-white truncate">
+                            {activity.title}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className={`inline-flex items-center rounded-md border px-1.5 py-0.2 text-[10px] font-medium ${activity.badgeColor}`}>
+                              {activity.channel}
+                            </span>
+                          </div>
+                        </td>
 
                       {/* View Button */}
                       <td className="px-5 py-3.5 text-right whitespace-nowrap">
@@ -446,7 +466,8 @@ export default function AuditPage() {
                         </button>
                       </td>
                     </tr>
-                  ))
+                  );
+                })
                 )}
               </tbody>
             </table>

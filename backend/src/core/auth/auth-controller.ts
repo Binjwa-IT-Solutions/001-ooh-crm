@@ -78,7 +78,10 @@ export class AuthController {
   /** POST /api/auth/login — step 1: password check, then OTP is issued. */
   static async login(req: Request, res: Response) {
     const input = loginSchema.parse(req.body);
-    const challenge = await AuthService.startLogin(input.email, input.password);
+    const challenge = await AuthService.startLogin(input.email, input.password, {
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
 
     res.status(200).json({
       message: 'Verification code sent',
@@ -106,6 +109,7 @@ export class AuthController {
 
     const session = await AuthService.verifyOtp(input.challengeId, input.code, {
       userAgent: req.headers['user-agent'],
+      ip: req.ip,
     });
 
     res.status(200).json({ message: 'Signed in', ...session });
@@ -132,6 +136,9 @@ export class AuthController {
         action: 'logout',
         entity: 'Auth',
         ctx: req.ctx,
+        method: 'POST',
+        path: '/api/auth/logout',
+        statusCode: 200,
         ip: req.ip,
         userAgent: req.headers['user-agent'],
       });
