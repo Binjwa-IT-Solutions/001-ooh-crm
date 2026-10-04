@@ -8,13 +8,35 @@ export const quotationLineSchema = z.object({
   ratePerDay: z.coerce.number().min(0, 'Rate per day is required'), // rupees from client; server converts to paise
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
+  discountPercent: z.coerce.number().min(0).max(100).optional().default(0),
+  taxPercent: z.coerce.number().min(0).max(100).optional().default(18),
 });
 
 export const createQuotationSchema = z.object({
   leadId: objectId,
   clientName: z.string().trim().min(1).optional(),
+  clientContactPerson: z.string().trim().optional(),
   clientEmail: z.string().trim().email('Invalid email').optional().or(z.literal('')),
   clientPhone: z.string().trim().optional().or(z.literal('')),
+  clientGstin: z.string().trim().optional(),
+  clientAddress: z.string().trim().optional(),
+  clientCity: z.string().trim().optional(),
+  clientState: z.string().trim().optional(),
+  isInterState: z.boolean().optional(),
+  taxPercent: z.coerce.number().min(0).max(100).optional(),
+  taxAmount: z.coerce.number().min(0).optional(), // rupees from UI; converted to paise on server
+  notes: z.string().trim().optional(),
+  terms: z.array(z.string().trim()).optional(),
+  bankDetails: z.object({
+    bankName: z.string().trim().optional(),
+    accountName: z.string().trim().optional(),
+    accountNumber: z.string().trim().optional(),
+    ifscCode: z.string().trim().optional(),
+    branch: z.string().trim().optional(),
+  }).optional(),
+  signatureImage: z.string().optional(),
+  signatoryName: z.string().trim().optional(),
+  signatoryDesignation: z.string().trim().optional(),
   validUntil: z.coerce.date().optional(),
   sites: z.array(quotationLineSchema).min(1, 'At least one site is required'),
 });
