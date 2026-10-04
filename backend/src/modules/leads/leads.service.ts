@@ -1363,10 +1363,42 @@ export class LeadsService {
       });
     }
 
-    // Sort descending by timestamp
-    activities.sort(
-      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-    );
+    // Helper rank to determine logical ordering when timestamps are identical
+    const getTieBreakerRank = (act: any): number => {
+      // Base creation / initial intake is the origin event (oldest -> rank 1, goes to bottom)
+      if (act.type === 'status_change') {
+        if (!act.from || act.from === act.to || act.to === 'New') {
+          return 1;
+        }
+        // State transition (e.g. New -> Contacted) happened after intake & call
+        return 3;
+      }
+      if (act.type === 'follow_up') {
+        return 2;
+      }
+      if (act.type === 'manager_review') {
+        return 4;
+      }
+      if (act.type === 'quotation') {
+        // "Quotation sent" happened after "Quotation created"
+        if (typeof act.reason === 'string' && act.reason.includes('sent')) {
+          return 6;
+        }
+        return 5;
+      }
+      if (act.type === 'campaign_event') {
+        return 7;
+      }
+      return 2;
+    };
+
+    // Sort descending by timestamp (newest on top, oldest at bottom), with tie-breaker
+    activities.sort((a, b) => {
+      const timeDiff = new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      if (timeDiff !== 0) return timeDiff;
+      // Higher rank = newer event = appears higher in reverse-chronological timeline
+      return getTieBreakerRank(b) - getTieBreakerRank(a);
+    });
 
     return { activities };
   }
