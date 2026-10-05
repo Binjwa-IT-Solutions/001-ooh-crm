@@ -16,7 +16,9 @@ export function formatDate(value?: string) {
 
 export function getVendorName(
   vendor: PurchaseOrder["vendorId"],
+  fallbackName?: string,
 ) {
+  if (fallbackName) return fallbackName;
   if (!vendor) return "—";
   if (typeof vendor === "string") {
     return vendor;
@@ -27,7 +29,9 @@ export function getVendorName(
 
 export function getCampaignName(
   campaign: PurchaseOrder["campaignId"],
+  fallbackName?: string,
 ) {
+  if (fallbackName) return fallbackName;
   if (!campaign) return "—";
   if (typeof campaign === "string") {
     return campaign;

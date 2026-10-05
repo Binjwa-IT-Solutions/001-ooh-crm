@@ -46,11 +46,19 @@ const MEDIA_TYPES: MediaType[] = [
 ];
 
 const AVAILABILITY: AvailabilityStatus[] = [
+  "Plan Received",
+  "On Boarding",
+  "Media Booking",
+  "Negotiation",
   "Available",
-  "Booked",
+  "Request Send",
 ];
 
 const STATUSES: MediaPlanStatus[] = [
+  "On Call",
+  "On Mail",
+  "WhatsApp",
+  "Manual",
   "Draft",
   "Pending",
   "Approved",
@@ -193,7 +201,7 @@ export default function SiteFilters({
         ))}
       </select>
 
-      {/* STATUS */}
+      {/* STATUS / FOLLOW UP */}
       <select
         value={status}
         onChange={(e) =>
@@ -205,7 +213,7 @@ export default function SiteFilters({
         }
         className={`${inputClass} cursor-pointer`}
       >
-        <option value="">Status</option>
+        <option value="">Follow Up</option>
 
         {STATUSES.map((item) => (
           <option key={item} value={item}>

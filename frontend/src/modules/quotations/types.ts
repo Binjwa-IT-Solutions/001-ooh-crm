@@ -1,13 +1,23 @@
 export type QuotationStatus = 'Draft' | 'Sent' | 'Accepted' | 'Rejected' | 'Expired';
 
 export interface QuotationLineItem {
-  siteId: string | { _id?: string; siteCode?: string; city?: string; type?: string; address?: string };
+  siteId: string | { _id?: string; code?: string; siteCode?: string; city?: string; type?: string; address?: string };
   description?: string;
   ratePerDay: number; // paise
   startDate: string;
   endDate: string;
   days: number;
+  discountPercent?: number;
+  taxPercent?: number;
   amount: number; // paise
+}
+
+export interface BankDetails {
+  bankName?: string;
+  accountName?: string;
+  accountNumber?: string;
+  ifscCode?: string;
+  branch?: string;
 }
 
 export interface Quotation {
@@ -16,8 +26,20 @@ export interface Quotation {
   quoteNumber: string;
   leadId?: string | { _id?: string; companyName?: string; contactPerson?: string; email?: string; mobile?: string };
   clientName?: string;
+  clientContactPerson?: string;
   clientEmail?: string;
   clientPhone?: string;
+  clientGstin?: string;
+  clientAddress?: string;
+  clientCity?: string;
+  clientState?: string;
+  isInterState?: boolean;
+  notes?: string;
+  terms?: string[];
+  bankDetails?: BankDetails;
+  signatureImage?: string;
+  signatoryName?: string;
+  signatoryDesignation?: string;
   sites: QuotationLineItem[];
   subtotal: number; // paise
   taxPercent: number;
@@ -72,6 +94,8 @@ export interface CreateQuotationLineInput {
   siteId: string;
   description?: string;
   ratePerDay: number; // in rupees from UI
+  discountPercent?: number;
+  taxPercent?: number;
   startDate: string;
   endDate: string;
 }
@@ -79,8 +103,22 @@ export interface CreateQuotationLineInput {
 export interface CreateQuotationFormValues {
   leadId: string;
   clientName?: string;
+  clientContactPerson?: string;
   clientEmail?: string;
   clientPhone?: string;
+  clientGstin?: string;
+  clientAddress?: string;
+  clientCity?: string;
+  clientState?: string;
+  isInterState?: boolean;
+  taxPercent?: number;
+  taxAmount?: number;
+  notes?: string;
+  terms?: string[];
+  bankDetails?: BankDetails;
+  signatureImage?: string;
+  signatoryName?: string;
+  signatoryDesignation?: string;
   validUntil?: string;
   sites: CreateQuotationLineInput[];
 }

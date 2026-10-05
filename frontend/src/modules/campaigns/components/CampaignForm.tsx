@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getCampaignLeadOptions, getCampaignManagers } from "../api";
+import { quotationsApi } from "@/modules/quotations/api";
 
 import type {
   Campaign,
@@ -12,13 +13,16 @@ import type {
 } from "../types";
 
 interface CampaignFormData {
-  name: string;
   leadId: string;
-  quotationId: string;
+  name: string;
+  state: string;
   city: string;
+  quotationName: string;
+  quotationNo: string;
+  quotationId: string;
+  piNo: string;
   startDate: string;
   endDate: string;
-  siteIds: string;
   contractedValue: string;
   status: CampaignStatus;
   assignedManager: string;
@@ -33,19 +37,33 @@ interface Props {
   ) => Promise<void>;
 }
 
+function getQuotationDisplayName(q: any): string {
+  const client = q.clientName?.trim();
+  const leadObj = typeof q.leadId === "object" ? q.leadId : null;
+  const leadName = leadObj?.companyName || leadObj?.name || "";
+  const desc = q.sites?.[0]?.description?.trim();
+  if (client) return client;
+  if (desc) return desc;
+  if (leadName) return `${leadName} Quotation`;
+  return `Quotation ${q.quoteNumber || ""}`;
+}
+
 function toFormData(
   campaign?: Campaign | null,
   defaultLeadId?: string,
 ): CampaignFormData {
   if (!campaign) {
     return {
-      name: "",
       leadId: defaultLeadId || "",
-      quotationId: "",
+      name: "",
+      state: "",
       city: "",
+      quotationName: "",
+      quotationNo: "",
+      quotationId: "",
+      piNo: "",
       startDate: "",
       endDate: "",
-      siteIds: "",
       contractedValue: "",
       status: "Draft",
       assignedManager: "",
@@ -53,44 +71,54 @@ function toFormData(
   }
 
   return {
-    name: campaign.name,
-
     leadId:
       typeof campaign.leadId === "string"
         ? campaign.leadId
         : campaign.leadId?._id ?? "",
 
-    quotationId:
-      !campaign.quotationId
-        ? ""
-        : typeof campaign.quotationId ===
-            "string"
-          ? campaign.quotationId
-          : campaign.quotationId._id,
+    name: campaign.name,
+
+    state: campaign.state || "",
 
     city: campaign.city,
 
-    startDate: campaign.startDate.slice(0, 10),
+    quotationName: campaign.quotationName || "",
 
-    endDate: campaign.endDate.slice(0, 10),
+    quotationNo:
+      campaign.quotationNo ||
+      (typeof campaign.quotationId === "object"
+        ? campaign.quotationId?.quoteNumber
+        : "") ||
+      "",
 
-    siteIds: campaign.siteIds
-      .map((site) =>
-        typeof site === "string"
-          ? site
-          : site._id,
-      )
-      .join(", "),
+    quotationId:
+      !campaign.quotationId
+        ? ""
+        : typeof campaign.quotationId === "string"
+          ? campaign.quotationId
+          : campaign.quotationId._id,
+
+    piNo: campaign.piNo || "",
+
+    startDate: campaign.startDate ? campaign.startDate.slice(0, 10) : "",
+
+    endDate: campaign.endDate ? campaign.endDate.slice(0, 10) : "",
 
     contractedValue: String(
-      campaign.contractedValue / 100,
+      (campaign.contractedValue || 0) / 100,
     ),
 
-    status: campaign.status,
+    status:
+      campaign.status === "InProgress"
+        ? "In Progress"
+        : campaign.status === "Completed"
+          ? "Campaign End"
+          : campaign.status === "Cancelled"
+            ? "Rejected"
+            : campaign.status,
 
     assignedManager:
-      typeof campaign.assignedManager ===
-        "string"
+      typeof campaign.assignedManager === "string"
         ? campaign.assignedManager
         : campaign.assignedManager?._id ?? "",
   };
@@ -110,6 +138,20 @@ export default function CampaignForm({
   const [error, setError] = useState("");
   const [leads, setLeads] = useState<LeadOption[]>([]);
   const [managers, setManagers] = useState<ManagerOption[]>([]);
+  const [quotations, setQuotations] = useState<Array<{
+    _id?: string;
+    id?: string;
+    quoteNumber: string;
+    clientName?: string;
+    leadId?: any;
+    total?: number;
+    sites?: any[];
+  }>>([]);
+  const [loadingQuotations, setLoadingQuotations] = useState(false);
+  const [selectedSites, setSelectedSites] = useState<string[]>(() => {
+    if (!campaign?.siteIds) return [];
+    return campaign.siteIds.map((s) => (typeof s === "string" ? s : s._id));
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -128,6 +170,29 @@ export default function CampaignForm({
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    setLoadingQuotations(true);
+
+    quotationsApi
+      .list({ limit: 100 })
+      .then((res) => {
+        if (active && res.quotations) {
+          setQuotations(res.quotations);
+        }
+      })
+      .catch(() => {
+        if (active) setQuotations([]);
+      })
+      .finally(() => {
+        if (active) setLoadingQuotations(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   function updateField(
     field: keyof CampaignFormData,
     value: string,
@@ -137,6 +202,57 @@ export default function CampaignForm({
       [field]: value,
     }));
   }
+
+  function handleLeadChange(leadId: string) {
+    updateField("leadId", leadId);
+    const lead = leads.find((l) => l._id === leadId);
+    if (lead?.city && !form.city.trim()) {
+      updateField("city", lead.city);
+    }
+  }
+
+  function handleSelectQuotation(q: any) {
+    const dispName = getQuotationDisplayName(q);
+    updateField("quotationName", dispName);
+    updateField("quotationNo", q.quoteNumber);
+    updateField("quotationId", q._id || q.id || "");
+    if (q.sites && Array.isArray(q.sites) && q.sites.length > 0) {
+      const siteIdsFromQ = q.sites
+        .map((s: any) => (typeof s.siteId === "object" ? s.siteId?._id : s.siteId))
+        .filter(Boolean);
+      if (siteIdsFromQ.length > 0) {
+        setSelectedSites(siteIdsFromQ);
+      }
+    }
+  }
+
+  function handleQuotationNameChange(name: string) {
+    updateField("quotationName", name);
+
+    if (!name.trim()) return;
+    const term = name.trim().toLowerCase();
+
+    const matching = quotations.filter((q) => {
+      const dispName = getQuotationDisplayName(q).toLowerCase();
+      const client = (q.clientName || "").toLowerCase();
+      const qNum = (q.quoteNumber || "").toLowerCase();
+      const leadObj = typeof q.leadId === "object" ? q.leadId : null;
+      const leadName = (leadObj?.companyName || "").toLowerCase();
+      return (
+        dispName.includes(term) ||
+        client.includes(term) ||
+        qNum.includes(term) ||
+        leadName.includes(term)
+      );
+    });
+
+    if (matching.length === 1) {
+      // Exactly one matching quotation -> automatically fill quotation no!
+      handleSelectQuotation(matching[0]);
+    }
+  }
+
+
 
   async function handleSubmit(
     event: React.FormEvent<HTMLFormElement>,
@@ -151,7 +267,6 @@ export default function CampaignForm({
       !form.city.trim() ||
       !form.startDate ||
       !form.endDate ||
-      !form.siteIds.trim() ||
       !form.contractedValue
     ) {
       setError(
@@ -170,20 +285,11 @@ export default function CampaignForm({
       return;
     }
 
-    const siteIds = form.siteIds
-      .split(",")
-      .map((id) => id.trim())
-      .filter(Boolean);
-
     const invalidField = [
       ["Client / Lead", form.leadId],
-      ...(form.quotationId.trim()
+      ...(form.quotationId.trim() && isObjectId(form.quotationId.trim())
         ? [["Quotation ID", form.quotationId.trim()]]
         : []),
-      ...siteIds.map((id, index) => [
-        `Site ID ${index + 1}`,
-        id,
-      ]),
       ...(form.assignedManager.trim()
         ? [["Assigned Manager", form.assignedManager.trim()]]
         : []),
@@ -200,13 +306,17 @@ export default function CampaignForm({
       await onSuccess({
         name: form.name.trim(),
         leadId: form.leadId.trim(),
-        ...(form.quotationId.trim()
+        state: form.state.trim() || undefined,
+        city: form.city.trim(),
+        quotationName: form.quotationName.trim() || undefined,
+        quotationNo: form.quotationNo.trim() || undefined,
+        ...(form.quotationId.trim() && isObjectId(form.quotationId.trim())
           ? { quotationId: form.quotationId.trim() }
           : {}),
-        city: form.city.trim(),
+        piNo: form.piNo.trim() || undefined,
         startDate: form.startDate,
         endDate: form.endDate,
-        siteIds,
+        siteIds: selectedSites.length > 0 ? selectedSites : undefined,
         contractedValue: Math.round(
           Number(form.contractedValue) * 100,
         ),
@@ -279,7 +389,15 @@ export default function CampaignForm({
 
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
 
-              {/* Campaign Name */}
+              {/* 1. Client / Lead Selector */}
+              <LeadSelector
+                value={form.leadId}
+                leads={leads}
+                required
+                onChange={handleLeadChange}
+              />
+
+              {/* 2. Campaign Name */}
               <Input
                 label="Campaign Name"
                 value={form.name}
@@ -290,7 +408,17 @@ export default function CampaignForm({
                 }
               />
 
-              {/* City */}
+              {/* 3. State */}
+              <Input
+                label="State"
+                value={form.state}
+                placeholder="Enter state"
+                onChange={(value) =>
+                  updateField("state", value)
+                }
+              />
+
+              {/* 4. City */}
               <Input
                 label="City"
                 value={form.city}
@@ -301,65 +429,44 @@ export default function CampaignForm({
                 }
               />
 
-              {/* Lead Selector */}
-              <LeadSelector
-                value={form.leadId}
-                leads={leads}
-                required
-                onChange={(value) =>
-                  updateField("leadId", value)
-                }
+              {/* 5. Quotation Name */}
+              <QuotationNameSelector
+                value={form.quotationName}
+                quotations={quotations}
+                loading={loadingQuotations}
+                onChange={handleQuotationNameChange}
+                onSelectQuotation={handleSelectQuotation}
               />
 
-              {/* Site IDs */}
+              {/* 6. Quotation No */}
+              <QuotationNoInput
+                value={form.quotationNo}
+                quotations={quotations}
+                onChange={(value) => {
+                  updateField("quotationNo", value);
+                  const matched = quotations.find(
+                    (q) => (q.quoteNumber || "").toLowerCase() === value.trim().toLowerCase(),
+                  );
+                  if (matched) {
+                    handleSelectQuotation(matched);
+                  } else {
+                    updateField("quotationId", "");
+                  }
+                }}
+                onSelectQuotation={handleSelectQuotation}
+              />
+
+              {/* 7. PI No */}
               <Input
-                label="Site IDs"
-                value={form.siteIds}
-                required
-                placeholder="siteId1, siteId2"
+                label="PI No"
+                value={form.piNo}
+                placeholder="Enter PI number (e.g. PI-2026-001)"
                 onChange={(value) =>
-                  updateField(
-                    "siteIds",
-                    value,
-                  )
+                  updateField("piNo", value)
                 }
               />
 
-              {/* Start Date */}
-              <DatePicker
-                label="Start Date"
-                value={form.startDate}
-                required
-                onChange={(value) =>
-                  updateField(
-                    "startDate",
-                    value,
-                  )
-                }
-              />
-
-              {/* End Date */}
-              <DatePicker
-                label="End Date"
-                value={form.endDate}
-                required
-                onChange={(value) =>
-                  updateField(
-                    "endDate",
-                    value,
-                  )
-                }
-              />
-
-              {/* Status */}
-              <StatusDropdown
-                value={form.status}
-                onChange={(value) =>
-                  updateField("status", value)
-                }
-              />
-
-              {/* Contracted Value */}
+              {/* 8. Contracted Value */}
               <Input
                 label="Contracted Value"
                 type="number"
@@ -374,7 +481,41 @@ export default function CampaignForm({
                 }
               />
 
-              {/* Assigned Manager Selector */}
+              {/* 9. Start Date */}
+              <DatePicker
+                label="Start Date"
+                value={form.startDate}
+                required
+                onChange={(value) =>
+                  updateField(
+                    "startDate",
+                    value,
+                  )
+                }
+              />
+
+              {/* 10. End Date */}
+              <DatePicker
+                label="End Date"
+                value={form.endDate}
+                required
+                onChange={(value) =>
+                  updateField(
+                    "endDate",
+                    value,
+                  )
+                }
+              />
+
+              {/* 11. Status */}
+              <StatusDropdown
+                value={form.status}
+                onChange={(value) =>
+                  updateField("status", value)
+                }
+              />
+
+              {/* 12. Assigned Manager Selector */}
               <ManagerSelector
                 value={form.assignedManager}
                 managers={managers}
@@ -697,10 +838,9 @@ function StatusDropdown({
 
   const options: CampaignStatus[] = [
     "Draft",
-    "Approved",
-    "InProgress",
-    "Completed",
-    "Cancelled",
+    "Campaign Live",
+    "Campaign End",
+    "Rejected",
   ];
 
   return (
@@ -717,9 +857,7 @@ function StatusDropdown({
         className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
       >
         <span>
-          {value === "InProgress"
-            ? "In Progress"
-            : value}
+          {value}
         </span>
 
         <span className="text-gray-500">
@@ -747,9 +885,7 @@ function StatusDropdown({
                     : "bg-white text-gray-900 hover:bg-[#F9DADA] hover:text-[#8B2424]"
                 }`}
               >
-                {option === "InProgress"
-                  ? "In Progress"
-                  : option}
+                {option}
               </button>
             );
           })}
@@ -802,6 +938,342 @@ function Input({
         }
         className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder:text-gray-500 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
       />
+    </div>
+  );
+}
+
+/* =========================
+   Quotation Name Selector Dropdown (with Search & Filter)
+========================= */
+
+function QuotationNameSelector({
+  value,
+  quotations,
+  loading,
+  onChange,
+  onSelectQuotation,
+}: {
+  value: string;
+  quotations: any[];
+  loading?: boolean;
+  onChange: (value: string) => void;
+  onSelectQuotation: (quotation: any) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  const filtered = quotations.filter((q) => {
+    if (!search.trim()) return true;
+    const term = search.toLowerCase().trim();
+    const dispName = getQuotationDisplayName(q).toLowerCase();
+    const client = (q.clientName || "").toLowerCase();
+    const qNum = (q.quoteNumber || "").toLowerCase();
+    const leadObj = typeof q.leadId === "object" ? q.leadId : null;
+    const leadName = (leadObj?.companyName || "").toLowerCase();
+    return (
+      dispName.includes(term) ||
+      client.includes(term) ||
+      qNum.includes(term) ||
+      leadName.includes(term)
+    );
+  });
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <div className="mb-1.5 flex items-center justify-between">
+        <label className="block text-sm font-medium text-gray-900">
+          Quotation Name
+        </label>
+        {quotations.length > 0 && (
+          <span className="text-xs text-gray-500">
+            {quotations.length} available
+          </span>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+      >
+        <div className="truncate">
+          {value ? (
+            <span className="font-medium text-gray-900">{value}</span>
+          ) : (
+            <span className="text-gray-400">Select or search quotation name</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 text-gray-400">
+          {value && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange("");
+              }}
+              className="hover:text-red-600 text-sm p-0.5 cursor-pointer font-bold leading-none"
+              title="Clear quotation name"
+            >
+              ×
+            </span>
+          )}
+          <span>▾</span>
+        </div>
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 z-50 mt-1 max-h-60 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+          <div className="border-b border-gray-100 p-2">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search quotation by name, quote #, client..."
+              className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 outline-none focus:border-[#8B2424]"
+              autoFocus
+            />
+          </div>
+
+          <div className="max-h-48 overflow-y-auto divide-y divide-gray-50">
+            {search.trim() && (
+              <div className="p-2 bg-gray-50 border-b border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange(search.trim());
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className="w-full rounded-md border border-dashed border-[#8B2424] bg-white px-2.5 py-1.5 text-left text-xs font-medium text-[#8B2424] hover:bg-[#FFF5F5] cursor-pointer"
+                >
+                  + Use custom name: &ldquo;{search.trim()}&rdquo;
+                </button>
+              </div>
+            )}
+
+            {filtered.map((q) => {
+              const dispName = getQuotationDisplayName(q);
+              const isSelected = value.trim().toLowerCase() === dispName.trim().toLowerCase();
+              const formattedVal = q.total
+                ? `₹${(q.total / 100).toLocaleString("en-IN")}`
+                : "";
+              const siteCount = q.sites?.length
+                ? `${q.sites.length} ${q.sites.length === 1 ? "site" : "sites"}`
+                : "";
+
+              return (
+                <button
+                  key={q._id || q.id || q.quoteNumber}
+                  type="button"
+                  onClick={() => {
+                    onSelectQuotation(q);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className={`block w-full cursor-pointer px-4 py-2.5 text-left transition ${
+                    isSelected
+                      ? "bg-[#FFF5F5] text-[#8B2424]"
+                      : "hover:bg-[#F9DADA] hover:text-[#8B2424] text-gray-900"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold">{dispName}</span>
+                    {formattedVal && (
+                      <span className="text-xs font-semibold text-emerald-700">
+                        {formattedVal}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    Quote #{q.quoteNumber} {siteCount ? `• ${siteCount}` : ""}
+                  </div>
+                </button>
+              );
+            })}
+
+            {filtered.length === 0 && (
+              <div className="px-4 py-3 text-center text-xs text-gray-500">
+                {search.trim()
+                  ? `No matching quotations. Click "+ Use custom name" above.`
+                  : "No quotations available."}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* =========================
+   Quotation No Input & Suggestions
+========================= */
+
+function QuotationNoInput({
+  value,
+  quotations,
+  onChange,
+  onSelectQuotation,
+}: {
+  value: string;
+  quotations: Array<{
+    id?: string;
+    _id?: string;
+    quoteNumber: string;
+    total?: number;
+    sites?: any[];
+  }>;
+  onChange: (value: string) => void;
+  onSelectQuotation: (quotation: any) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleOutsideClick(event: MouseEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, []);
+
+  const filtered = quotations.filter((q) => {
+    if (!value.trim()) return true;
+    return (q.quoteNumber || "")
+      .toLowerCase()
+      .includes(value.toLowerCase().trim());
+  });
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="mb-1.5 flex items-center justify-between">
+        <label className="block text-sm font-medium text-gray-900">
+          Quotation No
+        </label>
+        {value && (
+          <span className="text-xs font-medium text-emerald-600">
+            Selected
+          </span>
+        )}
+      </div>
+
+      <div className="relative">
+        <input
+          type="text"
+          value={value}
+          placeholder="Enter or select quotation no"
+          onChange={(e) => {
+            onChange(e.target.value);
+            if (quotations.length > 0) {
+              setOpen(true);
+            }
+          }}
+          onFocus={() => {
+            if (quotations.length > 0) {
+              setOpen(true);
+            }
+          }}
+          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-14 text-gray-900 placeholder:text-gray-400 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+        />
+
+        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 text-gray-400">
+          {value && (
+            <button
+              type="button"
+              onClick={() => onChange("")}
+              className="p-0.5 text-gray-400 hover:text-red-600 transition text-sm font-bold cursor-pointer leading-none"
+              title="Clear quotation no"
+            >
+              ×
+            </button>
+          )}
+
+          {quotations.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setOpen((prev) => !prev)}
+              className="p-1 text-gray-400 transition hover:text-[#8B2424] cursor-pointer"
+              title="Toggle quotation list"
+            >
+              ▾
+            </button>
+          )}
+        </div>
+      </div>
+
+      {open && quotations.length > 0 && (
+        <div className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl">
+          <div className="border-b border-gray-100 bg-gray-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+            Available Quotations ({quotations.length})
+          </div>
+          {filtered.length === 0 ? (
+            <div className="px-4 py-3 text-xs text-gray-500">
+              No matching quotation found. You can keep typing custom number.
+            </div>
+          ) : (
+            filtered.map((q) => {
+              const qId = q._id || q.id || q.quoteNumber;
+              const formattedVal = q.total
+                ? `₹${(q.total / 100).toLocaleString("en-IN")}`
+                : "";
+              const siteCount = q.sites?.length
+                ? `${q.sites.length} ${q.sites.length === 1 ? "site" : "sites"}`
+                : "";
+              const isSelected = value === q.quoteNumber;
+
+              return (
+                <button
+                  key={qId}
+                  type="button"
+                  onClick={() => {
+                    onChange(q.quoteNumber);
+                    onSelectQuotation(q);
+                    setOpen(false);
+                  }}
+                  className={`flex w-full cursor-pointer items-center justify-between px-4 py-2.5 text-left text-sm transition ${
+                    isSelected
+                      ? "bg-[#FFF5F5] text-[#8B2424]"
+                      : "hover:bg-[#F9DADA] hover:text-[#8B2424] text-gray-900"
+                  }`}
+                >
+                  <div>
+                    <span className="font-semibold">{q.quoteNumber}</span>
+                    {siteCount && (
+                      <span className="ml-2 text-xs text-gray-500">
+                        ({siteCount})
+                      </span>
+                    )}
+                  </div>
+                  {formattedVal && (
+                    <span className="text-xs font-semibold text-emerald-700">
+                      {formattedVal}
+                    </span>
+                  )}
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -872,7 +1344,23 @@ function LeadSelector({
             <span className="text-gray-400">Select client / lead</span>
           )}
         </div>
-        <span className="text-gray-500">▾</span>
+        <div className="flex items-center gap-1.5 text-gray-400">
+          {value && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange("");
+              }}
+              className="hover:text-red-600 text-sm p-0.5 cursor-pointer font-bold leading-none"
+              title="Clear client"
+            >
+              ×
+            </span>
+          )}
+          <span>▾</span>
+        </div>
       </button>
 
       {open && (
@@ -939,6 +1427,7 @@ function ManagerSelector({
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -952,6 +1441,16 @@ function ManagerSelector({
   }, []);
 
   const selectedManager = managers.find((m) => m._id === value);
+
+  const filteredManagers = managers.filter((m) => {
+    if (!search.trim()) return true;
+    const term = search.toLowerCase();
+    return (
+      (m.name || "").toLowerCase().includes(term) ||
+      (m.role || "").toLowerCase().includes(term) ||
+      (m.email || "").toLowerCase().includes(term)
+    );
+  });
 
   return (
     <div ref={dropdownRef} className="relative">
@@ -978,43 +1477,80 @@ function ManagerSelector({
             <span className="text-gray-400">Select manager (optional)</span>
           )}
         </div>
-        <span className="text-gray-500">▾</span>
+        <div className="flex items-center gap-1.5 text-gray-400">
+          {value && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange("");
+              }}
+              className="hover:text-red-600 text-sm p-0.5 cursor-pointer font-bold leading-none"
+              title="Clear manager"
+            >
+              ×
+            </span>
+          )}
+          <span>▾</span>
+        </div>
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl">
-          <button
-            type="button"
-            onClick={() => {
-              onChange("");
-              setOpen(false);
-            }}
-            className="block w-full cursor-pointer px-4 py-2.5 text-left text-sm text-gray-500 transition hover:bg-[#F9DADA] hover:text-[#8B2424]"
-          >
-            None (Unassigned)
-          </button>
+        <div className="absolute left-0 right-0 z-50 mt-1 max-h-60 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+          <div className="border-b border-gray-100 p-2">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search manager by name, role or email..."
+              className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 outline-none focus:border-[#8B2424]"
+              autoFocus
+            />
+          </div>
 
-          {managers.map((m) => {
-            const isSelected = m._id === value;
-            return (
-              <button
-                key={m._id}
-                type="button"
-                onClick={() => {
-                  onChange(m._id);
-                  setOpen(false);
-                }}
-                className={`block w-full cursor-pointer px-4 py-2.5 text-left transition ${
-                  isSelected
-                    ? "bg-[#FFF5F5] text-[#8B2424] font-medium"
-                    : "hover:bg-[#F9DADA] hover:text-[#8B2424] text-gray-900"
-                }`}
-              >
-                <div className="text-sm">{m.name}</div>
-                <div className="text-xs text-gray-400">{m.role || m.email || ""}</div>
-              </button>
-            );
-          })}
+          <div className="max-h-48 overflow-y-auto divide-y divide-gray-50">
+            <button
+              type="button"
+              onClick={() => {
+                onChange("");
+                setOpen(false);
+                setSearch("");
+              }}
+              className="block w-full cursor-pointer px-4 py-2.5 text-left text-sm text-gray-500 transition hover:bg-[#F9DADA] hover:text-[#8B2424]"
+            >
+              None (Unassigned)
+            </button>
+
+            {filteredManagers.map((m) => {
+              const isSelected = m._id === value;
+              return (
+                <button
+                  key={m._id}
+                  type="button"
+                  onClick={() => {
+                    onChange(m._id);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className={`block w-full cursor-pointer px-4 py-2.5 text-left transition ${
+                    isSelected
+                      ? "bg-[#FFF5F5] text-[#8B2424] font-medium"
+                      : "hover:bg-[#F9DADA] hover:text-[#8B2424] text-gray-900"
+                  }`}
+                >
+                  <div className="text-sm font-medium">{m.name}</div>
+                  <div className="text-xs text-gray-500">{m.role || m.email || ""}</div>
+                </button>
+              );
+            })}
+
+            {filteredManagers.length === 0 && (
+              <div className="px-4 py-3 text-center text-xs text-gray-500">
+                No matching managers found
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

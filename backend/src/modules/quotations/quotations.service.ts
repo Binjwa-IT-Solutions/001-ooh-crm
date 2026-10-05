@@ -9,7 +9,7 @@ import { Site } from '../sites/site.model.js';
 import { createFromQuotation } from '../campaigns/campaign.service.js';
 import { toObjectId } from '../../core/db/basePlugin.js';
 import { formattedSequence } from '../../core/db/sequence.js';
-import { renderPdf, lineItemsTable, formatPaise } from '../../core/pdf/index.js';
+import { renderPdf, lineItemsTable, formatPaise, renderQuotationBillBookPdf, type QuotationLineItem } from '../../core/pdf/index.js';
 import { fileService } from '../../core/files/index.js';
 import { notify } from '../../core/notifications/index.js';
 import { employeeService } from '../employees/employees.service.js';
@@ -160,7 +160,7 @@ export class QuotationsService {
     if (!quotation) throw new NotFoundError('Quotation not found');
 
     await quotation.populate('leadId', 'companyName contactPerson mobile email');
-    await quotation.populate('sites.siteId', 'siteCode city baseCostPerDay type');
+    await quotation.populate('sites.siteId', 'code siteCode city baseCostPerDay type address');
 
     return quotation;
   }
@@ -192,10 +192,13 @@ export class QuotationsService {
       startDate: Date;
       endDate: Date;
       days: number;
+      discountPercent?: number;
+      taxPercent?: number;
       amount: number;
     }> = [];
 
     let subtotal = 0;
+    let totalTaxPaise = 0;
 
     for (const item of data.sites) {
       const start = new Date(item.startDate);
@@ -209,7 +212,12 @@ export class QuotationsService {
 
       const days = daysInclusive(start, end);
       const ratePaise = rupeesToPaise(Number(item.ratePerDay));
-      const amount = Math.round(days * ratePaise);
+      const baseAmount = Math.round(days * ratePaise);
+      const discountPercent = Number(item.discountPercent || 0);
+      const discountPaise = Math.round(baseAmount * (discountPercent / 100));
+      const amount = baseAmount - discountPaise;
+      const lineTaxPercent = item.taxPercent !== undefined ? Number(item.taxPercent) : 18;
+      const lineTaxPaise = Math.round(amount * (lineTaxPercent / 100));
 
       lines.push({
         siteId: toObjectId(item.siteId),
@@ -218,24 +226,44 @@ export class QuotationsService {
         startDate: start,
         endDate: end,
         days,
+        discountPercent,
+        taxPercent: lineTaxPercent,
         amount,
       });
 
       subtotal += amount;
+      totalTaxPaise += lineTaxPaise;
     }
 
-    const taxAmount = Math.round(subtotal * TAX_RATE);
+    const taxPercent = data.taxPercent !== undefined
+      ? Number(data.taxPercent)
+      : (subtotal > 0 ? Math.round((totalTaxPaise / subtotal) * 100) : 18);
+    const taxAmount = data.taxAmount !== undefined
+      ? rupeesToPaise(Number(data.taxAmount))
+      : totalTaxPaise;
     const total = subtotal + taxAmount;
 
     const doc = await Quotation.create({
       quoteNumber,
       leadId: lead._id,
       clientName: data.clientName || lead.companyName,
+      clientContactPerson: data.clientContactPerson || lead.contactPerson,
       clientEmail: data.clientEmail || lead.email,
       clientPhone: data.clientPhone || lead.mobile,
+      clientGstin: data.clientGstin,
+      clientAddress: data.clientAddress || lead.companyAddress,
+      clientCity: data.clientCity || lead.city,
+      clientState: data.clientState,
+      isInterState: data.isInterState ?? false,
+      notes: data.notes,
+      terms: data.terms || [],
+      bankDetails: data.bankDetails,
+      signatureImage: data.signatureImage,
+      signatoryName: data.signatoryName,
+      signatoryDesignation: data.signatoryDesignation,
       sites: lines,
       subtotal,
-      taxPercent: 18,
+      taxPercent,
       taxAmount,
       total,
       validUntil,
@@ -244,7 +272,7 @@ export class QuotationsService {
     });
 
     await doc.populate('leadId', 'companyName contactPerson mobile email');
-    await doc.populate('sites.siteId', 'siteCode city baseCostPerDay type');
+    await doc.populate('sites.siteId', 'code siteCode city baseCostPerDay type address');
 
     return doc as IQuotation;
   }
@@ -282,7 +310,12 @@ export class QuotationsService {
 
         const days = daysInclusive(start, end);
         const ratePaise = rupeesToPaise(Number(item.ratePerDay));
-        const amount = Math.round(days * ratePaise);
+        const baseAmount = Math.round(days * ratePaise);
+        const discountPercent = Number(item.discountPercent || 0);
+        const discountPaise = Math.round(baseAmount * (discountPercent / 100));
+        const amount = baseAmount - discountPaise;
+        const lineTaxPercent = item.taxPercent !== undefined ? Number(item.taxPercent) : 18;
+        const lineTaxPaise = Math.round(amount * (lineTaxPercent / 100));
 
         lines.push({
           siteId: toObjectId(item.siteId),
@@ -291,6 +324,8 @@ export class QuotationsService {
           startDate: start,
           endDate: end,
           days,
+          discountPercent,
+          taxPercent: lineTaxPercent,
           amount,
         });
 
@@ -298,12 +333,34 @@ export class QuotationsService {
       }
     }
 
-    const taxAmount = Math.round(subtotal * TAX_RATE);
+    const calculatedTaxPaise = lines.reduce(
+      (sum, l) => sum + Math.round(l.amount * ((l.taxPercent ?? 18) / 100)),
+      0,
+    );
+    const taxPercent = data.taxPercent !== undefined
+      ? Number(data.taxPercent)
+      : (subtotal > 0 ? Math.round((calculatedTaxPaise / subtotal) * 100) : 18);
+    const taxAmount = data.taxAmount !== undefined
+      ? rupeesToPaise(Number(data.taxAmount))
+      : (data.sites || data.taxPercent !== undefined ? calculatedTaxPaise : quotation.taxAmount);
     const total = subtotal + taxAmount;
 
+    if (data.taxPercent !== undefined) quotation.taxPercent = taxPercent;
     if (data.clientName !== undefined) quotation.clientName = data.clientName;
+    if (data.clientContactPerson !== undefined) quotation.clientContactPerson = data.clientContactPerson;
     if (data.clientEmail !== undefined) quotation.clientEmail = data.clientEmail;
     if (data.clientPhone !== undefined) quotation.clientPhone = data.clientPhone;
+    if (data.clientGstin !== undefined) quotation.clientGstin = data.clientGstin;
+    if (data.clientAddress !== undefined) quotation.clientAddress = data.clientAddress;
+    if (data.clientCity !== undefined) quotation.clientCity = data.clientCity;
+    if (data.clientState !== undefined) quotation.clientState = data.clientState;
+    if (data.isInterState !== undefined) quotation.isInterState = data.isInterState;
+    if (data.notes !== undefined) quotation.notes = data.notes;
+    if (data.terms !== undefined) quotation.terms = data.terms;
+    if (data.bankDetails !== undefined) quotation.bankDetails = data.bankDetails;
+    if (data.signatureImage !== undefined) quotation.signatureImage = data.signatureImage;
+    if (data.signatoryName !== undefined) quotation.signatoryName = data.signatoryName;
+    if (data.signatoryDesignation !== undefined) quotation.signatoryDesignation = data.signatoryDesignation;
     if (data.validUntil) quotation.validUntil = new Date(data.validUntil);
 
     quotation.sites = lines;
@@ -314,7 +371,7 @@ export class QuotationsService {
 
     await quotation.save();
     await quotation.populate('leadId', 'companyName contactPerson mobile email');
-    await quotation.populate('sites.siteId', 'siteCode city baseCostPerDay type');
+    await quotation.populate('sites.siteId', 'code siteCode city baseCostPerDay type address');
 
     return quotation as IQuotation;
   }
@@ -328,58 +385,136 @@ export class QuotationsService {
     ctx: RequestContext,
   ): Promise<{ pdfKey: string; pdfUrl: string }> {
     const quotation = await Quotation.findOne({ _id: toObjectId(id), deletedAt: null })
-      .populate('leadId', 'companyName contactPerson mobile email')
-      .populate('sites.siteId', 'siteCode city type address')
+      .populate('leadId', 'companyName contactPerson mobile email city companyAddress')
+      .populate('sites.siteId', 'code siteCode city type address sizeWidth sizeHeight baseCostPerDay')
       .exec();
 
     if (!quotation) throw new NotFoundError('Quotation not found');
 
-    const leadName = quotation.clientName || (quotation.leadId as any)?.companyName || 'Valued Client';
-    const rows: string[][] = [];
+    const lead = quotation.leadId as any;
+    const clientCompanyName = quotation.clientName || lead?.companyName || 'Valued Client';
+    const clientContact = quotation.clientContactPerson || lead?.contactPerson || '-';
+    const clientPhone = quotation.clientPhone || lead?.mobile || '-';
+    const clientEmail = quotation.clientEmail || lead?.email || '-';
+    const clientCity = quotation.clientCity || lead?.city || '';
+    const clientState = quotation.clientState || '';
+    const clientAddress = quotation.clientAddress || lead?.companyAddress || '';
+    const clientGstin = quotation.clientGstin || '';
 
-    for (const line of quotation.sites) {
+    const items: QuotationLineItem[] = [];
+    let grossTotalPaise = 0;
+    let totalDiscountPaise = 0;
+
+    for (const [index, line] of quotation.sites.entries()) {
       const site = line.siteId as any;
-      const siteName = site?.siteCode ? `${site.siteCode} (${site.city || ''})` : 'Outdoor Site';
-      const startStr = new Date(line.startDate).toLocaleDateString('en-IN');
-      const endStr = new Date(line.endDate).toLocaleDateString('en-IN');
-      const dates = `${startStr} - ${endStr}`;
+      const siteCode = site?.code || site?.siteCode || `SITE-${index + 1}`;
+      const location = site?.address || site?.city ? `${site.address || ''} ${site.city ? `(${site.city})` : ''}`.trim() : (line.description || 'Outdoor Display Site');
+      const mediaType = site?.type || 'Hoarding';
+      const dimensions = (site?.sizeWidth && site?.sizeHeight)
+        ? `${site.sizeWidth}ft x ${site.sizeHeight}ft (${site.sizeWidth * site.sizeHeight} sq.ft)`
+        : (line.description || 'Standard Display');
+      const startStr = new Date(line.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const endStr = new Date(line.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-      rows.push([
-        siteName,
-        dates,
-        String(line.days),
-        formatPaise(line.ratePerDay),
-        formatPaise(line.amount),
-      ]);
+      const baseAmount = Math.round(line.days * line.ratePerDay);
+      const discountPercent = Number(line.discountPercent || 0);
+      const discountPaise = Math.round(baseAmount * (discountPercent / 100));
+      grossTotalPaise += baseAmount;
+      totalDiscountPaise += discountPaise;
+
+      items.push({
+        index: index + 1,
+        siteCode,
+        location,
+        mediaType,
+        dimensions,
+        dates: `${startStr} - ${endStr}`,
+        days: line.days,
+        ratePerDay: line.ratePerDay,
+        discountPercent,
+        taxPercent: line.taxPercent !== undefined ? line.taxPercent : 18,
+        amount: line.amount,
+      });
     }
 
-    const pdfBuffer = await renderPdf({
-      title: 'PROPOSAL / QUOTATION',
-      reference: quotation.quoteNumber,
-      meta: [
-        ['Client', leadName],
-        ['Date', new Date(quotation.createdAt).toLocaleDateString('en-IN')],
-        ['Valid Until', new Date(quotation.validUntil).toLocaleDateString('en-IN')],
-        ['Status', quotation.status],
-      ],
-      build: (doc) => {
-        lineItemsTable(doc, {
-          columns: [
-            { header: 'Site / Location', width: 0.35, align: 'left' },
-            { header: 'Duration', width: 0.25, align: 'left' },
-            { header: 'Days', width: 0.1, align: 'right' },
-            { header: 'Rate / Day', width: 0.15, align: 'right' },
-            { header: 'Amount', width: 0.15, align: 'right' },
-          ],
-          rows,
-          totals: [
-            ['Subtotal', quotation.subtotal],
-            ['GST (18%)', quotation.taxAmount],
-            ['Total Amount', quotation.total],
-          ],
-        });
-      },
-    });
+    let pdfBuffer: Buffer;
+    try {
+      pdfBuffer = await renderQuotationBillBookPdf({
+        quotationNumber: quotation.quoteNumber,
+        date: quotation.createdAt,
+        validUntil: quotation.validUntil,
+        status: quotation.status,
+        client: {
+          companyName: clientCompanyName,
+          contactPerson: clientContact,
+          phone: clientPhone,
+          email: clientEmail,
+          city: clientCity,
+          state: clientState,
+          address: clientAddress,
+          gstin: clientGstin,
+        },
+        items,
+        pricing: {
+          grossTotal: grossTotalPaise,
+          discountTotal: totalDiscountPaise,
+          subtotal: quotation.subtotal,
+          taxRate: quotation.taxPercent ? quotation.taxPercent / 100 : 0.18,
+          taxAmount: quotation.taxAmount,
+          grandTotal: quotation.total,
+          isInterState: quotation.isInterState ?? false,
+        },
+        terms: (quotation.terms && quotation.terms.length > 0) ? quotation.terms : undefined,
+        bankDetails: quotation.bankDetails ? {
+          bankName: quotation.bankDetails.bankName,
+          accountName: quotation.bankDetails.accountName,
+          accountNumber: quotation.bankDetails.accountNumber,
+          ifsc: quotation.bankDetails.ifscCode,
+          branch: quotation.bankDetails.branch,
+        } : undefined,
+        signature: {
+          image: quotation.signatureImage,
+          signatoryName: quotation.signatoryName,
+          signatoryDesignation: quotation.signatoryDesignation,
+        },
+      });
+    } catch (renderErr) {
+      console.warn('[QuotationPdf] renderQuotationBillBookPdf fallback to standard renderPdf:', renderErr);
+      const rows: string[][] = items.map((it) => [
+        it.siteCode ? `${it.siteCode} (${it.location})` : it.location || 'Outdoor Site',
+        it.dates,
+        String(it.days),
+        formatPaise(it.ratePerDay),
+        formatPaise(it.amount),
+      ]);
+      pdfBuffer = await renderPdf({
+        title: 'PROPOSAL / QUOTATION',
+        reference: quotation.quoteNumber,
+        meta: [
+          ['Client', clientCompanyName],
+          ['Date', new Date(quotation.createdAt).toLocaleDateString('en-IN')],
+          ['Valid Until', new Date(quotation.validUntil).toLocaleDateString('en-IN')],
+          ['Status', quotation.status],
+        ],
+        build: (doc) => {
+          lineItemsTable(doc, {
+            columns: [
+              { header: 'Site / Location', width: 0.35, align: 'left' },
+              { header: 'Duration', width: 0.25, align: 'left' },
+              { header: 'Days', width: 0.1, align: 'right' },
+              { header: 'Rate / Day', width: 0.15, align: 'right' },
+              { header: 'Amount', width: 0.15, align: 'right' },
+            ],
+            rows,
+            totals: [
+              ['Subtotal', quotation.subtotal],
+              ['GST (18%)', quotation.taxAmount],
+              ['Total Amount', quotation.total],
+            ],
+          });
+        },
+      });
+    }
 
     const versionNum = Date.now();
     const stored = await fileService.saveBuffer({
