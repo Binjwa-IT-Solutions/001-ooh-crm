@@ -274,7 +274,18 @@ export class ExceptionsService {
       const overdueCampaigns = allCampaigns.filter((c) => {
         if (!c.endDate) return false;
         const end = new Date(c.endDate);
-        return end < now && c.status !== CampaignStatus.COMPLETED && c.status !== 'Cancelled';
+        const st = String(c.status || '').toLowerCase().trim();
+        const isFinishedOrClosed =
+          st === 'campaign end' ||
+          st === 'completed' ||
+          st === 'complete' ||
+          st === 'cancelled' ||
+          st === 'rejected' ||
+          c.status === CampaignStatus.CAMPAIGN_END ||
+          c.status === CampaignStatus.COMPLETED ||
+          c.status === CampaignStatus.CANCELLED ||
+          c.status === CampaignStatus.REJECTED;
+        return end < now && !isFinishedOrClosed;
       });
 
       for (const c of overdueCampaigns) {
@@ -430,13 +441,34 @@ export class ExceptionsService {
 
     // ── Exception 7: Outstanding client billing / contracted payments ──────
     try {
-      const activeCompletedWithQuote = allCampaigns.filter(
-        (c) => c.quotationId && (c.status === CampaignStatus.COMPLETED || c.status === CampaignStatus.IN_PROGRESS),
-      );
+      const activeCompletedWithQuote = allCampaigns.filter((c) => {
+        if (!c.quotationId) return false;
+        const st = String(c.status || '').toLowerCase().trim();
+        return (
+          st === 'campaign end' ||
+          st === 'completed' ||
+          st === 'complete' ||
+          st === 'campaign live' ||
+          st === 'in progress' ||
+          st === 'inprogress' ||
+          c.status === CampaignStatus.CAMPAIGN_END ||
+          c.status === CampaignStatus.COMPLETED ||
+          c.status === CampaignStatus.CAMPAIGN_LIVE ||
+          c.status === CampaignStatus.IN_PROGRESS
+        );
+      });
 
       for (const c of activeCompletedWithQuote) {
-        // If contracted value > 0 and campaign is completed, surface financial sign-off pending
-        if (c.status === CampaignStatus.COMPLETED && c.contractedValue && c.contractedValue > 0) {
+        const st = String(c.status || '').toLowerCase().trim();
+        const isDone =
+          st === 'campaign end' ||
+          st === 'completed' ||
+          st === 'complete' ||
+          c.status === CampaignStatus.CAMPAIGN_END ||
+          c.status === CampaignStatus.COMPLETED;
+
+        // If contracted value > 0 and campaign is completed / campaign end, surface financial sign-off pending
+        if (isDone && c.contractedValue && c.contractedValue > 0) {
           const cId = String(c._id);
           const key = `client_payment_check:${cId}`;
 
@@ -445,7 +477,7 @@ export class ExceptionsService {
             type: 'client_payment_outstanding',
             severity: 'MEDIUM',
             title: `Client Billing Reconciliation: ${c.name}`,
-            description: `Campaign is Completed with contracted value ₹${(c.contractedValue || 0).toLocaleString('en-IN')}. Verify full billing reconciliation.`,
+            description: `Campaign is completed (${c.status}) with contracted value ₹${(c.contractedValue || 0).toLocaleString('en-IN')}. Verify full billing reconciliation.`,
             source: 'Client Billing',
             entityType: 'campaign',
             entityId: cId,

@@ -168,7 +168,13 @@ export class ComplianceAuditService {
       };
     }
 
-    if (now.getTime() > endDate.getTime() && campaign.status !== CampaignStatus.CANCELLED) {
+    const isCancelledOrRejected =
+      statusNormalized === CampaignStatus.CANCELLED ||
+      statusNormalized === CampaignStatus.REJECTED ||
+      statusNormalized.toLowerCase() === 'cancelled' ||
+      statusNormalized.toLowerCase() === 'rejected';
+
+    if (now.getTime() > endDate.getTime() && !isCancelledOrRejected) {
       return {
         checkType: 'executed_on_time',
         passed: false,
