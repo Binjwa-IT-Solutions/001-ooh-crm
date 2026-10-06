@@ -6,8 +6,15 @@ export const quotationLineSchema = z.object({
   siteId: objectId,
   description: z.string().trim().optional(),
   ratePerDay: z.coerce.number().min(0, 'Rate per day is required'), // rupees from client; server converts to paise
-  startDate: z.coerce.date(),
-  endDate: z.coerce.date(),
+  days: z.coerce.number().min(1, 'Days must be at least 1').optional().default(30),
+  startDate: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? undefined : val),
+    z.coerce.date().optional(),
+  ),
+  endDate: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? undefined : val),
+    z.coerce.date().optional(),
+  ),
   discountPercent: z.coerce.number().min(0).max(100).optional().default(0),
   taxPercent: z.coerce.number().min(0).max(100).optional().default(18),
 });

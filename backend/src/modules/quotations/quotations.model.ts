@@ -8,8 +8,8 @@ export interface IQuotationLine {
   siteId: Types.ObjectId;
   description?: string;
   ratePerDay: number; // paise
-  startDate: Date;
-  endDate: Date;
+  startDate?: Date | null;
+  endDate?: Date | null;
   days: number;
   discountPercent?: number;
   taxPercent?: number;
@@ -64,9 +64,9 @@ const quotationLineSchema = new Schema<IQuotationLine>(
     siteId: { type: Schema.Types.ObjectId, ref: 'Site', required: true },
     description: { type: String, trim: true },
     ratePerDay: { type: Number, required: true },
-    startDate: { type: Date, required: true },
-    endDate: { type: Date, required: true },
-    days: { type: Number, required: true },
+    startDate: { type: Date, required: false },
+    endDate: { type: Date, required: false },
+    days: { type: Number, required: true, default: 30 },
     discountPercent: { type: Number, default: 0 },
     taxPercent: { type: Number, default: 18 },
     amount: { type: Number, required: true },
