@@ -14,6 +14,7 @@ import {
   Activity,
   AlertTriangle,
   RotateCw,
+  Users,
 } from 'lucide-react';
 
 import { RequireAuth } from '@/shared/auth/require-auth';
@@ -21,6 +22,7 @@ import { auditApi } from '@/modules/audit/api';
 import type { AuditFilters, AuditLogEntry } from '@/modules/audit/types';
 import { AuditDetailModal } from '@/modules/audit/components/AuditDetailModal';
 import { ComplianceViewerTab } from '@/modules/audit/components/ComplianceViewerTab';
+import { UserWorkloadTab } from '@/modules/audit/components/UserWorkloadTab';
 import { getBusinessActivityInfo } from '@/modules/audit/audit-helpers';
 
 const ENTITY_OPTIONS = [
@@ -56,7 +58,7 @@ export default function AuditPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'logs' | 'compliance'>('logs');
+  const [activeTab, setActiveTab] = useState<'logs' | 'compliance' | 'workload'>('logs');
 
   // Filters state
   const [entity, setEntity] = useState('ALL');
@@ -101,6 +103,8 @@ export default function AuditPage() {
       const p = new URLSearchParams(window.location.search);
       if (p.get('tab') === 'compliance') {
         setActiveTab('compliance');
+      } else if (p.get('tab') === 'workload') {
+        setActiveTab('workload');
       }
     }
   }, []);
@@ -234,9 +238,24 @@ export default function AuditPage() {
             <ShieldCheck className="h-4 w-4" />
             <span>Campaign Compliance Checks</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('workload')}
+            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-semibold transition ${
+              activeTab === 'workload'
+                ? 'border-[#8B2424] text-[#8B2424] dark:border-rose-500 dark:text-rose-400'
+                : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+            }`}
+          >
+            <Users className="h-4 w-4" />
+            <span>Staff Workload & Performance</span>
+          </button>
         </div>
 
-        {activeTab === 'compliance' ? (
+        {activeTab === 'workload' ? (
+          <UserWorkloadTab />
+        ) : activeTab === 'compliance' ? (
           <ComplianceViewerTab />
         ) : (
           <>

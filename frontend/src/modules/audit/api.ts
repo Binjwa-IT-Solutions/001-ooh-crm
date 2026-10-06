@@ -7,6 +7,8 @@ import type {
   AuditLogEntry,
   ComplianceCheckResult,
   ComplianceRunSummary,
+  UserSummaryItem,
+  UserWorkloadAuditResponse,
 } from './types';
 
 export const auditApi = {
@@ -85,6 +87,24 @@ export const auditApi = {
     link.click();
     document.body.removeChild(link);
     window.URL.revokeObjectURL(blobUrl);
+  },
+
+  /**
+   * Fetch users summary list for workload audit dropdown.
+   */
+  async getWorkloadUsers(): Promise<{ data: UserSummaryItem[] }> {
+    return api.get<{ data: UserSummaryItem[] }>('/api/audit/workload/users');
+  },
+
+  /**
+   * Fetch workload & performance audit details for a specific user.
+   */
+  async getUserWorkload(userId: string, from?: string, to?: string): Promise<{ data: UserWorkloadAuditResponse }> {
+    const params = new URLSearchParams();
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return api.get<{ data: UserWorkloadAuditResponse }>(`/api/audit/workload/${encodeURIComponent(userId)}${query}`);
   },
 };
 

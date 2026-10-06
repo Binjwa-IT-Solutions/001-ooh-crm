@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { auditService } from '../../core/audit/index.js';
 import { listAuditQuerySchema, entityAuditQuerySchema } from './audit.validator.js';
 import { ComplianceAuditService } from './compliance.service.js';
+import { WorkloadAuditService } from './workload.service.js';
 
 export class AuditController {
   /**
@@ -164,5 +165,34 @@ export class AuditController {
       `attachment; filename="audit_logs_${Date.now()}.csv"`,
     );
     res.status(200).send(csvContent);
+  }
+
+  /**
+   * List all users with summary counts of active leads & tasks.
+   * GET /api/audit/workload/users
+   */
+  static async getWorkloadUsers(_req: Request, res: Response): Promise<void> {
+    const users = await WorkloadAuditService.listUsersSummary();
+    res.status(200).json({ data: users });
+  }
+
+  /**
+   * Deep-dive workload audit for a single user (completed, pending, overdue, activity stream).
+   * GET /api/audit/workload/:userId
+   */
+  static async getUserWorkload(req: Request, res: Response): Promise<void> {
+    const { userId } = req.params;
+    const fromStr = req.query.from as string | undefined;
+    const toStr = req.query.to as string | undefined;
+
+    const from = fromStr ? new Date(fromStr) : undefined;
+    const to = toStr ? new Date(toStr) : undefined;
+
+    const workload = await WorkloadAuditService.getUserWorkload(String(userId), {
+      from: from && !isNaN(from.getTime()) ? from : undefined,
+      to: to && !isNaN(to.getTime()) ? to : undefined,
+    });
+
+    res.status(200).json({ data: workload });
   }
 }

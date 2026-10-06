@@ -32,6 +32,12 @@ auditRoutes.get(
 // GET /api/audit - List global audit logs with filters & pagination
 auditRoutes.get('/', requirePermission('audit.view'), asyncHandler(AuditController.list));
 
+// GET /api/audit/workload/users - List all users with workload summary counts
+auditRoutes.get('/workload/users', requirePermission('audit.view'), asyncHandler(AuditController.getWorkloadUsers));
+
+// GET /api/audit/workload/:userId - Workload audit & performance breakdown for a single user
+auditRoutes.get('/workload/:userId', requirePermission('audit.view'), asyncHandler(AuditController.getUserWorkload));
+
 // GET /api/audit/export - Export audit logs to CSV
 auditRoutes.get('/export', requirePermission('audit.view'), asyncHandler(AuditController.exportCsv));
 
