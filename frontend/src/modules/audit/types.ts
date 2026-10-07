@@ -146,6 +146,27 @@ export interface UserWorkloadAuditResponse {
         custom: number;
       };
     };
+    finance?: {
+      paymentsInCount: number;
+      paymentsOutCount: number;
+      totalBillingPaise: number;
+      pendingDisbursementPaise: number;
+    };
+    hr?: {
+      pendingLeavesCount: number;
+      attendanceIrregularCount: number;
+      upcomingInterviewsCount: number;
+    };
+    manager?: {
+      pendingApprovalsCount: number;
+      activeEscalationsCount: number;
+      managedCampaignsCount: number;
+    };
+    admin?: {
+      activeExceptionsCount: number;
+      highSeverityExceptionsCount: number;
+      totalEscalationsCount: number;
+    };
   };
   pendingItems: {
     leads: Array<{
@@ -175,6 +196,76 @@ export interface UserWorkloadAuditResponse {
       status: string;
       deadline: string;
       isOverdue: boolean;
+    }>;
+    paymentsIn?: Array<{
+      _id: string;
+      campaignCode: string;
+      clientName: string;
+      city?: string;
+      contractedValuePaise: number;
+      status: string;
+      createdAt: string;
+    }>;
+    paymentsOut?: Array<{
+      _id: string;
+      poNumber: string;
+      vendorName: string;
+      totalAmountPaise: number;
+      paidAmountPaise: number;
+      paymentStatus: string;
+      dueDate?: string | null;
+      createdAt: string;
+    }>;
+    leaves?: Array<{
+      _id: string;
+      employeeName: string;
+      leaveType: string;
+      days: number;
+      reason: string;
+      status: string;
+      fromDate: string;
+      toDate: string;
+      createdAt: string;
+    }>;
+    attendance?: Array<{
+      _id: string;
+      employeeName: string;
+      date: string;
+      status: string;
+      workType: string;
+      checkInTime?: string | null;
+      flaggedForReview: boolean;
+    }>;
+    interviews?: Array<{
+      _id: string;
+      candidateName: string;
+      position: string;
+      interviewDate: string;
+      status: string;
+      mobile: string;
+    }>;
+    approvals?: Array<{
+      _id: string;
+      type: 'Lead' | 'Campaign' | 'Leave';
+      title: string;
+      requesterName: string;
+      status: string;
+      requestedAt: string;
+    }>;
+    escalations?: Array<{
+      _id: string;
+      taskTitle: string;
+      campaignName?: string;
+      level: string;
+      triggeredAt: string;
+    }>;
+    exceptions?: Array<{
+      key: string;
+      title: string;
+      type: string;
+      severity: string;
+      message: string;
+      entityId?: string;
     }>;
   };
   recentActivities: Array<{
