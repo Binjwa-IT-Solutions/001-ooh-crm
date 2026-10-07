@@ -70,6 +70,14 @@ export class QuotationsController {
     res.status(200).json(result);
   }
 
+  static async acceptInternal(req: Request, res: Response): Promise<void> {
+    const quotation = await QuotationsService.acceptInternal(
+      req.params.id as string,
+      req.ctx!,
+    );
+    res.status(200).json({ quotation });
+  }
+
   // --- Public Handlers (No Auth Required) ---
 
   static async getPublicByToken(req: Request, res: Response): Promise<void> {

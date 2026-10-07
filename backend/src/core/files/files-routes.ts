@@ -18,13 +18,21 @@ const router = Router();
 
 router.get(
   '/*key',
-  (req, _res, next) => {
+  (req, res, next) => {
+    const segments = req.params.key;
+    const key = Array.isArray(segments) ? segments.join('/') : String(segments || '');
+
+    // Quotation PDFs and public assets are client-facing documents accessed via random UUID keys.
+    // They must be accessible to external clients and browser downloads without CRM login.
+    if (key.startsWith('quotations/') || key.startsWith('public/')) {
+      return next();
+    }
+
     if (!req.headers.authorization && req.query.token) {
       req.headers.authorization = `Bearer ${req.query.token}`;
     }
-    next();
+    return requireAuth(req, res, next);
   },
-  requireAuth,
   asyncHandler(async (req, res) => {
     if (config.storage.driver !== 'local') {
       throw new NotFoundError('Files are served by object storage in this environment');

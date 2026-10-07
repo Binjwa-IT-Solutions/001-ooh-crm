@@ -564,7 +564,7 @@ export async function createFromQuotation(
           Math.min(
             ...sites.map((site) =>
               new Date(
-                site.startDate,
+                site.startDate || Date.now(),
               ).getTime(),
             ),
           ),
@@ -575,7 +575,7 @@ export async function createFromQuotation(
           Math.max(
             ...sites.map((site) =>
               new Date(
-                site.endDate,
+                site.endDate || (Date.now() + (site.days || 30) * 86400000),
               ).getTime(),
             ),
           ),

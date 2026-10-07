@@ -4,8 +4,8 @@ export interface QuotationLineItem {
   siteId: string | { _id?: string; code?: string; siteCode?: string; city?: string; type?: string; address?: string };
   description?: string;
   ratePerDay: number; // paise
-  startDate: string;
-  endDate: string;
+  startDate?: string | null;
+  endDate?: string | null;
   days: number;
   discountPercent?: number;
   taxPercent?: number;
@@ -94,10 +94,11 @@ export interface CreateQuotationLineInput {
   siteId: string;
   description?: string;
   ratePerDay: number; // in rupees from UI
+  days?: number;
   discountPercent?: number;
   taxPercent?: number;
-  startDate: string;
-  endDate: string;
+  startDate?: string | null;
+  endDate?: string | null;
 }
 
 export interface CreateQuotationFormValues {
@@ -125,19 +126,29 @@ export interface CreateQuotationFormValues {
 
 export interface PublicProposalSite {
   siteCode: string;
+  description?: string;
   city: string;
   type: string;
-  startDate: string;
-  endDate: string;
+  startDate?: string | null;
+  endDate?: string | null;
   days: number;
   ratePerDayRupees: number;
+  discountPercent?: number;
+  taxPercent?: number;
   amountRupees: number;
 }
 
 export interface PublicProposalView {
   quoteNumber: string;
   clientName: string;
+  clientContactPerson?: string;
   clientEmail: string;
+  clientPhone?: string;
+  clientAddress?: string;
+  clientCity?: string;
+  clientState?: string;
+  clientGstin?: string;
+  isInterState?: boolean;
   sites: PublicProposalSite[];
   subtotalRupees: number;
   taxPercent: number;
@@ -145,8 +156,13 @@ export interface PublicProposalView {
   totalRupees: number;
   validUntil: string;
   status: QuotationStatus;
+  terms?: string[];
+  bankDetails?: BankDetails;
+  signatoryName?: string;
+  signatoryDesignation?: string;
   viewedAt?: string | null;
   acceptedAt?: string | null;
   rejectedAt?: string | null;
   rejectionReason?: string | null;
+  pdfUrl?: string | null;
 }

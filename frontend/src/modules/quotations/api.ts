@@ -41,6 +41,18 @@ export const quotationsApi = {
   getPdfUrl: (id: string) =>
     api.get<{ pdfKey?: string; pdfUrl: string }>(`/api/quotations/${id}/pdf`),
 
+  downloadPdf: async (url: string, filename: string) => {
+    const blob = await api.getBlob(url);
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+  },
+
   uploadPdf: (id: string, file: File) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -52,6 +64,9 @@ export const quotationsApi = {
       `/api/quotations/${id}/send`,
       { sentTo, message },
     ),
+
+  acceptInternal: (id: string) =>
+    api.post<{ quotation: Quotation }>(`/api/quotations/${id}/accept`, {}).then((res) => res.quotation),
 
   // --- Public Unauthenticated API Methods ---
   getPublic: (token: string) =>
