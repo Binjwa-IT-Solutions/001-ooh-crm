@@ -217,7 +217,10 @@ export class WorkloadAuditService {
    * List all users with quick overview counts of active leads & tasks.
    */
   static async listUsersSummary(): Promise<UserSummaryItem[]> {
-    const users = await AuthUser.find({ deletedAt: null }).sort({ name: 1 }).lean();
+    const users = await AuthUser.find({
+      deletedAt: null,
+      role: { $ne: 'admin' },
+    }).sort({ name: 1 }).lean();
 
     const userSummaries: UserSummaryItem[] = [];
 

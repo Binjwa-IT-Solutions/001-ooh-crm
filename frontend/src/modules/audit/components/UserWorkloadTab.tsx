@@ -51,8 +51,8 @@ export function UserWorkloadTab() {
   // HR Queue Tabs: 'leaves' | 'attendance' | 'interviews' | 'tasks'
   const [hrQueueTab, setHrQueueTab] = useState<'leaves' | 'attendance' | 'interviews' | 'tasks'>('leaves');
 
-  // Manager Queue Tabs: 'approvals' | 'escalations' | 'tasks'
-  const [managerQueueTab, setManagerQueueTab] = useState<'approvals' | 'escalations' | 'tasks'>('approvals');
+  // Manager Queue Tabs: 'approvals' | 'escalations'
+  const [managerQueueTab, setManagerQueueTab] = useState<'approvals' | 'escalations'>('approvals');
 
   // Admin Queue Tabs: 'exceptions' | 'escalations' | 'tasks'
   const [adminQueueTab, setAdminQueueTab] = useState<'exceptions' | 'escalations' | 'tasks'>('exceptions');
@@ -125,9 +125,11 @@ export function UserWorkloadTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedUserId, fromDate, toDate]);
 
-  // Filtered users for dropdown search
+  // Filtered users for dropdown search (Admins excluded as they govern/audit the system)
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
+      const isExcludedAdmin = ['admin', 'superadmin', 'managing_director'].includes(u.role.toLowerCase());
+      if (isExcludedAdmin) return false;
       const matchSearch =
         u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
         u.email.toLowerCase().includes(userSearch.toLowerCase());
@@ -255,7 +257,6 @@ export function UserWorkloadTab() {
                 <option value="finance">Finance</option>
                 <option value="hr">HR</option>
                 <option value="manager">Managers</option>
-                <option value="admin">Admins</option>
               </select>
             </div>
 
@@ -565,9 +566,9 @@ export function UserWorkloadTab() {
                       <span className="font-semibold">{workloadData.metrics.completed.callsLogged}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-400">Tasks Completed:</span>
+                      <span className="text-slate-600 dark:text-slate-400">Management Decisions:</span>
                       <span className="font-bold text-emerald-700 dark:text-emerald-300">
-                        {workloadData.metrics.completed.tasksCompleted}
+                        {workloadData.metrics.completed.totalAuditActions} actions
                       </span>
                     </div>
                   </>
@@ -1392,19 +1393,6 @@ export function UserWorkloadTab() {
                       >
                         <AlertTriangle className="h-3 w-3" />
                         <span>Escalations ({workloadData.pendingItems.escalations?.length ?? 0})</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setManagerQueueTab('tasks')}
-                        className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition cursor-pointer ${
-                          managerQueueTab === 'tasks'
-                            ? 'bg-[#8B2424] text-white shadow-2xs'
-                            : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                        }`}
-                      >
-                        <Clock className="h-3 w-3" />
-                        <span>Tasks ({workloadData.pendingItems.tasks.length})</span>
                       </button>
                     </div>
                   )}
@@ -2340,7 +2328,6 @@ export function UserWorkloadTab() {
                 {(
                   (isFinance && financeQueueTab === 'tasks') ||
                   (isHr && hrQueueTab === 'tasks') ||
-                  (isManager && managerQueueTab === 'tasks') ||
                   (isAdmin && adminQueueTab === 'tasks') ||
                   (!isSales && !isOps && !isFinance && !isHr && !isManager && !isAdmin)
                 ) && (
