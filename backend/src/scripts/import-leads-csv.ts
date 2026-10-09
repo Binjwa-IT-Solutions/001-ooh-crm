@@ -76,6 +76,7 @@ async function run() {
 
   // 1. Locate CSV file
   const customPath = process.argv[2];
+  const homeDir = process.env.USERPROFILE || process.env.HOME || 'C:/Users/risha';
   const candidatePaths = [
     customPath,
     path.resolve(process.cwd(), 'leads.csv'),
@@ -83,6 +84,7 @@ async function run() {
     path.resolve(__dirname, '../../../leads.csv'),
     path.resolve(__dirname, '../../../leads_export.csv'),
     path.resolve(__dirname, '../../leads.csv'),
+    path.resolve(homeDir, 'Downloads/leads_export_2026-10-09.csv'),
   ].filter(Boolean) as string[];
 
   let csvPath: string | null = null;
@@ -194,12 +196,28 @@ async function run() {
       }
     }
 
-    // Format Created Date if present
+    // Format Created Date if present (handles "9/10/2026, 9:31:29 pm" format reliably)
     let receivedDate = new Date();
     if (createdAtStr) {
-      const parsedD = new Date(createdAtStr);
-      if (!isNaN(parsedD.getTime())) {
-        receivedDate = parsedD;
+      const match = createdAtStr.match(
+        /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:,\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?)?/i,
+      );
+      if (match) {
+        const d = parseInt(match[1], 10);
+        const m = parseInt(match[2], 10) - 1;
+        const y = parseInt(match[3], 10);
+        let h = match[4] ? parseInt(match[4], 10) : 0;
+        const min = match[5] ? parseInt(match[5], 10) : 0;
+        const sec = match[6] ? parseInt(match[6], 10) : 0;
+        const ampm = match[7] ? match[7].toLowerCase() : null;
+        if (ampm === 'pm' && h < 12) h += 12;
+        if (ampm === 'am' && h === 12) h = 0;
+        receivedDate = new Date(y, m, d, h, min, sec);
+      } else {
+        const parsedD = new Date(createdAtStr);
+        if (!isNaN(parsedD.getTime())) {
+          receivedDate = parsedD;
+        }
       }
     }
 
