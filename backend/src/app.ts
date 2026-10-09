@@ -121,6 +121,8 @@ app.use('/api/holidays', holidayRoutes);
 import candidateRoutes from './modules/candidates/candidates.routes.js';
 app.use('/api/candidates', candidateRoutes);
 
+import marketingRoutes from './modules/marketing/marketing.routes.js';
+app.use('/api/marketing', marketingRoutes);
 
 // 404 then the central error handler — both must stay last.
 app.use(notFoundHandler);

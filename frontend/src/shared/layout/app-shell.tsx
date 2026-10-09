@@ -60,6 +60,12 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: 'MARKETING',
+    items: [
+      { href: '/marketing', label: 'Marketing Hub', icon: Megaphone },
+    ],
+  },
+  {
     label: 'OPERATIONS',
     items: [
       { href: '/vendors', label: 'Vendors', icon: Building2, permission: 'vendors.view' },
