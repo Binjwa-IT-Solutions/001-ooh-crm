@@ -119,6 +119,11 @@ export const config = {
     /** Turn the automatic mutation log off only for a specific debugging session. */
     enabled: bool('AUDIT_ENABLED', true),
   },
+
+  pythonChatbot: {
+    url: process.env.PYTHON_CHATBOT_URL ?? 'http://127.0.0.1:8000',
+    timeoutMs: num('PYTHON_CHATBOT_TIMEOUT_MS', 60000),
+  },
 } as const;
 
 export type AppConfig = typeof config;
