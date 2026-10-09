@@ -14,6 +14,8 @@ const nextConfig: NextConfig = {
   },
   // Allow external device access for HMR
   allowedDevOrigins: ['192.168.1.164', 'localhost'],
+  // Hide development indicator badge (the black 'N' circle in the corner)
+  devIndicators: false,
 
   // Proxy all /api/* requests to the Express backend.
   // This means frontend fetch('/api/tasks') → backend http://localhost:5000/api/tasks
@@ -22,6 +24,10 @@ const nextConfig: NextConfig = {
       {
         source: "/api/:path*",
         destination: `${BACKEND_URL}/api/:path*`,
+      },
+      {
+        source: "/charts/:path*",
+        destination: `${BACKEND_URL}/charts/:path*`,
       },
     ];
   },
