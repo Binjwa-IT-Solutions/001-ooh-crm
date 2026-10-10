@@ -40,6 +40,7 @@ export interface User {
   email: string;
   role: Role;
   status: UserStatus;
+  mfaEnabled: boolean;
   permissions: readonly string[];
   lastLoginAt: string | null;
   createdAt?: string;
@@ -72,4 +73,16 @@ export interface UserListResponse {
   page: number;
   pageSize: number;
   totalPages: number;
+}
+
+export interface UserDeviceAndSessions {
+  device: {
+    deviceTag: string | null;
+    userAgent: string;
+    location: { latitude: number; longitude: number; accuracyMeters: number } | null;
+    firstSeenAt: string;
+    lastSeenAt: string;
+  } | null;
+  sessions: Array<{ id: string; userAgent: string; startedAt: string; expiresAt: string }>;
+  sessionsRevokedAt: string | null;
 }

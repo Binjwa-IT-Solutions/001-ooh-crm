@@ -29,6 +29,8 @@ const SKIP_PATHS = [
   '/api/auth/login',
   '/api/auth/verify-otp',
   '/api/auth/resend-otp',
+  '/api/auth/email-fallback',
+  '/api/auth/complete-mfa-enrollment',
   '/api/auth/refresh',
 ];
 
@@ -88,7 +90,11 @@ export function extractEntityId(body: unknown): string | null {
 export function auditMiddleware(req: Request, res: Response, next: NextFunction) {
   const action = METHOD_TO_ACTION[req.method];
 
-  if (!action || SKIP_PATHS.includes(req.path)) {
+  const isApprovalPoll =
+    req.method === 'POST' &&
+    /^\/api\/auth\/security\/login-approvals\/[0-9a-fA-F]{24}\/status$/.test(req.path);
+
+  if (!action || SKIP_PATHS.includes(req.path) || isApprovalPoll) {
     next();
     return;
   }
