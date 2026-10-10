@@ -341,6 +341,101 @@ export const employeeService = {
     return toDto(employee, true);
   },
 
+  /** Updates the authenticated user's own employee record (e.g. mandatory profile completion). */
+  async updateMine(input: UpdateEmployeeInput, ctx: RequestContext): Promise<EmployeeDto> {
+    let employee = await Employee.findOne({
+      userId: ctx.user.id,
+      deletedAt: null,
+    });
+
+    if (!employee && ctx.user.email) {
+      employee = await Employee.findOne({
+        workEmail: ctx.user.email.toLowerCase(),
+        deletedAt: null,
+      });
+
+      if (employee) {
+        employee.userId = toObjectId(ctx.user.id);
+        await employee.save();
+      }
+    }
+
+    // Auto-provision employee record if none exists for this active auth user
+    if (!employee && ctx.user.id) {
+      const user = await AuthUser.findById(ctx.user.id);
+      if (user) {
+        const provisioned = await employeeService.ensureEmployeeForUser({
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          status: user.status,
+        });
+        employee = await Employee.findById(provisioned._id);
+      }
+    }
+
+    if (!employee) {
+      throw new NotFoundError('No employee record is linked to your account yet');
+    }
+
+    const payload = dropBlanks(stripSensitiveInput({ ...input }, ctx));
+
+    // Validate email uniqueness if changing
+    if (payload.workEmail && payload.workEmail !== employee.workEmail) {
+      const clash = await Employee.findOne({ workEmail: payload.workEmail, _id: { $ne: employee._id } });
+      if (clash) throw new ConflictError('An employee with this work email already exists');
+    }
+
+    // Non-admin/HR users cannot change their status or reassign their own manager arbitrarily if already assigned
+    if (!['admin', 'hr'].includes(ctx.user.role)) {
+      delete payload.status;
+      if (employee.reportingManagerId) {
+        delete payload.reportingManagerId;
+      }
+    }
+
+    if (payload.reportingManagerId) {
+      const rawId = String(payload.reportingManagerId).trim();
+      const objId = toObjectId(rawId);
+      let targetManagerId: Types.ObjectId | null = null;
+      const manager = await Employee.findOne({ _id: objId, deletedAt: null });
+      if (manager) {
+        targetManagerId = manager._id as Types.ObjectId;
+      } else {
+        const managerByUser = await Employee.findOne({ userId: objId, deletedAt: null });
+        if (managerByUser) {
+          targetManagerId = managerByUser._id as Types.ObjectId;
+        } else {
+          throw new ValidationError('The selected reporting manager does not exist');
+        }
+      }
+
+      await assertNoManagerCycle(employee._id as Types.ObjectId, targetManagerId);
+      employee.reportingManagerId = targetManagerId;
+      delete payload.reportingManagerId;
+    }
+
+    Object.assign(employee, payload, { updatedBy: toObjectId(ctx.user.id) });
+    employee.isProfileComplete = Boolean(
+      employee.department &&
+      employee.designation &&
+      employee.dateOfJoining &&
+      employee.mobile
+    );
+    await employee.save();
+    await employee.populate('reportingManagerId', 'fullName designation');
+
+    if (payload.fullName) {
+      await AuthUser.updateOne(
+        { _id: toObjectId(ctx.user.id) },
+        { $set: { name: String(payload.fullName).trim() } },
+      );
+    }
+
+    return toDto(employee, true);
+  },
+
   /** Direct reports. Used by the org tree and, later, by leave approval routing. */
   async getDirectReports(managerId: string, ctx: RequestContext): Promise<EmployeeDto[]> {
     const documents = await scopedFind(Employee, { reportingManagerId: managerId }, ctx).sort({
@@ -441,11 +536,8 @@ export const employeeService = {
 
     if (input.reportingManagerId === null || input.reportingManagerId === '') {
       employee.reportingManagerId = null;
-      delete payload.reportingManagerId;
-      await Team.updateMany(
-        { members: employee._id },
-        { $pull: { members: employee._id } },
-      );
+      
+      await Team.updateMany({ members: employee._id }, { $pull: { members: employee._id } });
     } else if (payload.reportingManagerId) {
       const rawId = String(payload.reportingManagerId).trim();
       const objId = toObjectId(rawId);

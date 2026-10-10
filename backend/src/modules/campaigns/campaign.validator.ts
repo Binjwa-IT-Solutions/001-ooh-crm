@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { CampaignStatus } from "./campaign.model.js";
 
 const objectId = z
   .string()
@@ -15,10 +14,6 @@ export const createCampaignSchema = z.object({
   leadId: objectId,
 
   quotationId: objectId.optional(),
-  quotationNo: z.string().trim().optional(),
-  quotationName: z.string().trim().optional(),
-  piNo: z.string().trim().optional(),
-  state: z.string().trim().optional(),
 
   city: z
     .string()
@@ -32,33 +27,38 @@ export const createCampaignSchema = z.object({
 
   siteIds: z
     .array(objectId)
-    .optional()
-    .default([]),
+    .min(1, "At least one site is required"),
 
   contractedValue: z
     .number()
     .int()
     .nonnegative(),
 
-  status: z.nativeEnum(CampaignStatus).optional(),
-
   assignedManager: objectId.optional(),
 });
 
 export const updateCampaignStatusSchema = z.object({
-  status: z.nativeEnum(CampaignStatus),
-  reason: z.string().trim().max(500).optional(),
+  status: z.enum([
+    "Draft",
+    "Approved",
+    "InProgress",
+    "Completed",
+    "Cancelled",
+  ]),
 });
 
 export const campaignListQuerySchema = z.object({
   search: z.string().trim().optional(),
   leadId: objectId.optional(),
 
-  status: z.nativeEnum(CampaignStatus).optional(),
-
-  state: z
-    .string()
-    .trim()
+  status: z
+    .enum([
+      "Draft",
+      "Approved",
+      "InProgress",
+      "Completed",
+      "Cancelled",
+    ])
     .optional(),
 
   city: z

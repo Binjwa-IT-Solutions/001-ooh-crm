@@ -44,6 +44,13 @@ export class EmployeesController {
     res.status(200).json({ employee });
   }
 
+  /** PATCH /api/employees/me */
+  static async updateMine(req: Request, res: Response) {
+    const input = updateEmployeeSchema.parse(req.body);
+    const employee = await employeeService.updateMine(input, context(req));
+    res.status(200).json({ message: 'Profile updated', employee });
+  }
+
   /** GET /api/employees/manager-options */
   static async managerOptions(req: Request, res: Response) {
     const options = await employeeService.listManagerOptions(context(req));

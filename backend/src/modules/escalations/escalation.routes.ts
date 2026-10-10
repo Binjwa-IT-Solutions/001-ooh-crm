@@ -9,16 +9,16 @@ import {
 
 const router = Router();
 
-router.use(requireAuth);
-
 router.get(
   "/escalations",
+  requireAuth,
   requirePermission("tasks.view"),
   getEscalations,
 );
 
 router.get(
   "/tasks/:id/escalations",
+  requireAuth,
   requirePermission("tasks.view"),
   getTaskEscalations,
 );

@@ -183,7 +183,15 @@ export async function getMyAttendance(ctx: RequestContext, filters: Record<strin
 
 export async function getTeamAttendance(ctx: RequestContext, filters: Record<string, any> = {}) {
   const queryFilters: Record<string, any> = { ...filters };
-  if (queryFilters.date && typeof queryFilters.date === 'string') {
+  if (queryFilters.fromDate && queryFilters.toDate) {
+    const start = new Date(queryFilters.fromDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(queryFilters.toDate);
+    end.setHours(23, 59, 59, 999);
+    queryFilters.date = { $gte: start, $lte: end };
+    delete queryFilters.fromDate;
+    delete queryFilters.toDate;
+  } else if (queryFilters.date && typeof queryFilters.date === 'string') {
     const targetDate = new Date(queryFilters.date);
     targetDate.setHours(0, 0, 0, 0);
     const nextDate = new Date(targetDate);
@@ -214,7 +222,7 @@ export async function getTeamAttendance(ctx: RequestContext, filters: Record<str
 
   const records = await scopedFind(Attendance, queryFilters, ctx, { ownerField: 'employeeId' })
     .sort({ date: -1 })
-    .populate('employeeId', 'fullName name department');
+    .populate('employeeId', 'fullName name department employeeCode workEmail email avatar');
   return records;
 }
 

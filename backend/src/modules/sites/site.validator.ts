@@ -13,22 +13,11 @@ const mediaTypes = [
 ] as const;
 
 const availabilityTypes = [
-  "Plan Received",
-  "On Boarding",
-  "Media Booking",
-  "Negotiation",
   "Available",
-  "Request Send",
-  "Request",
-  "Send",
   "Booked",
 ] as const;
 
 const statusTypes = [
-  "On Call",
-  "On Mail",
-  "WhatsApp",
-  "Manual",
   "Draft",
   "Pending",
   "Approved",
@@ -50,10 +39,7 @@ export const createSiteSchema =
       z.string().min(1),
 
     salesPersonContact:
-      z.string().optional(),
-
-    vendorContact:
-      z.string().optional(),
+      z.string().min(1),
 
     state:
       z.string().min(1),
@@ -68,7 +54,7 @@ export const createSiteSchema =
       z.enum(mediaTypes),
 
     quantity:
-      z.coerce.number().min(0),
+      z.coerce.number().min(1),
 
     startDate:
       z.string().min(1),
@@ -83,10 +69,14 @@ export const createSiteSchema =
       z.string().min(1),
 
     availability:
-      z.string().optional(),
+      z.enum(
+        availabilityTypes
+      ).optional(),
 
     status:
-      z.string().optional(),
+      z.enum(
+        statusTypes
+      ).optional(),
   });
 
 /* ----------------------------------
@@ -106,10 +96,7 @@ export const updateSiteSchema =
         z.string().min(1).optional(),
 
       salesPersonContact:
-        z.string().optional(),
-
-      vendorContact:
-        z.string().optional(),
+        z.string().min(1).optional(),
 
       state:
         z.string().min(1).optional(),
@@ -124,7 +111,7 @@ export const updateSiteSchema =
         z.enum(mediaTypes).optional(),
 
       quantity:
-        z.coerce.number().min(0).optional(),
+        z.coerce.number().min(1).optional(),
 
       startDate:
         z.string().optional(),
@@ -139,10 +126,14 @@ export const updateSiteSchema =
         z.string().min(1).optional(),
 
       availability:
-        z.string().optional(),
+        z.enum(
+          availabilityTypes
+        ).optional(),
 
       status:
-        z.string().optional(),
+        z.enum(
+          statusTypes
+        ).optional(),
     })
     .refine(
       (data) => {
@@ -195,10 +186,14 @@ export const siteQuerySchema =
       ).optional(),
 
     availability:
-      z.string().optional(),
+      z.enum(
+        availabilityTypes
+      ).optional(),
 
     status:
-      z.string().optional(),
+      z.enum(
+        statusTypes
+      ).optional(),
   });
 
 /* ----------------------------------

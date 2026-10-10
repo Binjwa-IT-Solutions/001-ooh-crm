@@ -79,6 +79,14 @@ export const PERMISSIONS = [
   'finance.view',
   'finance.manage',
   'finance.bank_details',
+  'finance.create_payment_in',
+  'finance.create_payment_out',
+  'finance.view_payments',
+  'finance.update_payment',
+  'finance.delete_payment',
+  'finance.reconcile_payment',
+  'finance.view_reports',
+  'finance.view_leadership_reports',
 
   // Track G — HR
   'employees.view',
@@ -95,6 +103,15 @@ export const PERMISSIONS = [
   'reports.view',
   'candidates.view',
   'candidates.manage',
+
+  // Employee Salary & Payroll
+  'salary.view',
+  'salary.create',
+  'salary.update',
+  'payroll.view',
+  'payroll.create',
+  'payroll.process',
+  'payroll.payslip',
 
   // Track H — Audit
   'audit.view',
@@ -131,6 +148,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'proofs.view',
     'proofs.approve',
     'finance.view',
+    'finance.view_reports',
+    'finance.view_leadership_reports',
     'employees.view',
     'attendance.view_team',
     'leave.manage',
@@ -154,6 +173,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'campaigns.view',
     'tasks.view',
     'proofs.view',
+    'finance.view_payments',
+    'finance.view_reports',
   ],
 
   ops: [
@@ -184,9 +205,22 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'finance.manage',
     // Bank account / IFSC are Finance + Admin only (developer spec, C3).
     'finance.bank_details',
+    'finance.create_payment_in',
+    'finance.create_payment_out',
+    'finance.view_payments',
+    'finance.update_payment',
+    'finance.delete_payment',
+    'finance.reconcile_payment',
+    'finance.view_reports',
+    'finance.view_leadership_reports',
     'employees.view',
     'employees.sensitive',
     'audit.view',
+    'salary.view',
+    'payroll.view',
+    'payroll.create',
+    'payroll.process',
+    'payroll.payslip',
   ],
 
   hr: [
@@ -202,6 +236,13 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'reports.view',
     'candidates.view',
     'candidates.manage',
+    'salary.view',
+    'salary.create',
+    'salary.update',
+    'payroll.view',
+    'payroll.create',
+    'payroll.process',
+    'payroll.payslip',
   ],
 
   employee: [...BASE, 'tasks.view'],

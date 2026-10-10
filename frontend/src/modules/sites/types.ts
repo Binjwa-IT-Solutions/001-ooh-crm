@@ -9,27 +9,14 @@ export type MediaType =
   | "Other";
 
 export type AvailabilityStatus =
-  | "Plan Received"
-  | "On Boarding"
-  | "Media Booking"
-  | "Negotiation"
   | "Available"
-  | "Request Send"
-  | "Request"
-  | "Send"
-  | "Booked"
-  | (string & {});
+  | "Booked";
 
 export type MediaPlanStatus =
-  | "On Call"
-  | "On Mail"
-  | "WhatsApp"
-  | "Manual"
   | "Draft"
   | "Pending"
   | "Approved"
-  | "Rejected"
-  | (string & {});
+  | "Rejected";
 
 export type ATRStatus = MediaPlanStatus;
 
@@ -55,7 +42,6 @@ export interface Site {
 
   vendorName: string;
   vendorId?: string;
-  vendorContact?: string;
 
   availability: AvailabilityStatus;
 
@@ -101,7 +87,6 @@ export interface CreateSiteData {
 
   vendorName: string;
   vendorId?: string;
-  vendorContact?: string;
 
   availability: AvailabilityStatus;
 

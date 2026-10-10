@@ -53,6 +53,7 @@ declare module 'lucide-react' {
   export const File: LucideIcon;
   export const FileBarChart: LucideIcon;
   export const FileText: LucideIcon;
+  export const FileUser: LucideIcon;
   export const Filter: LucideIcon;
   export const Info: LucideIcon;
   export const Layers: LucideIcon;
@@ -84,13 +85,22 @@ declare module 'lucide-react' {
   export const TrendingUp: LucideIcon;
   export const Upload: LucideIcon;
   export const User: LucideIcon;
+  export const UserCog: LucideIcon;
   export const Users: LucideIcon;
   export const Users2: LucideIcon;
+  export const UsersRound: LucideIcon;
   export const UserX: LucideIcon;
   export const X: LucideIcon;
   export const XCircle: LucideIcon;
+  export const Calculator: LucideIcon;
+  export const Copy: LucideIcon;
+  export const Edit: LucideIcon;
+  export const Eye: LucideIcon;
+  export const History: LucideIcon;
+  export const PlusCircle: LucideIcon;
+  export const Printer: LucideIcon;
+  export const Share2: LucideIcon;
 
-  // Fallback to allow any other named icon imports
   const icons: Record<string, LucideIcon>;
   export default icons;
 }
