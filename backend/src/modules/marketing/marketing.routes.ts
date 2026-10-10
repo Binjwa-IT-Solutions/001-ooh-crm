@@ -13,6 +13,7 @@ marketingRoutes.get('/daily-logs', asyncHandler(MarketingController.listDailyLog
 marketingRoutes.get('/daily-logs/summary', asyncHandler(MarketingController.getManagerDailySummary));
 
 // 2. Tasks & Content
+marketingRoutes.get('/team-members', asyncHandler(MarketingController.getTeamMembers));
 marketingRoutes.post('/tasks', asyncHandler(MarketingController.createTask));
 marketingRoutes.get('/tasks', asyncHandler(MarketingController.listTasks));
 marketingRoutes.patch('/tasks/:id/status', asyncHandler(MarketingController.updateTaskStatus));

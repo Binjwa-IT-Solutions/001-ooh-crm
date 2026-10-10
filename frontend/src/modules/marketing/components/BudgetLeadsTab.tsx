@@ -6,7 +6,6 @@ import {
   Plus,
   RefreshCw,
   ExternalLink,
-  DollarSign,
   AlertTriangle,
   CheckCircle2,
   TrendingUp,
@@ -16,9 +15,16 @@ import {
 import { marketingApi } from '../api';
 import type { MarketingSpendItem, MarketingLeadItem } from '../types';
 
+function formatSpendTableDate(dateStr?: string) {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
 export default function BudgetLeadsTab() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [budget, setBudget] = useState<{ plannedAmount: number; totalSpent: number; remaining: number } | null>(null);
+  const [budget, setBudget] = useState<{ plannedAmount: number; month: string } | null>(null);
   const [spends, setSpends] = useState<MarketingSpendItem[]>([]);
   const [leads, setLeads] = useState<MarketingLeadItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,7 +45,7 @@ export default function BudgetLeadsTab() {
   // Budget Set modal
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [budgetSubmitting, setBudgetSubmitting] = useState(false);
-  const [plannedBudgetInput, setPlannedBudgetInput] = useState<number>(50000);
+  const [plannedBudgetInput, setPlannedBudgetInput] = useState<number>(150000);
 
   // Lead modal
   const [showLeadModal, setShowLeadModal] = useState(false);
@@ -66,11 +72,13 @@ export default function BudgetLeadsTab() {
         marketingApi.getLeads().catch(() => ({ data: [] })),
       ]);
 
-      if (budgetRes?.data) {
-        setBudget(budgetRes.data);
-        setPlannedBudgetInput(budgetRes.data.plannedAmount || 50000);
+      const bData = (budgetRes as any)?.data || budgetRes;
+      if (bData && (bData.plannedAmount !== undefined || bData.month)) {
+        setBudget(bData);
+        setPlannedBudgetInput(bData.plannedAmount || 150000);
       } else {
-        setBudget(null);
+        setBudget({ plannedAmount: 150000, month: selectedMonth });
+        setPlannedBudgetInput(150000);
       }
 
       setSpends(spendsRes?.data || []);
@@ -192,24 +200,25 @@ export default function BudgetLeadsTab() {
     }
   };
 
-  const planned = budget?.plannedAmount || 0;
-  const spent = budget?.totalSpent || 0;
-  const remaining = planned - spent;
-  const utilizationPct = planned > 0 ? Math.min(Math.round((spent / planned) * 100), 100) : 0;
-  const isOverBudget = spent > planned && planned > 0;
+  // Accurate budget & spend calculations
+  const planned = budget?.plannedAmount ?? 150000;
+  const actualSpent = spends.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+  const remaining = planned - actualSpent;
+  const utilizationPct = planned > 0 ? Math.min(Math.round((actualSpent / planned) * 100), 100) : 0;
+  const isOverBudget = actualSpent > planned && planned > 0;
 
   return (
     <div className="space-y-6">
       {/* Month & Budget KPI Bar */}
-      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-indigo-600" />
-              Budget, Spend Ledger & Leads
+              <CreditCard className="w-5 h-5 text-[#8B2424]" />
+              Budget, Spend Ledger &amp; Leads
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Strict accounting of ad spend & direct deal attribution for ROI calculation.
+              Strict accounting of ad spend &amp; direct deal attribution for ROI calculation.
             </p>
           </div>
 
@@ -218,18 +227,19 @@ export default function BudgetLeadsTab() {
               type="month"
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              className="text-xs font-semibold px-3 py-1.5 border border-slate-300 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="text-xs font-semibold px-3 py-1.5 border border-slate-300 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#8B2424]"
             />
             <button
               onClick={() => setShowBudgetModal(true)}
-              className="px-3 py-1.5 text-xs font-semibold border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg transition"
+              className="px-3 py-1.5 text-xs font-semibold border border-[#8B2424]/30 bg-[#F8E6E6] text-[#8B2424] hover:bg-[#F8E6E6]/80 rounded-lg transition cursor-pointer"
             >
               Set Budget
             </button>
             <button
               onClick={loadData}
               disabled={loading}
-              className="p-1.5 border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600"
+              className="p-1.5 border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600 cursor-pointer"
+              title="Refresh"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
@@ -249,7 +259,7 @@ export default function BudgetLeadsTab() {
             <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
               Actual Spent
             </p>
-            <p className="text-lg font-bold text-indigo-700 mt-1">₹{spent.toLocaleString()}</p>
+            <p className="text-lg font-bold text-[#8B2424] mt-1">₹{actualSpent.toLocaleString()}</p>
           </div>
 
           <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
@@ -268,14 +278,14 @@ export default function BudgetLeadsTab() {
           <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex flex-col justify-center">
             <div className="flex justify-between text-xs font-semibold mb-1">
               <span className="text-slate-600">Utilization</span>
-              <span className={isOverBudget ? 'text-rose-600' : 'text-slate-900'}>
+              <span className={isOverBudget ? 'text-rose-600' : 'text-slate-900 font-bold'}>
                 {utilizationPct}%
               </span>
             </div>
             <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
               <div
                 className={`h-2 rounded-full transition-all duration-300 ${
-                  isOverBudget ? 'bg-rose-500' : utilizationPct > 85 ? 'bg-amber-500' : 'bg-indigo-600'
+                  isOverBudget ? 'bg-rose-500' : utilizationPct > 85 ? 'bg-amber-500' : 'bg-[#8B2424]'
                 }`}
                 style={{ width: `${Math.min(utilizationPct, 100)}%` }}
               />
@@ -289,9 +299,9 @@ export default function BudgetLeadsTab() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => setSubTab('spend')}
-            className={`pb-3 text-sm font-semibold transition border-b-2 flex items-center gap-2 ${
+            className={`pb-3 text-sm font-semibold transition border-b-2 flex items-center gap-2 cursor-pointer ${
               subTab === 'spend'
-                ? 'border-indigo-600 text-indigo-600'
+                ? 'border-[#8B2424] text-[#8B2424]'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
@@ -301,14 +311,14 @@ export default function BudgetLeadsTab() {
 
           <button
             onClick={() => setSubTab('leads')}
-            className={`pb-3 text-sm font-semibold transition border-b-2 flex items-center gap-2 ${
+            className={`pb-3 text-sm font-semibold transition border-b-2 flex items-center gap-2 cursor-pointer ${
               subTab === 'leads'
-                ? 'border-indigo-600 text-indigo-600'
+                ? 'border-[#8B2424] text-[#8B2424]'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
             <Users className="w-4 h-4" />
-            Marketing Leads & Deals ({leads.length})
+            Marketing Leads &amp; Deals ({leads.length})
           </button>
         </div>
 
@@ -316,7 +326,7 @@ export default function BudgetLeadsTab() {
           {subTab === 'spend' ? (
             <button
               onClick={() => setShowSpendModal(true)}
-              className="mb-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition"
+              className="mb-2 px-3 py-1.5 bg-[#8B2424] hover:bg-[#721c1c] text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               Record Spend
@@ -324,7 +334,7 @@ export default function BudgetLeadsTab() {
           ) : (
             <button
               onClick={() => setShowLeadModal(true)}
-              className="mb-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition"
+              className="mb-2 px-3 py-1.5 bg-[#8B2424] hover:bg-[#721c1c] text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               Add Marketing Lead
@@ -335,7 +345,7 @@ export default function BudgetLeadsTab() {
 
       {/* Subtab Content: Spend Ledger */}
       {subTab === 'spend' && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-600">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold">
@@ -354,14 +364,14 @@ export default function BudgetLeadsTab() {
                 {spends.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="text-center py-12 text-slate-400">
-                      No marketing spends logged for {selectedMonth}. Click "Record Spend" to add.
+                      No marketing spends logged for {selectedMonth}. Click &quot;Record Spend&quot; to add.
                     </td>
                   </tr>
                 ) : (
                   spends.map((sp) => (
                     <tr key={sp._id} className="hover:bg-slate-50/80 transition">
                       <td className="px-4 py-3 font-medium text-slate-900 whitespace-nowrap">
-                        {sp.date}
+                        {formatSpendTableDate(sp.date)}
                       </td>
                       <td className="px-4 py-3 font-semibold text-slate-900">
                         {sp.campaignName}
@@ -394,7 +404,7 @@ export default function BudgetLeadsTab() {
                             href={sp.receiptUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-medium"
+                            className="inline-flex items-center gap-1 text-[#8B2424] hover:text-[#721c1c] font-medium"
                           >
                             <ExternalLink className="w-3 h-3" />
                             View
@@ -414,12 +424,12 @@ export default function BudgetLeadsTab() {
 
       {/* Subtab Content: Leads Pipeline */}
       {subTab === 'leads' && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-600">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold">
                 <tr>
-                  <th className="px-4 py-3">Company & Contact</th>
+                  <th className="px-4 py-3">Company &amp; Contact</th>
                   <th className="px-4 py-3">Phone</th>
                   <th className="px-4 py-3">City</th>
                   <th className="px-4 py-3">Source Platform</th>
@@ -432,7 +442,7 @@ export default function BudgetLeadsTab() {
                 {leads.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="text-center py-12 text-slate-400">
-                      No marketing leads registered yet. Click "Add Marketing Lead" to create one.
+                      No marketing leads registered yet. Click &quot;Add Marketing Lead&quot; to create one.
                     </td>
                   </tr>
                 ) : (
@@ -447,7 +457,7 @@ export default function BudgetLeadsTab() {
                       <td className="px-4 py-3 font-mono">{ld.phone}</td>
                       <td className="px-4 py-3 font-medium">{ld.city}</td>
                       <td className="px-4 py-3">
-                        <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-medium border border-indigo-100">
+                        <span className="bg-[#F8E6E6] text-[#8B2424] px-2 py-0.5 rounded font-medium border border-[#8B2424]/20">
                           {ld.sourcePlatform}
                         </span>
                       </td>
@@ -510,21 +520,21 @@ export default function BudgetLeadsTab() {
                   required
                   value={plannedBudgetInput}
                   onChange={(e) => setPlannedBudgetInput(Number(e.target.value))}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold"
+                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B2424] font-bold"
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setShowBudgetModal(false)}
-                  className="px-3 py-1.5 text-xs text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50"
+                  className="px-3 py-1.5 text-xs text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={budgetSubmitting}
-                  className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold"
+                  className="px-3 py-1.5 text-xs bg-[#8B2424] hover:bg-[#721c1c] text-white rounded-lg font-semibold cursor-pointer"
                 >
                   {budgetSubmitting ? 'Saving...' : 'Save Budget'}
                 </button>
@@ -539,7 +549,7 @@ export default function BudgetLeadsTab() {
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-5 shadow-xl border border-slate-200">
             <h3 className="font-bold text-base text-slate-900 mb-3 flex items-center gap-2">
-              <CreditCard className="w-4 h-4 text-indigo-600" />
+              <CreditCard className="w-4 h-4 text-[#8B2424]" />
               Record Marketing Spend
             </h3>
             <form onSubmit={handleRecordSpend} className="space-y-3">
@@ -551,7 +561,7 @@ export default function BudgetLeadsTab() {
                     required
                     value={spDate}
                     onChange={(e) => setSpDate(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B2424]"
                   />
                 </div>
                 <div>
@@ -564,7 +574,7 @@ export default function BudgetLeadsTab() {
                     required
                     value={spAmount}
                     onChange={(e) => setSpAmount(Number(e.target.value))}
-                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg font-bold focus:outline-none focus:ring-2 focus:ring-[#8B2424]"
                   />
                 </div>
               </div>
@@ -579,7 +589,7 @@ export default function BudgetLeadsTab() {
                   placeholder="e.g. Diwali Billboard Awareness Jaipur"
                   value={spCampaign}
                   onChange={(e) => setSpCampaign(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B2424]"
                 />
               </div>
 
@@ -591,7 +601,7 @@ export default function BudgetLeadsTab() {
                   <select
                     value={spPlatform}
                     onChange={(e) => setSpPlatform(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B2424]"
                   >
                     <option value="Meta Ads">Meta Ads</option>
                     <option value="Google Ads">Google Ads</option>
@@ -608,7 +618,7 @@ export default function BudgetLeadsTab() {
                   <select
                     value={spCity}
                     onChange={(e) => setSpCity(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B2424]"
                   >
                     <option value="Jaipur">Jaipur</option>
                     <option value="Delhi NCR">Delhi NCR</option>
@@ -627,7 +637,7 @@ export default function BudgetLeadsTab() {
                   <select
                     value={spType}
                     onChange={(e) => setSpType(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B2424]"
                   >
                     <option value="Ad Spend">Ad Spend</option>
                     <option value="Tool">Tool / Subscriptions</option>
@@ -643,7 +653,7 @@ export default function BudgetLeadsTab() {
                   <select
                     value={spStatus}
                     onChange={(e) => setSpStatus(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B2424]"
                   >
                     <option value="Paid">Paid</option>
                     <option value="Pending">Pending</option>
@@ -660,7 +670,7 @@ export default function BudgetLeadsTab() {
                   placeholder="https://drive.google.com/..."
                   value={spReceipt}
                   onChange={(e) => setSpReceipt(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B2424]"
                 />
               </div>
 
@@ -668,14 +678,14 @@ export default function BudgetLeadsTab() {
                 <button
                   type="button"
                   onClick={() => setShowSpendModal(false)}
-                  className="px-3 py-1.5 text-xs text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50"
+                  className="px-3 py-1.5 text-xs text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={spendSubmitting}
-                  className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold"
+                  className="px-3 py-1.5 text-xs bg-[#8B2424] hover:bg-[#721c1c] text-white rounded-lg font-semibold cursor-pointer"
                 >
                   {spendSubmitting ? 'Recording...' : 'Record Spend'}
                 </button>
@@ -690,7 +700,7 @@ export default function BudgetLeadsTab() {
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-5 shadow-xl border border-slate-200">
             <h3 className="font-bold text-base text-slate-900 mb-3 flex items-center gap-2">
-              <Users className="w-4 h-4 text-indigo-600" />
+              <Users className="w-4 h-4 text-[#8B2424]" />
               Add Marketing Lead
             </h3>
             <form onSubmit={handleCreateLead} className="space-y-3">
@@ -704,7 +714,7 @@ export default function BudgetLeadsTab() {
                   placeholder="e.g. Royal Jewels Jaipur"
                   value={ldCompany}
                   onChange={(e) => setLdCompany(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B2424]"
                 />
               </div>
 
@@ -719,7 +729,7 @@ export default function BudgetLeadsTab() {
                     placeholder="e.g. Rajesh Sharma"
                     value={ldContact}
                     onChange={(e) => setLdContact(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B2424]"
                   />
                 </div>
                 <div>
@@ -730,7 +740,7 @@ export default function BudgetLeadsTab() {
                     placeholder="+91 9876543210"
                     value={ldPhone}
                     onChange={(e) => setLdPhone(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B2424]"
                   />
                 </div>
               </div>
@@ -743,7 +753,7 @@ export default function BudgetLeadsTab() {
                   <select
                     value={ldPlatform}
                     onChange={(e) => setLdPlatform(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B2424]"
                   >
                     <option value="Meta Ads">Meta Ads</option>
                     <option value="Google Ads">Google Ads</option>
@@ -759,7 +769,7 @@ export default function BudgetLeadsTab() {
                   <select
                     value={ldCity}
                     onChange={(e) => setLdCity(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B2424]"
                   >
                     <option value="Jaipur">Jaipur</option>
                     <option value="Delhi NCR">Delhi NCR</option>
@@ -780,7 +790,7 @@ export default function BudgetLeadsTab() {
                   placeholder="e.g. 3 Billboards on Tonk Road"
                   value={ldService}
                   onChange={(e) => setLdService(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B2424]"
                 />
               </div>
 
@@ -788,14 +798,14 @@ export default function BudgetLeadsTab() {
                 <button
                   type="button"
                   onClick={() => setShowLeadModal(false)}
-                  className="px-3 py-1.5 text-xs text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50"
+                  className="px-3 py-1.5 text-xs text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={leadSubmitting}
-                  className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold"
+                  className="px-3 py-1.5 text-xs bg-[#8B2424] hover:bg-[#721c1c] text-white rounded-lg font-semibold cursor-pointer"
                 >
                   {leadSubmitting ? 'Adding...' : 'Add Lead'}
                 </button>
@@ -814,7 +824,7 @@ export default function BudgetLeadsTab() {
               <h3 className="font-bold text-base text-slate-900">Mark Lead as Won 🎉</h3>
             </div>
             <p className="text-xs text-slate-500 mb-3">
-              To calculate accurate marketing ROI & ROAS, enter the confirmed contract/deal value:
+              To calculate accurate marketing ROI &amp; ROAS, enter the confirmed contract/deal value:
             </p>
             <form onSubmit={handleConfirmWon} className="space-y-3">
               <div>
@@ -834,14 +844,14 @@ export default function BudgetLeadsTab() {
                 <button
                   type="button"
                   onClick={() => setWinningLeadId(null)}
-                  className="px-3 py-1.5 text-xs text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50"
+                  className="px-3 py-1.5 text-xs text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={stageSubmitting}
-                  className="px-3 py-1.5 text-xs bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-semibold"
+                  className="px-3 py-1.5 text-xs bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-semibold cursor-pointer"
                 >
                   {stageSubmitting ? 'Saving...' : 'Confirm Won'}
                 </button>

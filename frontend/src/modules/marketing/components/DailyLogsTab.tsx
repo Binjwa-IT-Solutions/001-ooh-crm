@@ -11,10 +11,15 @@ import {
   CheckCircle2,
   Calendar,
 } from 'lucide-react';
+import { useAuth } from '@/shared/auth/auth-context';
 import { marketingApi } from '../api';
 import type { DailyLogItem } from '../types';
 
 export default function DailyLogsTab() {
+  const { user } = useAuth();
+  const userRole = (user?.role || '').toLowerCase();
+  const isManagerOrAdmin = ['admin', 'superadmin', 'managing_director', 'manager'].includes(userRole);
+
   const [logs, setLogs] = useState<DailyLogItem[]>([]);
   const [managerSummary, setManagerSummary] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,7 +40,7 @@ export default function DailyLogsTab() {
     try {
       setLoading(true);
       if (viewMode === 'my') {
-        const res = await marketingApi.getDailyLogs({ date: selectedDate });
+        const res = await marketingApi.getDailyLogs({ date: selectedDate, userId: user?.id });
         setLogs(res.data || []);
       } else {
         const res = await marketingApi.getManagerDailySummary(selectedDate);
@@ -100,18 +105,20 @@ export default function DailyLogsTab() {
           >
             My Daily Logs
           </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('manager')}
-            className={`rounded-xl px-3.5 py-2 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-              viewMode === 'manager'
-                ? 'bg-[#8B2424] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Users className="h-3.5 w-3.5" />
-            <span>Team Overview (Manager View)</span>
-          </button>
+          {isManagerOrAdmin && (
+            <button
+              type="button"
+              onClick={() => setViewMode('manager')}
+              className={`rounded-xl px-3.5 py-2 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                viewMode === 'manager'
+                  ? 'bg-[#8B2424] text-white shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Users className="h-3.5 w-3.5" />
+              <span>Team Overview (Manager View)</span>
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-3">

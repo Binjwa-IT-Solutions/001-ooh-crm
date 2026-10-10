@@ -44,7 +44,7 @@ export class MarketingController {
     const assignedTo = req.query.assignedTo as string | undefined;
     const isContent = req.query.isContent === 'true' ? true : req.query.isContent === 'false' ? false : undefined;
 
-    const tasks = await MarketingService.listTasks({ status, assignedTo, isContent });
+    const tasks = await MarketingService.listTasks({ status, assignedTo, isContent }, req.ctx!);
     res.status(200).json({ data: tasks });
   }
 
@@ -58,6 +58,11 @@ export class MarketingController {
     const input = updateMarketingTaskSchema.parse(req.body);
     const task = await MarketingService.updateTask(req.params.id as string, input);
     res.status(200).json(task);
+  }
+
+  static async getTeamMembers(_req: Request, res: Response) {
+    const members = await MarketingService.getTeamMembers();
+    res.status(200).json({ data: members });
   }
 
   // 3. Budget & Spend

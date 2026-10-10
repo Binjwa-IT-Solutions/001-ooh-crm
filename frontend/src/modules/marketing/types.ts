@@ -12,13 +12,21 @@ export interface DailyLogItem {
   createdAt: string;
 }
 
+export interface MarketingTeamMember {
+  _id: string;
+  name: string;
+  email: string;
+  role: string;
+  designation?: string;
+}
+
 export interface MarketingTaskItem {
   _id: string;
   title: string;
   description?: string;
   type: string;
-  assignedTo: { _id: string; name: string; email: string };
-  assignedBy?: { _id: string; name: string };
+  assignedTo: { _id: string; name: string; email: string; role?: string; designation?: string };
+  assignedBy?: { _id: string; name: string; email?: string; role?: string; designation?: string };
   status: 'Backlog' | 'To Do' | 'In Progress' | 'In Review' | 'Revision Needed' | 'Approved' | 'Done' | 'On Hold' | 'Cancelled';
   priority: 'Low' | 'Medium' | 'High' | 'Urgent';
   dueDate?: string;

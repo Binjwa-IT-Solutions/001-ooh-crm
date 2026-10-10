@@ -43,7 +43,13 @@ import { PageHeader } from './page-header';
 
 interface NavGroup {
   label: string;
-  items: Array<{ href: string; label: string; icon: LucideIcon; permission?: string }>;
+  items: Array<{
+    href: string;
+    label: string;
+    icon: LucideIcon;
+    permission?: string;
+    roles?: string[];
+  }>;
 }
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -62,7 +68,12 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'MARKETING',
     items: [
-      { href: '/marketing', label: 'Marketing Hub', icon: Megaphone },
+      {
+        href: '/marketing',
+        label: 'Marketing Hub',
+        icon: Megaphone,
+        roles: ['admin', 'superadmin', 'managing_director', 'manager'],
+      },
     ],
   },
   {
@@ -148,9 +159,33 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex flex-1 flex-col overflow-y-auto pt-4 pb-12 no-scrollbar">
           <nav className="flex-1 space-y-6">
             {NAV_GROUPS.map((group) => {
-              const visibleItems = group.items.filter(
-                (item) => !item.permission || hasPermission(item.permission)
-              );
+              const visibleItems = group.items.filter((item) => {
+                if (item.href === '/marketing') {
+                  const roleStr = (user?.role || '').toLowerCase();
+                  // Admin, superadmin, manager always see Marketing Hub
+                  if (['admin', 'superadmin', 'managing_director', 'manager'].includes(roleStr)) {
+                    return true;
+                  }
+                  // Marketing employees see it (by email or designation)
+                  if (roleStr === 'employee') {
+                    const email = (user?.email || '').toLowerCase();
+                    const desig = (user?.designation || '').toLowerCase();
+                    return (
+                      email.includes('marketing') ||
+                      /marketing|designer|editor|content|creative|reel|video|social|media/.test(desig)
+                    );
+                  }
+                  return false;
+                }
+
+                if (item.roles && user?.role) {
+                  const roleStr = user.role.toLowerCase();
+                  if (!item.roles.map((r) => r.toLowerCase()).includes(roleStr)) {
+                    return false;
+                  }
+                }
+                return !item.permission || hasPermission(item.permission);
+              });
 
               if (visibleItems.length === 0) return null;
 

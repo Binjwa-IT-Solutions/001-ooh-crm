@@ -1,6 +1,7 @@
 import { Types } from 'mongoose';
 import { RequestContext } from '../../core/context.js';
 import { ValidationError, NotFoundError } from '../../core/errors/index.js';
+import { AuthUser } from '../../core/auth/auth-model.js';
 import {
   MarketingDailyLog,
   MarketingTask,
@@ -57,12 +58,15 @@ export class MarketingService {
   ): Promise<any[]> {
     const query: Record<string, any> = { deletedAt: null };
 
-    // Team members can only see their own logs unless manager/admin
+    // Team members can only see their own logs.
+    // In "My Daily Logs", managers/admins also see their own logs by default unless another userId is specified.
     const isManagerOrAdmin = ['admin', 'manager'].includes(ctx.user.role.toLowerCase());
     if (!isManagerOrAdmin) {
       query.userId = new Types.ObjectId(ctx.user.id);
-    } else if (filters.userId) {
+    } else if (filters.userId && filters.userId !== 'all') {
       query.userId = new Types.ObjectId(filters.userId);
+    } else if (!filters.userId) {
+      query.userId = new Types.ObjectId(ctx.user.id);
     }
 
     if (filters.date) {
@@ -150,15 +154,27 @@ export class MarketingService {
     return task;
   }
 
-  static async listTasks(filters: { status?: string; assignedTo?: string; isContent?: boolean }): Promise<any[]> {
+  static async listTasks(
+    filters: { status?: string; assignedTo?: string; isContent?: boolean },
+    ctx: RequestContext
+  ): Promise<any[]> {
     const query: Record<string, any> = { deletedAt: null };
     if (filters.status) query.status = filters.status;
-    if (filters.assignedTo) query.assignedTo = new Types.ObjectId(filters.assignedTo);
     if (filters.isContent !== undefined) query.isContent = filters.isContent;
 
+    // Normal marketing employees can ONLY see tasks assigned to them!
+    const isManagerOrAdmin = ['admin', 'superadmin', 'managing_director', 'manager'].includes(
+      ctx.user.role.toLowerCase()
+    );
+    if (!isManagerOrAdmin) {
+      query.assignedTo = new Types.ObjectId(ctx.user.id);
+    } else if (filters.assignedTo) {
+      query.assignedTo = new Types.ObjectId(filters.assignedTo);
+    }
+
     const tasks = await MarketingTask.find(query)
-      .populate('assignedTo', 'name email')
-      .populate('assignedBy', 'name')
+      .populate('assignedTo', 'name email role designation')
+      .populate('assignedBy', 'name email role designation')
       .sort({ priority: -1, createdAt: -1 })
       .lean();
 
@@ -224,6 +240,20 @@ export class MarketingService {
 
     await task.save();
     return task;
+  }
+
+  static async getTeamMembers(): Promise<any[]> {
+    // Strictly exclude non-marketing roles: Sales Agent, Operations, Finance, and HR
+    const excludedRoles = ['sales_agent', 'ops', 'finance', 'hr'];
+
+    return await AuthUser.find({
+      deletedAt: null,
+      status: 'Active',
+      role: { $nin: excludedRoles as any },
+    })
+      .select('name email role designation')
+      .sort({ name: 1 })
+      .lean();
   }
 
   // ─── 3. BUDGET & SPEND ────────────────────────────────────────────────────

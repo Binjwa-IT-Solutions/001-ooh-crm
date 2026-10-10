@@ -5,6 +5,7 @@ import type {
   MarketingSpendItem,
   MarketingLeadItem,
   MarketingDashboardData,
+  MarketingTeamMember,
 } from './types';
 
 export const marketingApi = {
@@ -36,6 +37,8 @@ export const marketingApi = {
     api.get<{ data: any[] }>(`/api/marketing/daily-logs/summary${date ? `?date=${date}` : ''}`),
 
   // 3. Tasks & Content
+  getTeamMembers: () => api.get<{ data: MarketingTeamMember[] }>('/api/marketing/team-members'),
+
   getTasks: (filters: { status?: string; assignedTo?: string; isContent?: boolean } = {}) => {
     const params = new URLSearchParams();
     if (filters.status) params.set('status', filters.status);
