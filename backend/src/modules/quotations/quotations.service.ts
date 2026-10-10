@@ -11,7 +11,8 @@ import { toObjectId } from '../../core/db/basePlugin.js';
 import { formattedSequence } from '../../core/db/sequence.js';
 import { renderPdf, lineItemsTable, formatPaise, renderQuotationBillBookPdf, type QuotationLineItem } from '../../core/pdf/index.js';
 import { fileService } from '../../core/files/index.js';
-import { notify } from '../../core/notifications/index.js';
+import { notify, sendEmail } from '../../core/notifications/index.js';
+import { config } from '../../config/index.js';
 import { employeeService } from '../employees/employees.service.js';
 import type {
   CreateQuotationInput,
@@ -189,8 +190,8 @@ export class QuotationsService {
       siteId: Types.ObjectId;
       description?: string;
       ratePerDay: number;
-      startDate: Date;
-      endDate: Date;
+      startDate?: Date | null;
+      endDate?: Date | null;
       days: number;
       discountPercent?: number;
       taxPercent?: number;
@@ -201,16 +202,23 @@ export class QuotationsService {
     let totalTaxPaise = 0;
 
     for (const item of data.sites) {
-      const start = new Date(item.startDate);
-      const end = new Date(item.endDate);
-      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-        throw new ValidationError('Invalid dates in quotation site line');
-      }
-      if (end < start) {
-        throw new ValidationError('endDate must be on or after startDate');
+      let start: Date | null = null;
+      let end: Date | null = null;
+      let days = Number(item.days || 30);
+
+      if (item.startDate && item.endDate) {
+        const s = new Date(item.startDate);
+        const e = new Date(item.endDate);
+        if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
+          if (e < s) {
+            throw new ValidationError('endDate must be on or after startDate');
+          }
+          start = s;
+          end = e;
+          days = daysInclusive(s, e);
+        }
       }
 
-      const days = daysInclusive(start, end);
       const ratePaise = rupeesToPaise(Number(item.ratePerDay));
       const baseAmount = Math.round(days * ratePaise);
       const discountPercent = Number(item.discountPercent || 0);
@@ -245,6 +253,7 @@ export class QuotationsService {
 
     const doc = await Quotation.create({
       quoteNumber,
+      trackingToken: generate32CharToken(),
       leadId: lead._id,
       clientName: data.clientName || lead.companyName,
       clientContactPerson: data.clientContactPerson || lead.contactPerson,
@@ -299,16 +308,23 @@ export class QuotationsService {
       subtotal = 0;
 
       for (const item of data.sites) {
-        const start = new Date(item.startDate);
-        const end = new Date(item.endDate);
-        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-          throw new ValidationError('Invalid dates in quotation site line');
-        }
-        if (end < start) {
-          throw new ValidationError('endDate must be on or after startDate');
+        let start: Date | null = null;
+        let end: Date | null = null;
+        let days = Number(item.days || 30);
+
+        if (item.startDate && item.endDate) {
+          const s = new Date(item.startDate);
+          const e = new Date(item.endDate);
+          if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
+            if (e < s) {
+              throw new ValidationError('endDate must be on or after startDate');
+            }
+            start = s;
+            end = e;
+            days = daysInclusive(s, e);
+          }
         }
 
-        const days = daysInclusive(start, end);
         const ratePaise = rupeesToPaise(Number(item.ratePerDay));
         const baseAmount = Math.round(days * ratePaise);
         const discountPercent = Number(item.discountPercent || 0);
@@ -413,8 +429,13 @@ export class QuotationsService {
       const dimensions = (site?.sizeWidth && site?.sizeHeight)
         ? `${site.sizeWidth}ft x ${site.sizeHeight}ft (${site.sizeWidth * site.sizeHeight} sq.ft)`
         : (line.description || 'Standard Display');
-      const startStr = new Date(line.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      const endStr = new Date(line.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const startStr = line.startDate
+        ? new Date(line.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        : '';
+      const endStr = line.endDate
+        ? new Date(line.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        : '';
+      const displayDates = (startStr && endStr) ? `${startStr} - ${endStr}` : `${line.days} Days (TBD)`;
 
       const baseAmount = Math.round(line.days * line.ratePerDay);
       const discountPercent = Number(line.discountPercent || 0);
@@ -428,7 +449,7 @@ export class QuotationsService {
         location,
         mediaType,
         dimensions,
-        dates: `${startStr} - ${endStr}`,
+        dates: displayDates,
         days: line.days,
         ratePerDay: line.ratePerDay,
         discountPercent,
@@ -599,7 +620,63 @@ export class QuotationsService {
 
     await quotation.save();
 
+    // 1. Update Lead to 'Proposal Sent' stage with audit trail
+    if (quotation.leadId) {
+      await Lead.updateOne(
+        { _id: quotation.leadId },
+        {
+          $set: { status: 'Proposal Sent' },
+          $push: {
+            statusHistory: {
+              to: 'Proposal Sent',
+              reason: `Proposal #${quotation.quoteNumber} dispatched to ${sentTo}`,
+              changedAt: new Date(),
+            },
+          },
+        },
+      );
+    }
+
+    // 2. Dispatch real email via system email service
     const publicUrl = `/q/${quotation.trackingToken}`;
+    const clientBaseUrl = config.cors.origins[0] || 'http://localhost:3000';
+    const fullPublicUrl = `${clientBaseUrl}${publicUrl}`;
+    try {
+      await sendEmail({
+        to: sentTo,
+        subject: `Media Proposal #${quotation.quoteNumber} - Media Octus Outdoor Advertising`,
+        text: `Dear ${quotation.clientContactPerson || quotation.clientName || 'Valued Client'},\n\nPlease review your outdoor media proposal #${quotation.quoteNumber} here:\n${fullPublicUrl}\n\n${message || ''}\n\nBest Regards,\nMedia Octus Team`,
+        html: `
+          <div style="font-family: Arial, sans-serif; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+            <div style="background-color: #8B2424; color: #ffffff; padding: 18px 24px; border-radius: 8px; text-align: left;">
+              <h2 style="margin: 0; font-size: 20px; font-weight: bold; letter-spacing: 0.5px;">MEDIA OCTUS</h2>
+              <p style="margin: 4px 0 0 0; font-size: 13px; opacity: 0.9;">Official Outdoor Media Proposal &bull; #${quotation.quoteNumber}</p>
+            </div>
+            <div style="padding: 24px 0;">
+              <p style="font-size: 14px; margin-top: 0;">Dear <strong>${quotation.clientContactPerson || quotation.clientName || 'Valued Client'}</strong>,</p>
+              <p style="font-size: 14px; line-height: 1.5; color: #334155;">
+                We have prepared a customized outdoor media proposal for <strong>${quotation.clientName || 'your campaign'}</strong>.
+              </p>
+              ${message ? `<div style="background: #f8fafc; padding: 14px; border-left: 4px solid #8B2424; margin: 18px 0; font-size: 13px; color: #475569; border-radius: 4px;">${message}</div>` : ''}
+              <div style="margin: 28px 0; text-align: center;">
+                <a href="${fullPublicUrl}" style="background-color: #8B2424; color: #ffffff; padding: 13px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">
+                  View &amp; Accept Proposal &rarr;
+                </a>
+              </div>
+              <p style="font-size: 12px; color: #64748b; line-height: 1.4;">
+                Or access directly using this link:<br/>
+                <a href="${fullPublicUrl}" style="color: #8B2424; word-break: break-all;">${fullPublicUrl}</a>
+              </p>
+            </div>
+            <div style="border-top: 1px solid #e2e8f0; padding-top: 14px; font-size: 11px; color: #94a3b8; text-align: center;">
+              &copy; ${new Date().getFullYear()} Media Octus Pvt. Ltd. Indore, MP. All rights reserved.
+            </div>
+          </div>
+        `,
+      });
+    } catch (emailErr) {
+      console.warn('[QuotationsService.send] Email dispatch notification caught:', emailErr);
+    }
 
     return {
       quotation,
@@ -610,14 +687,21 @@ export class QuotationsService {
 
   /**
    * B3 — Public Proposal View (No Login Required!).
-   * Returns ONLY client-facing details (no internal ObjectIds or agent info).
-   * Records first view timestamp and notifies owning agent.
+   * Returns ONLY client-facing details.
+   * Supports lookup by 32-char token OR ObjectId fallback.
    */
   static async getPublicByToken(token: string): Promise<Record<string, unknown>> {
-    const quotation = await Quotation.findOne({ trackingToken: token, deletedAt: null })
-      .populate('leadId', 'companyName contactPerson email mobile')
-      .populate('sites.siteId', 'siteCode city type address')
+    let quotation = await Quotation.findOne({ trackingToken: token, deletedAt: null })
+      .populate('leadId', 'companyName contactPerson email mobile companyAddress city state')
+      .populate('sites.siteId', 'siteCode code name location city state type mediaType')
       .exec();
+
+    if (!quotation && Types.ObjectId.isValid(token)) {
+      quotation = await Quotation.findOne({ _id: toObjectId(token), deletedAt: null })
+        .populate('leadId', 'companyName contactPerson email mobile companyAddress city state')
+        .populate('sites.siteId', 'siteCode code name location city state type mediaType')
+        .exec();
+    }
 
     if (!quotation) {
       throw new NotFoundError('Proposal not found');
@@ -655,17 +739,28 @@ export class QuotationsService {
     return {
       quoteNumber: quotation.quoteNumber,
       clientName: quotation.clientName || leadInfo?.companyName || 'Valued Client',
+      clientContactPerson: quotation.clientContactPerson || leadInfo?.contactPerson || '',
       clientEmail: quotation.clientEmail || leadInfo?.email || '',
+      clientPhone: quotation.clientPhone || leadInfo?.mobile || '',
+      clientAddress: quotation.clientAddress || leadInfo?.companyAddress || '',
+      clientCity: quotation.clientCity || leadInfo?.city || '',
+      clientState: quotation.clientState || leadInfo?.state || '',
+      clientGstin: quotation.clientGstin || '',
+      isInterState: quotation.isInterState ?? false,
       sites: quotation.sites.map((line) => {
         const s = line.siteId as any;
+        const siteLabel = line.description || `${s?.siteCode || s?.atrNo || 'Media Site'} - ${s?.location || s?.name || 'Outdoor'}`;
         return {
-          siteCode: s?.siteCode || 'Outdoor Site',
-          city: s?.city || '',
-          type: s?.type || '',
+          siteCode: s?.siteCode || s?.atrNo || s?.code || 'Media Site',
+          description: siteLabel,
+          city: s?.city || quotation.clientCity || 'Indore',
+          type: s?.mediaType || s?.type || 'Hoarding',
           startDate: line.startDate,
           endDate: line.endDate,
           days: line.days,
           ratePerDayRupees: line.ratePerDay / 100,
+          discountPercent: line.discountPercent || 0,
+          taxPercent: line.taxPercent ?? 18,
           amountRupees: line.amount / 100,
         };
       }),
@@ -675,10 +770,15 @@ export class QuotationsService {
       totalRupees: quotation.total / 100,
       validUntil: quotation.validUntil,
       status: quotation.status,
+      terms: quotation.terms || [],
+      bankDetails: quotation.bankDetails,
+      signatoryName: quotation.signatoryName,
+      signatoryDesignation: quotation.signatoryDesignation,
       viewedAt: quotation.viewedAt,
       acceptedAt: quotation.acceptedAt,
       rejectedAt: quotation.rejectedAt,
       rejectionReason: quotation.rejectionReason,
+      pdfUrl: quotation.pdfKey ? await fileService.url(quotation.pdfKey) : null,
     };
   }
 
@@ -686,7 +786,10 @@ export class QuotationsService {
    * B3 — Public Proposal Accept (No Login Required!).
    */
   static async acceptPublic(token: string): Promise<Record<string, unknown>> {
-    const quotation = await Quotation.findOne({ trackingToken: token, deletedAt: null });
+    let quotation = await Quotation.findOne({ trackingToken: token, deletedAt: null });
+    if (!quotation && Types.ObjectId.isValid(token)) {
+      quotation = await Quotation.findOne({ _id: toObjectId(token), deletedAt: null });
+    }
     if (!quotation) throw new NotFoundError('Proposal not found');
 
     const now = new Date();
@@ -706,19 +809,21 @@ export class QuotationsService {
     await quotation.save();
 
     // Update Lead to Won with status history audit trail and clear next action
-    await Lead.updateOne(
-      { _id: quotation.leadId },
-      {
-        $set: { status: 'Won', nextActionDate: null },
-        $push: {
-          statusHistory: {
-            to: 'Won',
-            reason: `Proposal #${quotation.quoteNumber} accepted by client`,
-            changedAt: now,
+    if (quotation.leadId) {
+      await Lead.updateOne(
+        { _id: quotation.leadId },
+        {
+          $set: { status: 'Won', nextActionDate: null },
+          $push: {
+            statusHistory: {
+              to: 'Won',
+              reason: `Proposal #${quotation.quoteNumber} accepted by client`,
+              changedAt: now,
+            },
           },
         },
-      },
-    );
+      );
+    }
 
     // Call campaignService.createFromQuotation
     try {
@@ -748,7 +853,10 @@ export class QuotationsService {
    * B3 — Public Proposal Reject (No Login Required!).
    */
   static async rejectPublic(token: string, reason: string): Promise<Record<string, unknown>> {
-    const quotation = await Quotation.findOne({ trackingToken: token, deletedAt: null });
+    let quotation = await Quotation.findOne({ trackingToken: token, deletedAt: null });
+    if (!quotation && Types.ObjectId.isValid(token)) {
+      quotation = await Quotation.findOne({ _id: toObjectId(token), deletedAt: null });
+    }
     if (!quotation) throw new NotFoundError('Proposal not found');
 
     const now = new Date();
@@ -757,6 +865,22 @@ export class QuotationsService {
     quotation.rejectedAt = now;
     quotation.rejectionReason = reason;
     await quotation.save();
+
+    // Record in Lead status history
+    if (quotation.leadId) {
+      await Lead.updateOne(
+        { _id: quotation.leadId },
+        {
+          $push: {
+            statusHistory: {
+              to: 'Negotiation',
+              reason: `Proposal #${quotation.quoteNumber} declined by client: ${reason}`,
+              changedAt: now,
+            },
+          },
+        },
+      );
+    }
 
     // Notify agent
     if (quotation.createdBy) {
@@ -771,6 +895,48 @@ export class QuotationsService {
     }
 
     return QuotationsService.getPublicByToken(token);
+  }
+
+  /**
+   * Internal Accept Action — When sales executive receives client confirmation offline (Phone/WhatsApp).
+   */
+  static async acceptInternal(id: string, ctx: RequestContext): Promise<IQuotation> {
+    const quotation = await Quotation.findOne({ _id: toObjectId(id), deletedAt: null });
+    if (!quotation) throw new NotFoundError('Quotation not found');
+
+    const now = new Date();
+    quotation.status = 'Accepted';
+    quotation.acceptedAt = now;
+    quotation.updatedBy = toObjectId(ctx.user.id);
+    await quotation.save();
+
+    // Update Lead to Won with status history audit trail
+    if (quotation.leadId) {
+      await Lead.updateOne(
+        { _id: quotation.leadId },
+        {
+          $set: { status: 'Won', nextActionDate: null },
+          $push: {
+            statusHistory: {
+              to: 'Won',
+              reason: `Proposal #${quotation.quoteNumber} marked as Accepted (Client confirmed via executive)`,
+              changedAt: now,
+            },
+          },
+        },
+      );
+    }
+
+    // Convert to campaign
+    try {
+      await createFromQuotation(String(quotation._id), {
+        userId: ctx.user.id ?? quotation.createdBy ?? 'system',
+      });
+    } catch (err) {
+      console.error('[acceptInternal] failed to create campaign from quotation', err);
+    }
+
+    return quotation as IQuotation;
   }
 
   static async getQuotationStats(ctx: RequestContext): Promise<{
