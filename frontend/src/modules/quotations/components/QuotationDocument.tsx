@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type { Quotation } from "../types";
 import { quotationsApi } from "../api";
+import ShareProposalModal from "./ShareProposalModal";
 
 function PrinterIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
   return (
@@ -41,6 +42,7 @@ interface Props {
   quotation: Quotation;
   onBack: () => void;
   onNext?: () => void;
+  onRefresh?: (updated: Quotation) => void;
 }
 
 function formatDate(dateStr?: string | null) {
@@ -94,9 +96,9 @@ function numberToWordsINR(amountInPaise: number): string {
   return str.trim() + " Rupees Only";
 }
 
-export default function QuotationDocument({ quotation, onBack, onNext }: Props) {
+export default function QuotationDocument({ quotation, onBack, onNext, onRefresh }: Props) {
   const [downloading, setDownloading] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   const quoteId = quotation._id || quotation.id;
@@ -131,15 +133,6 @@ export default function QuotationDocument({ quotation, onBack, onNext }: Props) 
     window.print();
   };
 
-  const handleCopyPublicLink = () => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const token = quotation.trackingToken || quoteId;
-    const link = `${origin}/q/${token}`;
-    navigator.clipboard.writeText(link);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   const leadObj: any = typeof quotation.leadId === "object" ? quotation.leadId : null;
   const clientName = quotation.clientName || leadObj?.companyName || "Client Name";
   const contactPerson = quotation.clientContactPerson || leadObj?.contactPerson || leadObj?.name || "-";
@@ -162,24 +155,15 @@ export default function QuotationDocument({ quotation, onBack, onNext }: Props) 
         </button>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Public Link Share */}
+          {/* Public Share & Dispatch Modal */}
           <button
             type="button"
-            onClick={handleCopyPublicLink}
+            onClick={() => setShareModalOpen(true)}
             className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-slate-800 dark:bg-slate-900 dark:text-gray-300 dark:hover:bg-slate-800 transition cursor-pointer"
-            title="Copy Public Client Proposal Link"
+            title="Dispatch Proposal via Email, WhatsApp, or Direct Link"
           >
-            {copied ? (
-              <>
-                <Check className="h-3.5 w-3.5 text-emerald-600" />
-                <span className="text-emerald-600">Copied Link!</span>
-              </>
-            ) : (
-              <>
-                <ShareIcon className="h-3.5 w-3.5" />
-                <span>Share Proposal</span>
-              </>
-            )}
+            <ShareIcon className="h-3.5 w-3.5" />
+            <span>Share Proposal</span>
           </button>
 
           {/* Print */}
@@ -439,6 +423,14 @@ export default function QuotationDocument({ quotation, onBack, onNext }: Props) 
           </div>
         </div>
       </div>
+
+      {/* Unified Share & Dispatch Proposal Modal */}
+      <ShareProposalModal
+        quotation={quotation}
+        isOpen={shareModalOpen}
+        onClose={() => setShareModalOpen(false)}
+        onSent={(updated) => onRefresh?.(updated)}
+      />
     </div>
   );
 }

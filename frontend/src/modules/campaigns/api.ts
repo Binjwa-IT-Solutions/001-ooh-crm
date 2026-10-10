@@ -25,10 +25,6 @@ function buildQuery(filters: CampaignFilters): string {
     params.set("status", filters.status);
   }
 
-  if (filters.state?.trim()) {
-    params.set("state", filters.state.trim());
-  }
-
   if (filters.city?.trim()) {
     params.set("city", filters.city.trim());
   }

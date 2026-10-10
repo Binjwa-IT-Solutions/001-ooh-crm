@@ -36,19 +36,19 @@ function buildQuery(query: EmployeeListQuery): string {
  * converted from rupees, ids left as strings.
  */
 function toPayload(values: EmployeeFormValues): Record<string, unknown> {
-  const payload: Record<string, unknown> = {
-    fullName: values.fullName,
-    workEmail: values.workEmail,
-    mobile: values.mobile,
-    department: values.department,
-    designation: values.designation,
-    employmentType: values.employmentType,
-    dateOfJoining: values.dateOfJoining,
-    workLocation: values.workLocation,
-    status: values.status,
-  };
+  const payload: Record<string, unknown> = {};
 
-  const optional: Array<[string, string]> = [
+  if (values.fullName?.trim()) payload.fullName = values.fullName.trim();
+  if (values.workEmail?.trim()) payload.workEmail = values.workEmail.trim();
+  if (values.mobile?.trim()) payload.mobile = values.mobile.trim();
+  if (values.workLocation?.trim()) payload.workLocation = values.workLocation.trim();
+  if (values.status) payload.status = values.status;
+  if (values.department) payload.department = values.department;
+  if (values.designation?.trim()) payload.designation = values.designation.trim();
+  if (values.employmentType) payload.employmentType = values.employmentType;
+  if (values.dateOfJoining?.trim()) payload.dateOfJoining = values.dateOfJoining.trim();
+
+  const optional: Array<[string, string | undefined]> = [
     ['personalEmail', values.personalEmail],
     ['dateOfBirth', values.dateOfBirth],
     ['dateOfExit', values.dateOfExit],
@@ -61,18 +61,18 @@ function toPayload(values: EmployeeFormValues): Record<string, unknown> {
   ];
 
   for (const [key, value] of optional) {
-    if (value.trim() !== '') payload[key] = value.trim();
+    if (value && value.trim() !== '') payload[key] = value.trim();
   }
 
   // The user types rupees; the API's validator converts to integer paise.
-  if (values.annualCtcRupees.trim() !== '') {
+  if (values.annualCtcRupees && values.annualCtcRupees.trim() !== '') {
     payload.annualCtc = Number(values.annualCtcRupees);
   }
 
   const emergency = {
-    name: values.emergencyContactName.trim(),
-    relationship: values.emergencyContactRelationship.trim(),
-    mobile: values.emergencyContactMobile.trim(),
+    name: values.emergencyContactName?.trim() || '',
+    relationship: values.emergencyContactRelationship?.trim() || '',
+    mobile: values.emergencyContactMobile?.trim() || '',
   };
   if (emergency.name || emergency.relationship || emergency.mobile) {
     payload.emergencyContact = emergency;
@@ -157,6 +157,11 @@ export const employeesApi = {
   update: (id: string, values: EmployeeFormValues) =>
     api
       .patch<{ employee: Employee }>(`/api/employees/${id}`, toPayload(values))
+      .then((res) => res.employee),
+
+  updateMine: (values: EmployeeFormValues) =>
+    api
+      .patch<{ employee: Employee }>('/api/employees/me', toPayload(values))
       .then((res) => res.employee),
 
   deactivate: (id: string) => api.delete<{ id: string }>(`/api/employees/${id}`),

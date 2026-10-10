@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getCampaignManagers } from "../api";
 import type { ManagerOption } from "../types";
 
@@ -8,32 +8,33 @@ interface Props {
   filters: {
     search?: string;
     status?: string;
-    manager?: string;
-    state?: string;
     city?: string;
+    manager?: string;
     startDate?: string;
     endDate?: string;
   };
-  stateOptions?: string[];
-  cityOptions?: string[];
   onChange: (filters: Props["filters"]) => void;
   onReset: () => void;
 }
 
-const STATUS_OPTIONS = [
-  { label: "Draft", value: "Draft" },
-  { label: "Campaign Live", value: "Campaign Live" },
-  { label: "Campaign End", value: "Campaign End" },
-  { label: "Campaign Rejected", value: "Rejected" },
+const statusOptions = [
+  "Draft",
+  "Approved",
+  "InProgress",
+  "Completed",
+  "Cancelled",
 ];
 
 export default function CampaignFilters({
   filters,
-  stateOptions = [],
-  cityOptions = [],
   onChange,
   onReset,
 }: Props) {
+  const [statusOpen, setStatusOpen] = useState(false);
+  const statusRef = useRef<HTMLDivElement>(null);
+
+  const [managerOpen, setManagerOpen] = useState(false);
+  const managerRef = useRef<HTMLDivElement>(null);
   const [managers, setManagers] = useState<ManagerOption[]>([]);
 
   useEffect(() => {
@@ -51,50 +52,30 @@ export default function CampaignFilters({
     };
   }, []);
 
-  const selectedManager = managers.find((m) => m._id === filters.manager);
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (
+        statusRef.current &&
+        !statusRef.current.contains(event.target as Node)
+      ) {
+        setStatusOpen(false);
+      }
+      if (
+        managerRef.current &&
+        !managerRef.current.contains(event.target as Node)
+      ) {
+        setManagerOpen(false);
+      }
+    };
 
-  const managerOptions = useMemo(() => {
-    return managers.map((m) => ({
-      label: m.name,
-      value: m._id,
-      sublabel: m.role ? `(${m.role})` : undefined,
-    }));
-  }, [managers]);
+    document.addEventListener("mousedown", handleOutsideClick);
 
-  const stateDropdownOptions = useMemo(() => {
-    return stateOptions.map((s) => ({
-      label: s,
-      value: s,
-    }));
-  }, [stateOptions]);
-
-  const cityDropdownOptions = useMemo(() => {
-    return cityOptions.map((c) => ({
-      label: c,
-      value: c,
-    }));
-  }, [cityOptions]);
-
-  const statusDropdownOptions = useMemo(() => {
-    return STATUS_OPTIONS.map((st) => ({
-      label: st.label,
-      value: st.value,
-    }));
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
   }, []);
 
-  const statusDisplayValue = useMemo(() => {
-    if (!filters.status) return "All Statuses";
-    const found = STATUS_OPTIONS.find((s) => s.value === filters.status);
-    return found ? found.label : filters.status;
-  }, [filters.status]);
-
-  const handleStateChange = (nextState: string) => {
-    onChange({
-      ...filters,
-      state: nextState,
-      city: "", // Reset city when state changes, matching ATR
-    });
-  };
+  const selectedManager = managers.find((m) => m._id === filters.manager);
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -106,7 +87,7 @@ export default function CampaignFilters({
           </h2>
 
           <p className="mt-1 text-sm text-gray-500">
-            Search by name, code, lead, manager, state, city or filter by status.
+            Search by name, code, lead, manager, city or filter by status and date range.
           </p>
         </div>
 
@@ -147,7 +128,7 @@ export default function CampaignFilters({
                 search: event.target.value,
               })
             }
-            placeholder="Search campaigns by name, code, lead / client, manager, state, city..."
+            placeholder="Search campaigns by name, code, lead / client, manager, city..."
             className="w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-10 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
           />
 
@@ -169,72 +150,172 @@ export default function CampaignFilters({
         </div>
       </div>
 
-      {/* Filters Grid: Status, Manager, State, City */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {/* 1. Status Filter */}
-        <SearchableFilterDropdown
-          label="Status"
-          value={filters.status ?? ""}
-          displayValue={statusDisplayValue}
-          allOptionLabel="All Statuses"
-          searchable={false}
-          options={statusDropdownOptions}
-          onChange={(val) =>
+      {/* Filters Grid */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
+        {/* Status */}
+        <div ref={statusRef} className="relative">
+          <label className="mb-1.5 block text-sm font-medium text-gray-900">
+            Status
+          </label>
+
+          <button
+            type="button"
+            onClick={() => setStatusOpen(!statusOpen)}
+            className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+          >
+            <span>
+              {filters.status
+                ? filters.status === "InProgress"
+                  ? "In Progress"
+                  : filters.status
+                : "All Statuses"}
+            </span>
+
+            <span className="text-gray-500">▾</span>
+          </button>
+
+          {statusOpen && (
+            <div className="absolute left-0 right-0 z-20 mt-1 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+              <button
+                type="button"
+                onClick={() => {
+                  onChange({
+                    ...filters,
+                    status: "",
+                  });
+                  setStatusOpen(false);
+                }}
+                className={`block w-full cursor-pointer px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
+                  !filters.status
+                    ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
+                    : "text-gray-900"
+                }`}
+              >
+                All Statuses
+              </button>
+
+              {statusOptions.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => {
+                    onChange({
+                      ...filters,
+                      status: option,
+                    });
+                    setStatusOpen(false);
+                  }}
+                  className={`block w-full cursor-pointer px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
+                    filters.status === option
+                      ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
+                      : "text-gray-900"
+                  }`}
+                >
+                  {option === "InProgress" ? "In Progress" : option}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Manager Filter */}
+        <div ref={managerRef} className="relative">
+          <label className="mb-1.5 block text-sm font-medium text-gray-900">
+            Manager
+          </label>
+
+          <button
+            type="button"
+            onClick={() => setManagerOpen(!managerOpen)}
+            className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+          >
+            <span className="truncate">
+              {selectedManager ? selectedManager.name : filters.manager || "All Managers"}
+            </span>
+
+            <span className="text-gray-500">▾</span>
+          </button>
+
+          {managerOpen && (
+            <div className="absolute left-0 right-0 z-20 mt-1 max-h-56 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+              <button
+                type="button"
+                onClick={() => {
+                  onChange({
+                    ...filters,
+                    manager: "",
+                  });
+                  setManagerOpen(false);
+                }}
+                className="block w-full cursor-pointer px-4 py-2.5 text-left text-gray-900 transition hover:bg-[#F9DADA] hover:text-[#8B2424]"
+              >
+                All Managers
+              </button>
+
+              {managers.map((m) => (
+                <button
+                  key={m._id}
+                  type="button"
+                  onClick={() => {
+                    onChange({
+                      ...filters,
+                      manager: m._id,
+                    });
+                    setManagerOpen(false);
+                  }}
+                  className={`block w-full cursor-pointer px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
+                    filters.manager === m._id
+                      ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
+                      : "text-gray-900"
+                  }`}
+                >
+                  {m.name} {m.role ? `(${m.role})` : ""}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* City */}
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-gray-900">
+            City
+          </label>
+
+          <input
+            type="text"
+            value={filters.city ?? ""}
+            onChange={(event) =>
+              onChange({
+                ...filters,
+                city: event.target.value,
+              })
+            }
+            placeholder="Enter city"
+            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder:text-gray-500 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
+          />
+        </div>
+
+        {/* Start Date */}
+        <CustomDatePicker
+          label="Start Date"
+          value={filters.startDate ?? ""}
+          onChange={(value) =>
             onChange({
               ...filters,
-              status: val,
+              startDate: value,
             })
           }
         />
 
-        {/* 2. Manager Filter */}
-        <SearchableFilterDropdown
-          label="Manager"
-          value={filters.manager ?? ""}
-          displayValue={selectedManager ? selectedManager.name : (filters.manager || "All Managers")}
-          allOptionLabel="All Managers"
-          searchPlaceholder="Search manager..."
-          emptyMessage="No managers found"
-          options={managerOptions}
-          onChange={(val) =>
+        {/* End Date */}
+        <CustomDatePicker
+          label="End Date"
+          value={filters.endDate ?? ""}
+          onChange={(value) =>
             onChange({
               ...filters,
-              manager: val,
-            })
-          }
-        />
-
-        {/* 3. State Filter */}
-        <SearchableFilterDropdown
-          label="State"
-          value={filters.state ?? ""}
-          displayValue={filters.state || "All States"}
-          allOptionLabel="All States"
-          searchPlaceholder="Search state..."
-          emptyMessage="No states found in campaigns"
-          options={stateDropdownOptions}
-          onChange={handleStateChange}
-        />
-
-        {/* 4. City Filter (Dependent on State!) */}
-        <SearchableFilterDropdown
-          label="City"
-          value={filters.city ?? ""}
-          displayValue={filters.city || "All Cities"}
-          allOptionLabel="All Cities"
-          disabled={!filters.state}
-          disabledPlaceholder="Select State First"
-          searchPlaceholder="Search city..."
-          emptyMessage={
-            filters.state
-              ? "No cities found for selected state"
-              : "Select State First"
-          }
-          options={cityDropdownOptions}
-          onChange={(val) =>
-            onChange({
-              ...filters,
-              city: val,
+              endDate: value,
             })
           }
         />
@@ -243,265 +324,164 @@ export default function CampaignFilters({
   );
 }
 
-/* ========================================================================== */
-/* Reusable Searchable Dropdown for Filters                                  */
-/* ========================================================================== */
+/* =========================
+   Custom Date Picker
+========================= */
 
-interface DropdownOption {
-  label: string;
-  value: string;
-  sublabel?: string;
-}
-
-interface SearchableFilterDropdownProps {
-  label: string;
-  value: string;
-  displayValue: string;
-  allOptionLabel: string;
-  searchable?: boolean;
-  searchPlaceholder?: string;
-  emptyMessage?: string;
-  disabled?: boolean;
-  disabledPlaceholder?: string;
-  options: DropdownOption[];
-  onChange: (value: string) => void;
-}
-
-function SearchableFilterDropdown({
+function CustomDatePicker({
   label,
   value,
-  displayValue,
-  allOptionLabel,
-  searchable = true,
-  searchPlaceholder = "Search...",
-  emptyMessage = "No options available",
-  disabled = false,
-  disabledPlaceholder = "Select option",
-  options,
   onChange,
-}: SearchableFilterDropdownProps) {
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const [date, setDate] = useState(
+    value ? new Date(`${value}T00:00:00`) : new Date(),
+  );
+
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (value) {
+      setDate(new Date(`${value}T00:00:00`));
+    }
+  }, [value]);
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
       if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
+        pickerRef.current &&
+        !pickerRef.current.contains(event.target as Node)
       ) {
         setOpen(false);
-        setSearch("");
-      }
-    };
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-        setSearch("");
       }
     };
 
     document.addEventListener("mousedown", handleOutsideClick);
-    document.addEventListener("keydown", handleEscape);
 
     return () => {
       document.removeEventListener("mousedown", handleOutsideClick);
-      document.removeEventListener("keydown", handleEscape);
     };
   }, []);
 
-  useEffect(() => {
-    if (open && searchInputRef.current) {
-      setTimeout(() => {
-        searchInputRef.current?.focus();
-      }, 50);
-    }
-  }, [open]);
+  const year = date.getFullYear();
+  const month = date.getMonth();
 
-  // If disabled while open, close it
-  useEffect(() => {
-    if (disabled && open) {
-      setOpen(false);
-      setSearch("");
-    }
-  }, [disabled, open]);
+  const daysInMonth = new Date(
+    year,
+    month + 1,
+    0,
+  ).getDate();
 
-  const filteredOptions = useMemo(() => {
-    if (!search.trim()) return options;
-    const term = search.toLowerCase().trim();
-    return options.filter(
-      (opt) =>
-        opt.label.toLowerCase().includes(term) ||
-        (opt.sublabel && opt.sublabel.toLowerCase().includes(term))
-    );
-  }, [options, search]);
+  const firstDay = new Date(
+    year,
+    month,
+    1,
+  ).getDay();
 
-  const hasSelectedValue = Boolean(value);
+  const formatDate = (day: number) =>
+    `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+
+  const selectDate = (day: number) => {
+    const newDate = new Date(year, month, day);
+
+    setDate(newDate);
+    onChange(formatDate(day));
+    setOpen(false);
+  };
 
   return (
-    <div ref={dropdownRef} className="relative">
+    <div ref={pickerRef} className="relative">
       <label className="mb-1.5 block text-sm font-medium text-gray-900">
         {label}
       </label>
 
-      {/* Trigger Button */}
+      {/* Date Button */}
       <button
         type="button"
-        disabled={disabled}
-        onClick={() => {
-          if (!disabled) {
-            setOpen((prev) => !prev);
-            setSearch("");
-          }
-        }}
-        className={`flex w-full items-center justify-between rounded-lg border px-4 py-2.5 text-left text-sm outline-none transition ${
-          disabled
-            ? "cursor-not-allowed border-gray-200 bg-[#F9FAFB] text-gray-400"
-            : hasSelectedValue
-              ? "cursor-pointer border-[#8B2424] bg-white font-medium text-gray-900 hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
-              : "cursor-pointer border-gray-300 bg-white text-gray-700 hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
-        }`}
+        onClick={() => setOpen(!open)}
+        className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
       >
-        <span className="truncate pr-2">
-          {disabled ? disabledPlaceholder : displayValue}
+        <span className={value ? "text-gray-900" : "text-gray-500"}>
+          {value || "Select date"}
         </span>
 
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          {!disabled && hasSelectedValue && (
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={(e) => {
-                e.stopPropagation();
-                onChange("");
-                setOpen(false);
-                setSearch("");
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.stopPropagation();
-                  onChange("");
-                  setOpen(false);
-                  setSearch("");
-                }
-              }}
-              className="flex h-4 w-4 items-center justify-center rounded-full text-xs text-gray-400 hover:bg-gray-200 hover:text-gray-700"
-              title="Clear"
-            >
-              ✕
-            </span>
-          )}
-
-          <span
-            className={`text-xs transition-transform duration-200 ${
-              disabled ? "text-gray-300" : "text-gray-500"
-            } ${open ? "rotate-180" : ""}`}
-          >
-            ▾
-          </span>
-        </div>
+        <span className="text-[#8B2424]">📅</span>
       </button>
 
-      {/* Dropdown Menu */}
-      {!disabled && open && (
-        <div className="absolute left-0 right-0 z-30 mt-1 max-h-64 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
-          {/* Search Input */}
-          {searchable && (
-            <div className="sticky top-0 z-10 border-b border-gray-100 bg-gray-50/90 p-2 backdrop-blur-sm">
-              <div className="relative">
-                <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5 text-xs text-gray-400">
-                  🔍
-                </span>
-
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder={searchPlaceholder}
-                  className="w-full rounded-md border border-gray-200 bg-white py-1.5 pl-8 pr-7 text-xs text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-[#8B2424] focus:ring-1 focus:ring-[#8B2424]"
-                  onClick={(e) => e.stopPropagation()}
-                />
-
-                {search && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSearch("");
-                      searchInputRef.current?.focus();
-                    }}
-                    className="absolute inset-y-0 right-0 flex items-center pr-2 text-xs text-gray-400 hover:text-gray-600"
-                    title="Clear search text"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Options List */}
-          <div className="max-h-52 overflow-y-auto divide-y divide-gray-50">
-            {/* "All" Option */}
+      {/* Calendar */}
+      {open && (
+        <div className="absolute left-0 top-full z-30 mt-2 w-[240px] rounded-xl border border-gray-200 bg-white p-2.5 shadow-xl">
+          {/* Month Navigation */}
+          <div className="mb-2 flex items-center justify-between">
             <button
               type="button"
-              onClick={() => {
-                onChange("");
-                setOpen(false);
-                setSearch("");
-              }}
-              className={`block w-full cursor-pointer px-4 py-2.5 text-left text-xs transition ${
-                !hasSelectedValue
-                  ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
-                  : "text-gray-900 hover:bg-[#F9DADA] hover:text-[#8B2424]"
-              }`}
+              onClick={() =>
+                setDate(new Date(year, month - 1, 1))
+              }
+              className="rounded-lg px-2 py-1 text-sm text-[#8B2424] transition hover:bg-[#F9DADA]"
             >
-              {allOptionLabel}
+              ‹
             </button>
 
-            {/* Filtered Options */}
-            {filteredOptions.map((opt) => {
-              const isSelected = opt.value === value;
+            <span className="text-xs font-bold text-gray-900">
+              {date.toLocaleString("en-IN", {
+                month: "long",
+                year: "numeric",
+              })}
+            </span>
+
+            <button
+              type="button"
+              onClick={() =>
+                setDate(new Date(year, month + 1, 1))
+              }
+              className="rounded-lg px-2 py-1 text-sm text-[#8B2424] transition hover:bg-[#F9DADA]"
+            >
+              ›
+            </button>
+          </div>
+
+          {/* Week Days */}
+          <div className="mb-1 grid grid-cols-7 gap-0.5 text-center text-[10px] font-semibold text-gray-500">
+            {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map(
+              (day) => (
+                <span key={day}>{day}</span>
+              ),
+            )}
+          </div>
+
+          {/* Dates */}
+          <div className="grid grid-cols-7 gap-0.5">
+            {Array.from({ length: firstDay }).map((_, index) => (
+              <span key={`empty-${index}`} className="h-7" />
+            ))}
+
+            {Array.from(
+              { length: daysInMonth },
+              (_, index) => index + 1,
+            ).map((day) => {
+              const selected = value === formatDate(day);
+
               return (
                 <button
-                  key={opt.value}
+                  key={day}
                   type="button"
-                  onClick={() => {
-                    onChange(opt.value);
-                    setOpen(false);
-                    setSearch("");
-                  }}
-                  className={`block w-full cursor-pointer px-4 py-2.5 text-left text-xs transition ${
-                    isSelected
-                      ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
-                      : "text-gray-900 hover:bg-[#F9DADA] hover:text-[#8B2424]"
+                  onClick={() => selectDate(day)}
+                  className={`h-7 rounded-md text-xs font-medium transition ${
+                    selected
+                      ? "bg-[#8B2424] text-[#F9DADA]"
+                      : "text-gray-700 hover:bg-[#F9DADA] hover:text-[#8B2424]"
                   }`}
                 >
-                  <span className="font-medium">{opt.label}</span>
-                  {opt.sublabel && (
-                    <span className="ml-1.5 text-gray-400 text-[11px]">
-                      {opt.sublabel}
-                    </span>
-                  )}
+                  {day}
                 </button>
               );
             })}
-
-            {/* Empty States */}
-            {options.length === 0 && (
-              <div className="px-4 py-3 text-center text-xs text-gray-500">
-                {emptyMessage}
-              </div>
-            )}
-
-            {options.length > 0 && filteredOptions.length === 0 && (
-              <div className="px-4 py-3 text-center text-xs text-gray-500">
-                No matching options found
-              </div>
-            )}
           </div>
         </div>
       )}

@@ -15,6 +15,7 @@
     "start": "node dist/server.js",
     "seed": "tsx src/scripts/seed.ts",
     "cleanup:campaigns": "tsx src/scripts/cleanup-campaigns.ts",
+    "import:leads": "tsx src/scripts/import-leads-csv.ts",
     "test": "tsx --test --test-concurrency=1 \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "typecheck:test": "tsc -p tsconfig.test.json --noEmit",

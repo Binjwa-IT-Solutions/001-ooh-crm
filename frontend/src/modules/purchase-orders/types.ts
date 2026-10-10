@@ -11,35 +11,9 @@ export interface PurchaseOrderLineItem {
   spaceType?: string;
   from?: string;
   to?: string;
-  ratePerDay?: number;
+  negotiatedRatePerDay?: number;
   days?: number;
   amount?: number;
-
-  item?: string;
-  service?: string;
-  description?: string;
-  hsn?: string;
-  qty?: number;
-  unit?: string;
-  rate?: number;
-  discount?: number;
-  tax?: number;
-}
-
-export interface BankDetails {
-  bankName?: string;
-  personName?: string;
-  accountNumber?: string;
-  ifsc?: string;
-  branch?: string;
-}
-
-export interface CompanyProfile {
-  companyName?: string;
-  companyAddress?: string;
-  companyGstin?: string;
-  companyEmail?: string;
-  companyPhone?: string;
 }
 
 export interface PurchaseOrder {
@@ -58,22 +32,18 @@ export interface PurchaseOrder {
         endDate?: string;
         status?: string;
       };
-  campaignName?: string;
-  vendorId?:
+  vendorId:
     | string
     | {
         _id: string;
         name: string;
         state?: string;
         city?: string;
-        address?: string;
-        gstin?: string;
         status?: string;
         contactPerson?: string;
         mobile?: string;
         email?: string;
       };
-  vendorName?: string;
 
   city?: string;
   spaceType?: string;
@@ -91,35 +61,6 @@ export interface PurchaseOrder {
   negotiationRounds?: number;
   negotiationNotes?: string;
   approvedBy?: string;
-
-  poDate?: string;
-  placeOfSupply?: string;
-  vendorAddress?: string;
-  vendorGstin?: string;
-  subtotal?: number;
-  gstRate?: number;
-  gstAmount?: number;
-  companyName?: string;
-  companyAddress?: string;
-  companyGstin?: string;
-  companyEmail?: string;
-  companyPhone?: string;
-  notes?: string;
-  termsAndConditions?: string[];
-  bankDetails?: BankDetails | null;
-
-  // Payment Tracking
-  paymentTerms?: string;
-  dueDate?: string;
-  paymentMethod?: string;
-  gstApplicable?: boolean;
-  accountsStatus?: string;
-  accountsComments?: string;
-  invoiceNumber?: string;
-  invoiceDate?: string;
-  paymentStatus?: "Pending" | "Partial" | "Paid";
-  paidAmount?: number;
-  paymentDate?: string;
 
   lineItems: PurchaseOrderLineItem[];
   totalAmount: number;
@@ -131,27 +72,24 @@ export interface PurchaseOrder {
 }
 
 export interface PurchaseOrderFormData {
-  poNumber?: string;
   pricingId?: string;
-  vendorId?: string;
-  vendorName?: string;
+  vendorId: string;
   campaignId?: string;
-  campaignName?: string;
 
-  city?: string;
-  spaceType?: string;
+  city: string;
+  spaceType: string;
 
-  cardRate?: number;
-  negotiatedRate?: number;
+  cardRate: number;
+  negotiatedRate: number;
   discountGiven?: number;
   discountPercent?: number;
 
-  companyCostPrice?: number;
-  companySellingPrice?: number;
+  companyCostPrice: number;
+  companySellingPrice: number;
   profitPerUnit?: number;
   profitMarginPercent?: number;
 
-  durationDays?: number;
+  durationDays: number;
   validityFrom?: string;
   validityTo?: string;
 
@@ -159,38 +97,11 @@ export interface PurchaseOrderFormData {
   negotiationNotes?: string;
   approvedBy?: string;
 
-  poDate?: string;
-  placeOfSupply?: string;
-  vendorAddress?: string;
-  vendorGstin?: string;
-  subtotal?: number;
-  gstRate?: number;
-  gstAmount?: number;
-  companyName?: string;
-  companyAddress?: string;
-  companyGstin?: string;
-  companyEmail?: string;
-  companyPhone?: string;
-  notes?: string;
-  termsAndConditions?: string[];
-  bankDetails?: BankDetails | null;
-  status?: PurchaseOrderStatus;
-
   totalAmount?: number;
-  lineItems?: PurchaseOrderLineItem[];
-}
-
-export interface PaymentTrackingData {
-  invoiceNumber?: string;
-  invoiceDate?: string;
-  paidAmount?: number;
-  paymentDate?: string;
-  paymentTerms?: string;
-  dueDate?: string;
-  paymentMethod?: string;
-  gstApplicable?: boolean;
-  accountsStatus?: string;
-  accountsComments?: string;
+  lineItems?: Omit<
+    PurchaseOrderLineItem,
+    "amount" | "days"
+  >[];
 }
 
 export interface CampaignOption {
@@ -208,8 +119,6 @@ export interface VendorOption {
   name: string;
   state?: string;
   city?: string;
-  address?: string;
-  gstin?: string;
   status?: string;
   contactPerson?: string;
   mobile?: string;

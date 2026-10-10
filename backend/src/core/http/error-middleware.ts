@@ -63,6 +63,20 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
     return;
   }
 
+  // Invalid ObjectId / BSON error
+  if (
+    err instanceof mongoose.Error.CastError ||
+    (typeof err === 'object' && err !== null && (err as { name?: string }).name === 'BSONError')
+  ) {
+    res.status(400).json({
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid ID format',
+      },
+    });
+    return;
+  }
+
   console.error('[unhandled error]', err);
 
   res.status(500).json({

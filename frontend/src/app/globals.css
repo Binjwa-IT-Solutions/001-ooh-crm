@@ -93,13 +93,66 @@ select option:checked {
   font-weight: 600;
 }
 
-/* Remove number input stepper / spin buttons (amount badhane/ghatane wale arrow) */
-input[type='number']::-webkit-inner-spin-button,
-input[type='number']::-webkit-outer-spin-button {
-  -webkit-appearance: none !important;
-  margin: 0 !important;
-}
-input[type='number'] {
-  -moz-appearance: textfield !important;
-  appearance: textfield !important;
+/* Document & Print Optimizations */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 15mm;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Suppress dashboard chrome in print */
+  header,
+  aside,
+  nav,
+  .print\:hidden,
+  [data-print-hidden='true'] {
+    display: none !important;
+    height: 0 !important;
+    width: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* Reset layout constraints for full-width print */
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .invoice-document {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  tr,
+  .invoice-row {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  /* Prevent page cutoff on scrollable app containers */
+  html, body, .overflow-auto, .overflow-y-auto, .overflow-x-auto {
+    overflow: visible !important;
+    height: auto !important;
+  }
 }

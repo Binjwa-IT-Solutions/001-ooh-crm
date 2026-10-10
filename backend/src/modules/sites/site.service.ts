@@ -237,10 +237,7 @@ export async function createSite(
       data.salesPersonName,
 
     salesPersonContact:
-      data.salesPersonContact || data.vendorContact || "",
-
-    vendorContact:
-      data.vendorContact || data.salesPersonContact || "",
+      data.salesPersonContact,
 
     state:
       data.state.trim(),
@@ -272,7 +269,7 @@ export async function createSite(
 
     status:
       data.status ??
-      ATRStatus.ON_CALL,
+      ATRStatus.DRAFT,
 
     deletedAt: null,
   });
@@ -391,12 +388,6 @@ export async function getSites(
       },
       {
         salesPersonContact: {
-          $regex: search,
-          $options: "i",
-        },
-      },
-      {
-        vendorContact: {
           $regex: search,
           $options: "i",
         },
@@ -567,22 +558,6 @@ export async function updateSite(
     endDate,
     duration,
   };
-
-  if (
-    data.vendorContact !== undefined &&
-    data.salesPersonContact === undefined
-  ) {
-    updateData.salesPersonContact =
-      data.vendorContact;
-  }
-
-  if (
-    data.salesPersonContact !== undefined &&
-    data.vendorContact === undefined
-  ) {
-    updateData.vendorContact =
-      data.salesPersonContact;
-  }
 
   /* ATR NO CANNOT CHANGE */
 
@@ -835,10 +810,7 @@ function createSiteDataFromCsv(
       row.salesPersonName,
 
     salesPersonContact:
-      row.salesPersonContact || row.vendorContact,
-
-    vendorContact:
-      row.vendorContact || row.salesPersonContact,
+      row.salesPersonContact,
 
     state:
       row.state,
@@ -870,7 +842,7 @@ function createSiteDataFromCsv(
 
     status:
       row.status ||
-      ATRStatus.ON_CALL,
+      ATRStatus.DRAFT,
   };
 }
 
@@ -1087,7 +1059,7 @@ export async function getSitesByVendor(
     deletedAt: null,
   })
     .select(
-      "atrNo clientName salesPersonName salesPersonContact vendorContact state city location mediaType quantity startDate endDate duration vendorName availability status"
+      "atrNo clientName salesPersonName salesPersonContact state city location mediaType quantity startDate endDate duration vendorName availability status"
     )
     .sort({
       atrNo: 1,

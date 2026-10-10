@@ -528,6 +528,10 @@ function QuotationsContent() {
           quotation={activeQuote}
           onBack={() => setCurrentStep(3)}
           onNext={() => setCurrentStep(5)}
+          onRefresh={(updated) => {
+            setActiveQuote(updated);
+            loadQuotations();
+          }}
         />
       )}
 

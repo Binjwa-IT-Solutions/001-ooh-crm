@@ -1,5 +1,6 @@
-import { redirect } from "next/navigation";
+import { redirect } from 'next/navigation';
 
 export default function NewPurchaseOrderPage() {
-  redirect("/purchase-orders?step=2");
+  redirect('/purchase-orders');
 }
+

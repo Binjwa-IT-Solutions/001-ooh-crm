@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it } from 'node:test';
 import { Types } from 'mongoose';
 
-import { connectDatabase, disconnectDatabase } from '../../core/db/connect.js';
+import { connectDatabase, disconnectDatabase, assertTestDatabase } from '../../core/db/connect.js';
 import { type RequestContext } from '../../core/context.js';
 import { Employee } from './employees.model.js';
 import { Team } from './team.model.js';
@@ -18,7 +18,7 @@ describe('Multi-Team Management under Manager & Member CRM Summary', () => {
   let mgrCtx: RequestContext;
 
   before(async () => {
-    await connectDatabase();
+    await connectDatabase({ isTestConnection: true });
   });
 
   after(async () => {
@@ -26,6 +26,7 @@ describe('Multi-Team Management under Manager & Member CRM Summary', () => {
   });
 
   beforeEach(async () => {
+    assertTestDatabase();
     await Employee.deleteMany({});
     await Team.deleteMany({});
     await AuthUser.deleteMany({});

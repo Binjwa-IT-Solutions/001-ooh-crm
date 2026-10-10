@@ -146,7 +146,6 @@ export default function SitesPage() {
           site.clientName,
           site.salesPersonName,
           site.salesPersonContact,
-          site.vendorContact,
           site.state,
           site.city,
           site.location,
@@ -300,7 +299,28 @@ export default function SitesPage() {
     setSelectedSite(null);
   };
 
+  /* =========================
+     SUMMARY
+     ========================= */
 
+  const approvedCount =
+    sites.filter(
+      (site) =>
+        site.status === "Approved"
+    ).length;
+
+  const availableCount =
+    sites.filter(
+      (site) =>
+        site.availability ===
+        "Available"
+    ).length;
+
+  const bookedCount =
+    sites.filter(
+      (site) =>
+        site.availability === "Booked"
+    ).length;
 
   /* =========================
      CLEAR FILTERS
@@ -365,9 +385,38 @@ export default function SitesPage() {
         </div>
       </div>
 
+      {/* SUMMARY */}
+
+      <div className="grid grid-cols-1 gap-4 px-6 py-5 sm:grid-cols-2 lg:grid-cols-4">
+
+        <SummaryCard
+          label="Total ATR"
+          value={sites.length}
+          helper="Registered ATR plans"
+        />
+
+        <SummaryCard
+          label="Approved"
+          value={approvedCount}
+          helper="Currently approved"
+        />
+
+        <SummaryCard
+          label="Available"
+          value={availableCount}
+          helper="Available"
+        />
+
+        <SummaryCard
+          label="Booked"
+          value={bookedCount}
+          helper="Currently booked"
+        />
+      </div>
+
       {/* FILTERS */}
 
-      <section className="mx-6 mt-6 rounded-xl border border-[#E8E8EC] bg-white">
+      <section className="mx-6 rounded-xl border border-[#E8E8EC] bg-white">
 
         <div className="border-b border-[#E8E8EC] px-5 py-4">
           <h2 className="text-sm font-semibold text-[#1F2937]">
@@ -524,6 +573,32 @@ export default function SitesPage() {
           onSubmit={handleSubmit}
         />
       )}
+    </div>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+  helper,
+}: {
+  label: string;
+  value: number;
+  helper: string;
+}) {
+  return (
+    <div className="rounded-xl border border-[#E8E8EC] bg-white p-5">
+      <p className="text-xs font-medium text-[#667085]">
+        {label}
+      </p>
+
+      <p className="mt-2 text-2xl font-semibold text-[#1F2937]">
+        {value}
+      </p>
+
+      <p className="mt-1 text-xs text-[#98A2B3]">
+        {helper}
+      </p>
     </div>
   );
 }

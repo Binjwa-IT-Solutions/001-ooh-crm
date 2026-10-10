@@ -65,6 +65,7 @@ export class QuotationsController {
       req.params.id as string,
       input.sentTo,
       input.message,
+      input.channel,
       req.ctx!,
     );
     res.status(200).json(result);
