@@ -10,6 +10,9 @@ import {
   Candidate,
   CandidateStatus,
   CandidateListQuery,
+  MonthlyRegisterRow,
+  AbsenceRow,
+  OvertimeRow,
 } from './types';
 
 export const attendanceApi = {
@@ -153,12 +156,19 @@ export const reportsApi = {
   getMonthlyRegister: async (fromMonth: number, fromYear: number, toMonth?: number, toYear?: number) => {
     const tm = toMonth ?? fromMonth;
     const ty = toYear ?? fromYear;
-    return await api.get<unknown[]>(
+    return await api.get<MonthlyRegisterRow[]>(
       `/api/reports/attendance/monthly?fromMonth=${fromMonth}&fromYear=${fromYear}&toMonth=${tm}&toYear=${ty}`
     );
   },
   getAbsenceReport: async (fromDate: string, toDate: string) => {
-    return await api.get<unknown[]>(`/api/reports/attendance/absence?fromDate=${fromDate}&toDate=${toDate}`);
+    return await api.get<AbsenceRow[]>(`/api/reports/attendance/absence?fromDate=${fromDate}&toDate=${toDate}`);
+  },
+  getOvertimeReport: async (fromMonth: number, fromYear: number, toMonth?: number, toYear?: number, minHours = 0) => {
+    const tm = toMonth ?? fromMonth;
+    const ty = toYear ?? fromYear;
+    return await api.get<OvertimeRow[]>(
+      `/api/reports/attendance/overtime?fromMonth=${fromMonth}&fromYear=${fromYear}&toMonth=${tm}&toYear=${ty}&minHours=${minHours}`
+    );
   },
   exportReportUrl: (params: Record<string, string | number | undefined>) => {
     const clean: Record<string, string> = {};

@@ -1,8 +1,10 @@
+// @ts-ignore
 import assert from 'node:assert/strict';
+// @ts-ignore
 import test, { before, after } from 'node:test';
 import mongoose, { Types } from 'mongoose';
 
-import { connectDatabase, disconnectDatabase } from '../../../core/db/connect.js';
+import { connectDatabase, disconnectDatabase, assertTestDatabase } from '../../../core/db/connect.js';
 import type { RequestContext } from '../../../core/context.js';
 import Holiday from '../models/holiday.model.js';
 import { holidayService } from './holiday.service.js';
@@ -32,7 +34,8 @@ const employeeCtx = {
 } as unknown as RequestContext;
 
 before(async () => {
-  await connectDatabase();
+  await connectDatabase({ isTestConnection: true });
+  assertTestDatabase();
 
   // Mock startSession to support standalone MongoDB environments without replica sets
   const originalStartSession = mongoose.startSession;
@@ -40,8 +43,8 @@ before(async () => {
   mongoose.startSession = async (options?: any) => {
     const session = await originalStartSession.call(mongoose, options);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    session.withTransaction = async (fn: () => Promise<any>) => {
-      return fn();
+    (session.withTransaction as any) = async (fn: any) => {
+      return fn(session);
     };
     return session;
   };
@@ -94,6 +97,7 @@ before(async () => {
 });
 
 after(async () => {
+  assertTestDatabase();
   await Holiday.deleteMany({ name: { $regex: /Test|Modified/i } });
   if (employeeId) {
     await LeaveRequest.deleteMany({ employeeId });
@@ -132,7 +136,7 @@ test('Holiday CRUD operations', async () => {
   const list = await holidayService.list(employeeCtx);
   const found = list.find((h) => h.id === holiday.id);
   assert.ok(found);
-  assert.equal(found.name, 'Independence Day Test');
+  assert.equal(found?.name, 'Independence Day Test');
 
   // Update
   const updated = await holidayService.update(

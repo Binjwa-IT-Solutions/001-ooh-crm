@@ -2,6 +2,7 @@
 
 import { AppShell } from '@/shared/layout/app-shell';
 import { RequireAuth } from '@/shared/auth/require-auth';
+import { ProfileCompletionGuard } from '@/modules/employees/components/profile-completion-guard';
 
 export default function AuthenticatedLayout({
   children,
@@ -10,7 +11,9 @@ export default function AuthenticatedLayout({
 }) {
   return (
     <RequireAuth>
-      <AppShell>{children}</AppShell>
+      <ProfileCompletionGuard>
+        <AppShell>{children}</AppShell>
+      </ProfileCompletionGuard>
     </RequireAuth>
   );
 }

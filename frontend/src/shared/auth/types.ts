@@ -19,6 +19,8 @@ export interface AuthUser {
   phone?: string;
   designation?: string;
   gender?: 'Male' | 'Female' | null;
+  isProfileComplete?: boolean;
+  employeeId?: string | null;
 }
 
 /** Returned by POST /api/auth/login — step 1 of the two-step sign-in. */

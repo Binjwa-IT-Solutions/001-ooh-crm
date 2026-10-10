@@ -77,8 +77,48 @@ function officeLocations(): OfficeLocation[] {
   });
 }
 
-const nodeEnv = process.env.NODE_ENV ?? 'development';
+export function deriveTestMongoUri(baseUri: string): string {
+  if (process.env.MONGO_URI_TEST && process.env.MONGO_URI_TEST.trim() !== '') {
+    return process.env.MONGO_URI_TEST.trim();
+  }
+
+  try {
+    const parsed = new URL(baseUri);
+    let pathname = parsed.pathname.replace(/^\//, '');
+    if (!pathname || pathname === '') {
+      pathname = 'media-octus-crm-test';
+    } else if (!pathname.endsWith('-test')) {
+      pathname = `${pathname}-test`;
+    }
+    parsed.pathname = `/${pathname}`;
+    return parsed.toString();
+  } catch {
+    const qIndex = baseUri.indexOf('?');
+    const base = qIndex !== -1 ? baseUri.slice(0, qIndex) : baseUri;
+    const query = qIndex !== -1 ? baseUri.slice(qIndex) : '';
+    const lastSlash = base.lastIndexOf('/');
+    if (lastSlash !== -1) {
+      const dbName = base.slice(lastSlash + 1);
+      const newDb = dbName.endsWith('-test') ? dbName : (dbName ? `${dbName}-test` : 'media-octus-crm-test');
+      return `${base.slice(0, lastSlash + 1)}${newDb}${query}`;
+    }
+    return `${base}/media-octus-crm-test${query}`;
+  }
+}
+
+const isTestRun =
+  process.env.NODE_ENV === 'test' ||
+  process.execArgv.some((arg) => arg.includes('test')) ||
+  process.argv.some((arg) => arg.includes('--test') || arg.includes('.test.'));
+
+const nodeEnv = process.env.NODE_ENV ?? (isTestRun ? 'test' : 'development');
 const isProduction = nodeEnv === 'production';
+const isTest = nodeEnv === 'test' || isTestRun;
+
+const baseMongoUri = required('MONGO_URI', 'mongodb://localhost:27017/media-octus-crm?retryWrites=false');
+const testMongoUri = deriveTestMongoUri(baseMongoUri);
+const activeMongoUri = isTest ? testMongoUri : baseMongoUri;
+
 const mfaEncryptionKey = required(
   'MFA_ENCRYPTION_KEY',
   'd3a6c88f29e2b4a1d3a6c88f29e2b4a1d3a6c88f29e2b4a1d3a6c88f29e2b4a1',
@@ -91,6 +131,7 @@ if (!/^[0-9a-fA-F]{64}$/.test(mfaEncryptionKey)) {
 export const config = {
   nodeEnv,
   isProduction,
+  isTest,
   port: num('PORT', 5000),
   security: {
     locationChangeRadiusMeters: Math.max(100, num('LOCATION_CHANGE_RADIUS_METERS', 1000)),
@@ -100,7 +141,9 @@ export const config = {
     requireAccurateLocation: bool('LOCATION_REQUIRED', false),
   },
 
-  mongoUri: required('MONGO_URI', 'mongodb://localhost:27017/media-octus-crm?retryWrites=false'),
+  mongoUri: activeMongoUri,
+  mongoBaseUri: baseMongoUri,
+  mongoTestUri: testMongoUri,
 
   cors: {
     // Comma-separated list. "*" allows everything (fine for local dev only).
@@ -184,6 +227,11 @@ export const config = {
   audit: {
     /** Turn the automatic mutation log off only for a specific debugging session. */
     enabled: bool('AUDIT_ENABLED', true),
+  },
+
+  pythonChatbot: {
+    url: process.env.PYTHON_CHATBOT_URL ?? 'http://127.0.0.1:8000',
+    timeoutMs: num('PYTHON_CHATBOT_TIMEOUT_MS', 60000),
   },
 } as const;
 

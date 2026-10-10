@@ -16,14 +16,7 @@ export enum MediaType {
 }
 
 export enum AvailabilityStatus {
-  PLAN_RECEIVED = "Plan Received",
-  ON_BOARDING = "On Boarding",
-  MEDIA_BOOKING = "Media Booking",
-  NEGOTIATION = "Negotiation",
   AVAILABLE = "Available",
-  REQUEST_SEND = "Request Send",
-  REQUEST = "Request",
-  SEND = "Send",
   BOOKED = "Booked",
 }
 
@@ -32,10 +25,6 @@ export enum ATRStatus {
   PENDING = "Pending",
   APPROVED = "Approved",
   REJECTED = "Rejected",
-  ON_CALL = "On Call",
-  ON_MAIL = "On Mail",
-  WHATSAPP = "WhatsApp",
-  MANUAL = "Manual",
 }
 
 export interface ISite extends Document {
@@ -44,7 +33,7 @@ export interface ISite extends Document {
   clientName: string;
 
   salesPersonName: string;
-  salesPersonContact?: string;
+  salesPersonContact: string;
 
   state: string;
   city: string;
@@ -59,10 +48,9 @@ export interface ISite extends Document {
   duration: number;
 
   vendorName: string;
-  vendorContact?: string;
 
-  availability: AvailabilityStatus | string;
-  status: ATRStatus | string;
+  availability: AvailabilityStatus;
+  status: ATRStatus;
 
   createdAt: Date;
   updatedAt: Date;
@@ -95,9 +83,8 @@ const siteSchema =
 
       salesPersonContact: {
         type: String,
-        required: false,
+        required: true,
         trim: true,
-        default: "",
       },
 
       state: {
@@ -129,7 +116,7 @@ const siteSchema =
       quantity: {
         type: Number,
         required: true,
-        min: 0,
+        min: 1,
       },
 
       startDate: {
@@ -154,21 +141,19 @@ const siteSchema =
         trim: true,
       },
 
-      vendorContact: {
-        type: String,
-        required: false,
-        trim: true,
-        default: "",
-      },
-
       availability: {
         type: String,
-        default: AvailabilityStatus.AVAILABLE,
+        enum: Object.values(
+          AvailabilityStatus
+        ),
+        default:
+          AvailabilityStatus.AVAILABLE,
       },
 
       status: {
         type: String,
-        default: ATRStatus.ON_CALL,
+        enum: Object.values(ATRStatus),
+        default: ATRStatus.DRAFT,
       },
 
       deletedAt: {

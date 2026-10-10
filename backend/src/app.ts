@@ -70,6 +70,18 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/profile', profileRoutes);
 
+import chatbotRoutes from './modules/chatbot/chatbot.routes.js';
+import { ChatbotController } from './modules/chatbot/chatbot.controller.js';
+import { requireAuth } from './core/auth/auth-middleware.js';
+import { asyncHandler } from './core/http/asyncHandler.js';
+app.use('/api/chatbot', chatbotRoutes);
+app.get('/charts/:filename', asyncHandler(ChatbotController.getChart));
+app.get('/api/conversations', requireAuth, asyncHandler(ChatbotController.listConversations));
+app.get('/api/conversations/:id', requireAuth, asyncHandler(ChatbotController.getConversation));
+app.delete('/api/conversations/:id', requireAuth, asyncHandler(ChatbotController.deleteConversation));
+app.post('/api/tool', requireAuth, asyncHandler(ChatbotController.executeTool));
+app.post('/api/chat', requireAuth, asyncHandler(ChatbotController.sendMessage));
+
 import { leadRoutes } from './modules/leads/leads.routes.js';
 
 import vendorRoutes from './modules/vendors/vendor.routes.js';
@@ -103,6 +115,9 @@ app.use('/api/purchase-orders', purchaseOrderRoutes);
 app.use('/api/proofs', proofRoutes);
 app.use('/api/quotations', quotationsRoutes);
 
+import financeRoutes from './modules/finance/routes/finance.routes.js';
+app.use('/api/finance', financeRoutes);
+
 //attendance & shift configs
 app.use('/api/attendance', attendanceRoutes);
 
@@ -122,6 +137,9 @@ app.use('/api/holidays', holidayRoutes);
 
 import candidateRoutes from './modules/candidates/candidates.routes.js';
 app.use('/api/candidates', candidateRoutes);
+
+import payrollRoutes from './modules/payroll/payroll.routes.js';
+app.use('/api/payroll', payrollRoutes);
 
 // 404 then the central error handler — both must stay last.
 app.use(notFoundHandler);

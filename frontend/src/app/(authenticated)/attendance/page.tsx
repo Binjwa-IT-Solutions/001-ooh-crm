@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Clock, Users, FileBarChart } from 'lucide-react';
 import { cx } from '@/shared/ui';
 import { useAuth } from '@/shared/auth/auth-context';
@@ -15,20 +15,39 @@ type TabType = 'my' | 'team' | 'reports';
 
 export default function AttendanceContainerPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { hasPermission } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabType>('my');
 
   const canViewTeam = hasPermission('attendance.view_team');
+  const canViewSelf = hasPermission('attendance.self');
 
-  // Tab configuration
+  // Determine initial tab from query param or user permission
+  const paramTab = searchParams.get('tab');
+  const initialTab: TabType = (paramTab === 'my' || paramTab === 'reports' || paramTab === 'team')
+    ? paramTab
+    : (paramTab === 'metrics' ? 'team' : (canViewSelf ? 'my' : 'team'));
+
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab);
+
+  // Sync state if query param changes
+  useEffect(() => {
+    if (paramTab === 'my' || paramTab === 'reports' || paramTab === 'team') {
+      setActiveTab(paramTab);
+    } else if (paramTab === 'metrics') {
+      setActiveTab('team');
+    }
+  }, [paramTab]);
+
+  // Tab configuration: [My Attendance] [Attendance Metrics] [Attendance Reports]
   const tabs = [
-    { id: 'my', label: 'My Attendance', icon: Clock, show: hasPermission('attendance.self') },
-    { id: 'team', label: 'Team Attendance', icon: Users, show: canViewTeam },
+    { id: 'my', label: 'My Attendance', icon: Clock, show: canViewSelf },
+    { id: 'team', label: 'Attendance Metrics', icon: Users, show: canViewTeam },
     { id: 'reports', label: 'Attendance Reports', icon: FileBarChart, show: canViewTeam },
   ].filter(tab => tab.show);
 
-  // If the user doesn't have permission for the active tab (e.g. they somehow got there), default to the first available tab
+  // If the user doesn't have permission for the active tab, default to the first available tab
   const currentTab = tabs.find(t => t.id === activeTab) ? activeTab : tabs[0]?.id;
+
 
   const currentTabDef = tabs.find(t => t.id === currentTab);
   usePageSubTitle(currentTabDef ? currentTabDef.label : null);

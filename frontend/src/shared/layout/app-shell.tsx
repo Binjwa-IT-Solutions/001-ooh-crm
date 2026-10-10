@@ -6,10 +6,8 @@ import { type ReactNode, useState } from 'react';
 import {
   LayoutDashboard,
   Users,
-  Plus,
   FileText,
   MapPin,
-  CalendarCheck,
   Building2,
   ShoppingCart,
   Megaphone,
@@ -24,29 +22,29 @@ import {
   CalendarDays,
   ShieldCheck,
   AlertTriangle,
+  CreditCard,
   Search,
-  Bell,
   Menu,
   X,
   LogOut,
-  ChevronDown,
+  type LucideIcon,
 } from 'lucide-react';
 
 import { useAuth } from '../auth/auth-context';
 import { ROLE_LABELS } from '../auth/types';
 import { Button, cx } from '../ui';
-import { type LucideIcon } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import ProfileMenu from './ProfileMenu';
 import { PageHeaderProvider } from './page-header-context';
 import { PageHeader } from './page-header';
+import { EmployeesNavIcon, InterviewsNavIcon, UserManagementNavIcon } from './nav-icons';
 
 interface NavGroup {
   label: string;
   items: Array<{
     href: string;
     label: string;
-    icon: LucideIcon;
+    icon: LucideIcon | React.ComponentType<{ className?: string }>;
     permission?: string;
     roles?: string[];
   }>;
@@ -90,39 +88,22 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'FINANCE & ANALYTICS',
     items: [
-      {
-        href: '/payments-in',
-        label: 'Payments In',
-        icon: ArrowDownToLine,
-        permission: 'finance.view',
-      },
-      {
-        href: '/payments-out',
-        label: 'Payments Out',
-        icon: ArrowUpFromLine,
-        permission: 'finance.view',
-      },
-      {
-        href: '/analytics',
-        label: 'Sales Analytics',
-        icon: BarChart3,
-        permission: 'analytics.view',
-      },
-      {
-        href: '/profitability',
-        label: 'Profitability',
-        icon: TrendingUp,
-        permission: 'profitability.view',
-      },
+      { href: '/finance/sales-dashboard', label: 'Sales Revenue', icon: BarChart3, permission: 'finance.view_reports' },
+      { href: '/finance/profit-dashboard', label: 'Profit Dashboard', icon: TrendingUp, permission: 'finance.view_leadership_reports' },
+      { href: '/finance/invoices', label: 'Invoices', icon: FileText, permission: 'finance.view_payments' },
+      { href: '/finance/payments-in', label: 'Client Payments', icon: ArrowDownToLine, permission: 'finance.view_payments' },
+      { href: '/finance/payments-out', label: 'Vendor Payments', icon: ArrowUpFromLine, permission: 'finance.view_payments' },
+      { href: '/finance/payroll', label: 'Payroll / Salary Payments', icon: CreditCard, permission: 'payroll.view' },
     ],
   },
   {
     label: 'HR',
     items: [
-      { href: '/employees', label: 'Employees', icon: Users, permission: 'employees.view' },
-      { href: '/candidates', label: 'Interviews', icon: Users, permission: 'candidates.view' },
+      { href: '/employees', label: 'Employees', icon: EmployeesNavIcon, permission: 'employees.view' },
+      { href: '/candidates', label: 'Interviews', icon: InterviewsNavIcon, permission: 'candidates.view' },
       { href: '/attendance', label: 'Attendance', icon: Clock, permission: 'attendance.self' },
       { href: '/leave', label: 'Leave', icon: CalendarDays, permission: 'leave.self' },
+      { href: '/hr/salary', label: 'Salary Management', icon: CreditCard, permission: 'salary.view' },
     ],
   },
   {
@@ -140,7 +121,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'ADMINISTRATION',
     items: [
-      { href: '/users', label: 'Users', icon: Users, permission: 'users.view' },
+      { href: '/users', label: 'Users', icon: UserManagementNavIcon, permission: 'users.view' },
       {
         href: '/security/approvals',
         label: 'Login approvals',
@@ -169,7 +150,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Sidebar (Fixed on Desktop, Drawer on Mobile) */}
       <div
         className={cx(
-          'fixed inset-y-0 left-0 z-50 w-64 flex-col border-r border-[#E6E8EC] bg-white transition-transform duration-300 lg:flex',
+          'fixed inset-y-0 left-0 z-50 w-64 flex-col border-r border-[#E6E8EC] bg-white transition-transform duration-300 lg:flex print:hidden',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
       >
@@ -250,9 +231,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Main content wrapper */}
       <PageHeaderProvider>
-        <div className="flex flex-1 flex-col lg:pl-64 min-h-screen">
+        <div className="flex flex-1 flex-col lg:pl-64 min-h-screen print:pl-0 print:m-0 print:min-h-0 print:w-full">
           {/* Header (Sticky) */}
-          <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between gap-x-4 border-b border-[#E6E8EC] bg-white px-4 sm:gap-x-6 sm:px-6 lg:px-8">
+          <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between gap-x-4 border-b border-[#E6E8EC] bg-white px-4 sm:gap-x-6 sm:px-6 lg:px-8 print:hidden">
             <div className="flex items-center gap-4">
               <button
                 type="button"
@@ -312,8 +293,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           </header>
 
           {/* Main content */}
-          <main className="flex-1 bg-white p-4 sm:p-6 lg:p-8">
-            <div className="mx-auto w-full max-w-[1200px]">{children}</div>
+          <main className="flex-1 bg-white p-4 sm:p-6 lg:p-8 print:p-0 print:m-0 print:w-full">
+            <div className="mx-auto w-full max-w-[1200px] print:max-w-none print:w-full print:m-0">
+              {children}
+            </div>
           </main>
         </div>
       </PageHeaderProvider>

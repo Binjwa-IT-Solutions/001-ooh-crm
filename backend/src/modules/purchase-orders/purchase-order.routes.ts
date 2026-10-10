@@ -1,4 +1,5 @@
 import { Router } from "express";
+
 import { requireAuth } from "../../core/auth/auth-middleware.js";
 import { requirePermission } from "../../core/rbac/index.js";
 import * as controller from "./purchase-order.controller.js";
@@ -7,25 +8,52 @@ const router = Router();
 
 router.use(requireAuth);
 
-const view = requirePermission("purchase_orders.view");
-const manage = requirePermission("purchase_orders.manage");
+router.get(
+  "/",
+  requirePermission("purchase_orders.view"),
+  controller.list,
+);
 
-router.get("/", view, controller.list);
-router.get("/campaign-options", view, controller.campaignOptions);
-router.get("/vendor-options", view, controller.vendorOptions);
+router.get(
+  "/campaign-options",
+  requirePermission("purchase_orders.view"),
+  controller.campaignOptions,
+);
 
-router.post("/", manage, controller.create);
+router.get(
+  "/vendor-options",
+  requirePermission("purchase_orders.view"),
+  controller.vendorOptions,
+);
 
-router.get("/:id", view, controller.getById);
-router.patch("/:id", manage, controller.update);
+router.get(
+  "/:id",
+  requirePermission("purchase_orders.view"),
+  controller.getById,
+);
 
-router.post("/:id/issue", manage, controller.issue);
-router.post("/:id/cancel", manage, controller.cancel);
+router.post(
+  "/",
+  requirePermission("purchase_orders.manage"),
+  controller.create,
+);
 
-/* Step 4 */
-router.patch("/:id/document", manage, controller.document);
+router.patch(
+  "/:id",
+  requirePermission("purchase_orders.manage"),
+  controller.update,
+);
 
-/* Step 5 */
-router.patch("/:id/payment", manage, controller.payment);
+router.post(
+  "/:id/issue",
+  requirePermission("purchase_orders.manage"),
+  controller.issue,
+);
+
+router.post(
+  "/:id/cancel",
+  requirePermission("purchase_orders.manage"),
+  controller.cancel,
+);
 
 export default router;

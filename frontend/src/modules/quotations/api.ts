@@ -59,10 +59,15 @@ export const quotationsApi = {
     return api.post<{ pdfKey: string; pdfUrl: string }>(`/api/quotations/${id}/upload-pdf`, formData);
   },
 
-  send: (id: string, sentTo: string, message?: string) =>
+  send: (
+    id: string,
+    sentTo: string,
+    message?: string,
+    channel: 'email' | 'whatsapp' | 'link' = 'email',
+  ) =>
     api.post<{ quotation: Quotation; trackingToken: string; publicUrl: string }>(
       `/api/quotations/${id}/send`,
-      { sentTo, message },
+      { sentTo, message, channel },
     ),
 
   acceptInternal: (id: string) =>
