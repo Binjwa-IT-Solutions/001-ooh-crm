@@ -10,6 +10,13 @@ export interface IUser extends BaseDocument {
   role: Role;
   status: 'Active' | 'Inactive';
   lastLoginAt?: Date | null;
+  /** Access tokens issued before this instant are rejected (admin "sign out everywhere"). */
+  sessionsRevokedAt?: Date | null;
+  totpSecretEncrypted?: string;
+  totpEnabledAt?: Date | null;
+  totpLastUsedStep?: number;
+  mfaEnrollmentIdHash?: string;
+  mfaEnrollmentAttempts?: number;
   phone?: string;
   designation?: string;
   gender?: 'Male' | 'Female' | null;
@@ -50,6 +57,32 @@ const userSchema = new Schema<IUser>({
   lastLoginAt: {
     type: Date,
     default: null,
+  },
+  sessionsRevokedAt: {
+    type: Date,
+    default: null,
+  },
+  totpSecretEncrypted: {
+    type: String,
+    select: false,
+  },
+  totpEnabledAt: {
+    type: Date,
+    default: null,
+  },
+  totpLastUsedStep: {
+    type: Number,
+    default: -1,
+    select: false,
+  },
+  mfaEnrollmentIdHash: {
+    type: String,
+    select: false,
+  },
+  mfaEnrollmentAttempts: {
+    type: Number,
+    default: 0,
+    select: false,
   },
   phone: {
     type: String,

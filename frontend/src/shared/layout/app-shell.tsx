@@ -46,6 +46,7 @@ interface NavGroup {
     label: string;
     icon: LucideIcon | React.ComponentType<{ className?: string }>;
     permission?: string;
+    roles?: string[];
   }>;
 }
 
@@ -59,7 +60,12 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/leads', label: 'Leads', icon: Users, permission: 'leads.view' },
       { href: '/quotations', label: 'Quotations', icon: FileText, permission: 'quotations.view' },
-      { href: '/my-campaigns', label: 'My Campaigns', icon: Megaphone, permission: 'campaigns.view' },
+      {
+        href: '/my-campaigns',
+        label: 'My Campaigns',
+        icon: Megaphone,
+        permission: 'campaigns.view',
+      },
     ],
   },
   {
@@ -67,7 +73,12 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/vendors', label: 'Vendors', icon: Building2, permission: 'vendors.view' },
       { href: '/sites', label: 'ATR', icon: MapPin, permission: 'sites.view' },
-      { href: '/purchase-orders', label: 'Purchase Orders', icon: ShoppingCart, permission: 'purchase_orders.view' },
+      {
+        href: '/purchase-orders',
+        label: 'Purchase Orders',
+        icon: ShoppingCart,
+        permission: 'purchase_orders.view',
+      },
       { href: '/campaigns', label: 'Campaigns', icon: Megaphone, permission: 'campaigns.view' },
       { href: '/tasks', label: 'Tasks', icon: ClipboardCheck, permission: 'tasks.view' },
       { href: '/escalations', label: 'Escalations', icon: ArrowUpRight, permission: 'tasks.view' },
@@ -99,13 +110,24 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'COMPLIANCE',
     items: [
       { href: '/audit', label: 'Audit', icon: ShieldCheck, permission: 'audit.view' },
-      { href: '/exceptions', label: 'Exceptions', icon: AlertTriangle, permission: 'exceptions.view' },
+      {
+        href: '/exceptions',
+        label: 'Exceptions',
+        icon: AlertTriangle,
+        permission: 'exceptions.view',
+      },
     ],
   },
   {
     label: 'ADMINISTRATION',
     items: [
       { href: '/users', label: 'Users', icon: UserManagementNavIcon, permission: 'users.view' },
+      {
+        href: '/security/approvals',
+        label: 'Login approvals',
+        icon: ShieldCheck,
+        roles: ['admin'],
+      },
     ],
   },
 ];
@@ -129,13 +151,17 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div
         className={cx(
           'fixed inset-y-0 left-0 z-50 w-64 flex-col border-r border-[#E6E8EC] bg-white transition-transform duration-300 lg:flex print:hidden',
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
       >
         <div className="relative flex h-16 shrink-0 items-center justify-center px-4">
           <Link href="/dashboard" className="flex items-center justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png?v=4" alt="Media Octus" className="h-[52px] w-auto max-w-[190px] object-contain" />
+            <img
+              src="/logo.png?v=4"
+              alt="Media Octus"
+              className="h-[52px] w-auto max-w-[190px] object-contain"
+            />
           </Link>
           <button
             onClick={() => setSidebarOpen(false)}
@@ -149,7 +175,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           <nav className="flex-1 space-y-6">
             {NAV_GROUPS.map((group) => {
               const visibleItems = group.items.filter(
-                (item) => !item.permission || hasPermission(item.permission)
+                (item) =>
+                  (!item.permission || hasPermission(item.permission)) &&
+                  (!item.roles || item.roles.includes(user?.role ?? '')),
               );
 
               if (visibleItems.length === 0) return null;
@@ -165,7 +193,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                   )}
                   <ul className="space-y-0.5">
                     {visibleItems.map((item) => {
-                      const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                      const isActive =
+                        pathname === item.href || pathname.startsWith(item.href + '/');
                       const Icon = item.icon;
 
                       return (
@@ -177,11 +206,16 @@ export function AppShell({ children }: { children: ReactNode }) {
                               'flex items-center gap-3 px-6 py-2.5 text-sm transition-colors border-l-4',
                               isActive
                                 ? 'bg-[#F8E6E6] text-[#6E1D1D] border-[#6E1D1D] font-medium'
-                                : 'border-transparent text-slate-500 hover:bg-[#F8E6E6] hover:text-[#6E1D1D]'
+                                : 'border-transparent text-slate-500 hover:bg-[#F8E6E6] hover:text-[#6E1D1D]',
                             )}
                             onClick={() => setSidebarOpen(false)}
                           >
-                            <Icon className={cx('h-5 w-5', isActive ? 'text-[#6E1D1D]' : 'text-slate-500')} />
+                            <Icon
+                              className={cx(
+                                'h-5 w-5',
+                                isActive ? 'text-[#6E1D1D]' : 'text-slate-500',
+                              )}
+                            />
                             {item.label}
                           </Link>
                         </li>
@@ -216,7 +250,12 @@ export function AppShell({ children }: { children: ReactNode }) {
 
               <div className="flex items-center justify-end gap-x-4 lg:gap-x-6">
                 {/* Search Bar - aligned to the right */}
-                <form className="relative flex w-64 items-center" action="#" method="GET" onSubmit={(e) => e.preventDefault()}>
+                <form
+                  className="relative flex w-64 items-center"
+                  action="#"
+                  method="GET"
+                  onSubmit={(e) => e.preventDefault()}
+                >
                   <label htmlFor="search-field" className="sr-only">
                     Search
                   </label>
@@ -239,7 +278,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                   {/* Shared Profile Menu */}
                   <ProfileMenu />
 
-                  <Button variant="ghost" onClick={() => void signOut()} className="h-10 px-3 text-[#687280] hover:text-primary transition-colors border border-transparent" title="Sign out">
+                  <Button
+                    variant="ghost"
+                    onClick={() => void signOut()}
+                    className="h-10 px-3 text-[#687280] hover:text-primary transition-colors border border-transparent"
+                    title="Sign out"
+                  >
                     <LogOut className="h-4 w-4" />
                     <span className="sr-only">Sign out</span>
                   </Button>

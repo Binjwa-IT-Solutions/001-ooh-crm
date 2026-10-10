@@ -17,19 +17,20 @@ import leaveTypeRoutes, {
 } from './modules/HR/routes/leave.routes.js';
 import { holidayRoutes } from './modules/HR/routes/holiday.routes.js';
 
-
 const app = express();
 
 app.use(
   cors({
     origin: function (origin, callback) {
       if (!origin) return callback(null, true);
-      
-      const isAllowed = 
-        config.cors.origins.includes('*') || 
+
+      const isAllowed =
+        config.cors.origins.includes('*') ||
         config.cors.origins.includes(origin) ||
-        /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+):\d+$/.test(origin);
-        
+        /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+):\d+$/.test(
+          origin,
+        );
+
       if (isAllowed) {
         callback(null, true);
       } else {
@@ -37,7 +38,7 @@ app.use(
       }
     },
     credentials: true,
-  })
+  }),
 );
 
 app.use(express.json({ limit: '1mb' }));
@@ -88,11 +89,12 @@ import siteRoutes from './modules/sites/site.routes.js';
 import campaignRoutes from './modules/campaigns/campaign.routes.js';
 import taskRoutes from './modules/tasks/task.routes.js';
 import escalationRoutes from './modules/escalations/escalation.routes.js';
-import purchaseOrderRoutes from "./modules/purchase-orders/purchase-order.routes.js";
+import purchaseOrderRoutes from './modules/purchase-orders/purchase-order.routes.js';
 import proofRoutes from './modules/proofs/proof.routes.js';
 
-
-import quotationsRoutes, { publicQuotationsRoutes } from './modules/quotations/quotations.routes.js';
+import quotationsRoutes, {
+  publicQuotationsRoutes,
+} from './modules/quotations/quotations.routes.js';
 
 // Public unauthenticated proposal routes
 app.use('/api/q', publicQuotationsRoutes);
@@ -106,7 +108,7 @@ app.use('/api/leads', leadRoutes);
 app.use('/api/vendors', vendorRoutes);
 app.use('/api/sites', siteRoutes);
 app.use('/api/campaigns', campaignRoutes);
-app.use('/api/tasks',taskRoutes);
+app.use('/api/tasks', taskRoutes);
 app.use('/api', escalationRoutes);
 
 app.use('/api/purchase-orders', purchaseOrderRoutes);
@@ -138,7 +140,6 @@ app.use('/api/candidates', candidateRoutes);
 
 import payrollRoutes from './modules/payroll/payroll.routes.js';
 app.use('/api/payroll', payrollRoutes);
-
 
 // 404 then the central error handler — both must stay last.
 app.use(notFoundHandler);

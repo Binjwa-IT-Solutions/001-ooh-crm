@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { AuthService } from './auth-service.js';
+import { adminNeedsAuthenticatorRecovery, AuthService } from './auth-service.js';
+import * as OTPAuth from 'otpauth';
+import { createTotpSetup, decryptTotpSecret, verifyTotp } from './mfa.js';
 import {
   listUsersSchema,
   loginSchema,
   registerSchema,
+  resetUserMfaSchema,
   updateUserSchema,
   verifyOtpSchema,
 } from './auth-validator.js';
@@ -37,6 +40,30 @@ test('generateOtpCode does not repeat itself', () => {
   assert.ok(codes.size > 40, 'expected mostly distinct codes');
 });
 
+test('only enrolled admins enter the email authenticator recovery flow', () => {
+  assert.equal(adminNeedsAuthenticatorRecovery({ role: 'admin', totpEnabledAt: new Date() }), true);
+  assert.equal(adminNeedsAuthenticatorRecovery({ role: 'admin', totpEnabledAt: null }), false);
+  assert.equal(
+    adminNeedsAuthenticatorRecovery({ role: 'employee', totpEnabledAt: new Date() }),
+    false,
+  );
+});
+
+test('TOTP setup encrypts the secret and verifies authenticator codes', () => {
+  const setup = createTotpSetup('user@example.com');
+  const decryptedSecret = decryptTotpSecret(setup.encryptedSecret);
+  const totp = new OTPAuth.TOTP({
+    secret: OTPAuth.Secret.fromBase32(decryptedSecret),
+    digits: 6,
+    period: 30,
+  });
+
+  assert.equal(decryptedSecret, setup.secret);
+  assert.notEqual(setup.encryptedSecret, setup.secret);
+  assert.equal(verifyTotp(setup.encryptedSecret, totp.generate()), totp.counter());
+  assert.match(setup.otpauthUrl, /^otpauth:\/\/totp\//);
+});
+
 test('login validation rejects a malformed email', () => {
   assert.throws(() => loginSchema.parse({ email: 'not-an-email', password: 'secret' }));
   assert.doesNotThrow(() => loginSchema.parse({ email: 'a@b.com', password: 'secret' }));
@@ -54,6 +81,24 @@ test('OTP validation accepts only numeric codes', () => {
   assert.doesNotThrow(() => verifyOtpSchema.parse({ challengeId: 'abc', code: '123456' }));
   assert.throws(() => verifyOtpSchema.parse({ challengeId: 'abc', code: '12ab56' }));
   assert.throws(() => verifyOtpSchema.parse({ challengeId: '', code: '123456' }));
+});
+
+test('MFA reset validation requires reason and six-digit reauthentication codes', () => {
+  const payload = {
+    password: 'AdminPassword123!',
+    totpCode: '123456',
+    reason: 'User lost their authenticator device',
+  };
+
+  assert.doesNotThrow(() => resetUserMfaSchema.parse(payload));
+  assert.throws(() => resetUserMfaSchema.parse({ ...payload, totpCode: '12345' }));
+  assert.throws(() => resetUserMfaSchema.parse({ ...payload, reason: 'lost' }));
+  assert.throws(() =>
+    resetUserMfaSchema.parse({
+      ...payload,
+      secondAdmin: { email: 'not-an-email', password: 'ApproverPassword123!', totpCode: '123456' },
+    }),
+  );
 });
 
 test('register validation enforces a minimum password length', () => {
@@ -121,5 +166,3 @@ test('admin holds every permission and employee does not', () => {
 test('an unknown role gets no permissions rather than throwing', () => {
   assert.deepEqual(permissionsForRole('not-a-role'), []);
 });
-
-
