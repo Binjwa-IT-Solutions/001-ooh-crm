@@ -61,7 +61,8 @@ export const listQuotationsSchema = z.object({
 });
 
 export const sendQuotationSchema = z.object({
-  sentTo: z.string().trim().email('Enter a valid recipient email'),
+  sentTo: z.string().trim().min(1, 'Enter a valid recipient email or contact'),
+  channel: z.enum(['email', 'whatsapp', 'link']).optional().default('email'),
   message: z.string().trim().optional(),
 });
 

@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import type { Quotation } from "../types";
 import { quotationsApi } from "../api";
+import ShareProposalModal from "./ShareProposalModal";
 
 function SendIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
   return (
@@ -76,9 +77,7 @@ export default function QuotationDetails({
   onRefresh,
   onEdit,
 }: Props) {
-  const [sendModalOpen, setSendModalOpen] = useState(false);
-  const [recipientEmail, setRecipientEmail] = useState(quotation.clientEmail || "");
-  const [sending, setSending] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const [uploadingPdf, setUploadingPdf] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -89,23 +88,6 @@ export default function QuotationDetails({
   const phone = quotation.clientPhone || leadObj?.mobile || "-";
   const email = quotation.clientEmail || leadObj?.email || "-";
   const address = quotation.clientAddress || quotation.clientCity || "-";
-
-  const handleSendEmail = async () => {
-    if (!recipientEmail) return;
-    try {
-      setSending(true);
-      const res = await quotationsApi.send(quoteId, recipientEmail);
-      if (res.quotation) {
-        onRefresh(res.quotation);
-      }
-      setSendModalOpen(false);
-      alert(`Proposal sent successfully to ${recipientEmail}!`);
-    } catch (err: any) {
-      alert(err.message || "Failed to send proposal");
-    } finally {
-      setSending(false);
-    }
-  };
 
   const handleUploadSignedPdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -176,14 +158,15 @@ export default function QuotationDetails({
             <span>{uploadingPdf ? "Uploading PDF..." : "Upload Signed PDF"}</span>
           </button>
 
-          {/* Send via Email Button */}
+          {/* Send & Share Proposal Button */}
           <button
             type="button"
-            onClick={() => setSendModalOpen(true)}
+            onClick={() => setShareModalOpen(true)}
             className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300 transition cursor-pointer"
+            title="Dispatch via Email, WhatsApp, or Direct Link"
           >
             <SendIcon className="h-3.5 w-3.5" />
-            <span>Send to Client</span>
+            <span>Send &amp; Share Proposal</span>
           </button>
 
           {/* Document PDF Preview (Step 4) */}
@@ -370,50 +353,13 @@ export default function QuotationDetails({
         </div>
       </div>
 
-      {/* Send Modal */}
-      {sendModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-900 space-y-4">
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white">
-              Dispatch Proposal to Client
-            </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              Enter the client recipient email to dispatch this proposal with an official tracking link.
-            </p>
-
-            <div>
-              <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">
-                Recipient Email *
-              </label>
-              <input
-                type="email"
-                value={recipientEmail}
-                onChange={(e) => setRecipientEmail(e.target.value)}
-                placeholder="client@company.com"
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-900 outline-none focus:border-[#8B2424] dark:border-slate-800 dark:bg-slate-950 dark:text-white"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setSendModalOpen(false)}
-                className="rounded-xl border border-gray-200 px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-slate-800 dark:text-gray-300"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={sending || !recipientEmail}
-                onClick={handleSendEmail}
-                className="rounded-xl bg-[#8B2424] px-4 py-2 text-xs font-bold text-white hover:bg-[#721c1c] disabled:opacity-50"
-              >
-                {sending ? "Sending..." : "Send Proposal"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Unified Share & Dispatch Proposal Modal */}
+      <ShareProposalModal
+        quotation={quotation}
+        isOpen={shareModalOpen}
+        onClose={() => setShareModalOpen(false)}
+        onSent={(updated) => onRefresh(updated)}
+      />
     </div>
   );
 }

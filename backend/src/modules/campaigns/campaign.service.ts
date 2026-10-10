@@ -9,6 +9,7 @@ import Campaign, {
 
 import { Quotation } from "../quotations/quotations.model.js";
 import { Lead } from "../leads/leads.model.js";
+import { Site } from "../sites/site.model.js";
 import { AuthUser } from "../../core/auth/auth-model.js";
 import { checkSitesExist } from "../sites/site.service.js";
 import { generateForCampaign } from "../tasks/task.service.js";
@@ -562,6 +563,44 @@ export async function createFromQuotation(
         session ?? undefined,
       );
 
+      /* -------------------------- Resolve City & State ------------------- */
+
+      let campaignCity = quotation.clientCity?.trim() || "";
+      let campaignState = quotation.clientState?.trim() || "";
+      let assignedManager: Types.ObjectId | undefined = undefined;
+
+      if (quotation.leadId) {
+        const leadDoc = await Lead.findById(quotation.leadId)
+          .session(session ?? null)
+          .lean();
+        if (leadDoc) {
+          if (!campaignCity) {
+            campaignCity = leadDoc.city?.trim() || leadDoc.qualification?.city?.trim() || "";
+          }
+          if (leadDoc.assignedTo && Types.ObjectId.isValid(leadDoc.assignedTo)) {
+            assignedManager = new Types.ObjectId(leadDoc.assignedTo);
+          }
+        }
+      }
+
+      if ((!campaignCity || !campaignState) && sites.length > 0) {
+        const siteDoc = await Site.findById(sites[0].siteId)
+          .session(session ?? null)
+          .lean();
+        if (siteDoc) {
+          if (!campaignCity) {
+            campaignCity = siteDoc.city?.trim() || "";
+          }
+          if (!campaignState) {
+            campaignState = siteDoc.state?.trim() || "";
+          }
+        }
+      }
+
+      if (!campaignCity) {
+        campaignCity = "National";
+      }
+
       /* -------------------------- Create Campaign ------------------------ */
 
       const campaign =
@@ -581,7 +620,17 @@ export async function createFromQuotation(
           quotationId:
             quotation._id,
 
-          city: "",
+          quotationNo:
+            quotation.quoteNumber || "",
+
+          quotationName:
+            quotation.clientName || "",
+
+          state:
+            campaignState || "",
+
+          city:
+            campaignCity,
 
           startDate,
 
@@ -598,6 +647,8 @@ export async function createFromQuotation(
 
           status:
             CampaignStatus.DRAFT,
+
+          assignedManager,
         });
 
       await campaign.save({
