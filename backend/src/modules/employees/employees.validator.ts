@@ -112,6 +112,28 @@ export const updateEmployeeSchema = z
   .partial()
   .refine((data) => Object.keys(data).length > 0, { message: 'Nothing to update' });
 
+/**
+ * What an employee may set on their own record: personal details, emergency
+ * contact/address, and their own PAN/Aadhaar/bank details. Everything else —
+ * work email, department, designation, dates, manager, status, CTC — is owned by
+ * HR. Unknown keys are stripped, so sending them does nothing.
+ */
+export const updateMyProfileSchema = z
+  .object({
+    fullName: baseEmployeeShape.fullName,
+    mobile: baseEmployeeShape.mobile,
+    personalEmail: baseEmployeeShape.personalEmail,
+    dateOfBirth: baseEmployeeShape.dateOfBirth,
+    workLocation: baseEmployeeShape.workLocation,
+    panNumber: baseEmployeeShape.panNumber,
+    aadhaarNumber: baseEmployeeShape.aadhaarNumber,
+    bankAccountNumber: baseEmployeeShape.bankAccountNumber,
+    ifsc: baseEmployeeShape.ifsc,
+    emergencyContact: baseEmployeeShape.emergencyContact,
+    address: baseEmployeeShape.address,
+  })
+  .partial();
+
 export const listEmployeesSchema = z.object({
   search: z.string().trim().max(120).optional(),
   department: z.enum(DEPARTMENTS).optional(),
@@ -159,6 +181,7 @@ export const assignTeamMemberSchema = z.object({
 
 export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
 export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;
+export type UpdateMyProfileInput = z.infer<typeof updateMyProfileSchema>;
 export type ListEmployeesQuery = z.infer<typeof listEmployeesSchema>;
 export type CreateTeamInput = z.infer<typeof createTeamSchema>;
 export type UpdateTeamInput = z.infer<typeof updateTeamSchema>;

@@ -59,6 +59,10 @@ export interface IEmployee extends BaseDocument {
   workLocation?: string;
   status: EmployeeStatus;
   isProfileComplete?: boolean;
+  /** When the employee last saved their own self-service profile form. */
+  selfProfileSubmittedAt?: Date | null;
+  /** When HR was reminded to fill the HR-owned fields (sent at most once). */
+  hrReminderSentAt?: Date | null;
 
   // --- Sensitive. Never returned without employees.sensitive. ---
   panNumber?: string;
@@ -104,6 +108,8 @@ const employeeSchema = new Schema<IEmployee>({
   workLocation: { type: String, trim: true, default: '' },
   status: { type: String, enum: EMPLOYEE_STATUSES, required: true, default: 'Active', index: true },
   isProfileComplete: { type: Boolean, default: false, index: true },
+  selfProfileSubmittedAt: { type: Date, default: null },
+  hrReminderSentAt: { type: Date, default: null },
 
   panNumber: { type: String, uppercase: true, trim: true },
   aadhaarNumber: { type: String, trim: true },

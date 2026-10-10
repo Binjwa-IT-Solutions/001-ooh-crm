@@ -81,6 +81,57 @@ function toPayload(values: EmployeeFormValues): Record<string, unknown> {
   return payload;
 }
 
+/**
+ * Only the fields an employee may set on their own record. The server accepts
+ * nothing else on PATCH /me, so sending HR fields would be silently dropped.
+ */
+export type SelfProfileValues = Pick<
+  EmployeeFormValues,
+  | 'fullName'
+  | 'mobile'
+  | 'personalEmail'
+  | 'dateOfBirth'
+  | 'workLocation'
+  | 'panNumber'
+  | 'aadhaarNumber'
+  | 'bankAccountNumber'
+  | 'ifsc'
+  | 'emergencyContactName'
+  | 'emergencyContactRelationship'
+  | 'emergencyContactMobile'
+  | 'address'
+>;
+
+function toSelfPayload(values: SelfProfileValues): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+  const fields: Array<[string, string | undefined]> = [
+    ['fullName', values.fullName],
+    ['mobile', values.mobile],
+    ['personalEmail', values.personalEmail],
+    ['dateOfBirth', values.dateOfBirth],
+    ['workLocation', values.workLocation],
+    ['panNumber', values.panNumber],
+    ['aadhaarNumber', values.aadhaarNumber],
+    ['bankAccountNumber', values.bankAccountNumber],
+    ['ifsc', values.ifsc],
+    ['address', values.address],
+  ];
+  for (const [key, value] of fields) {
+    if (value && value.trim() !== '') payload[key] = value.trim();
+  }
+
+  const emergency = {
+    name: values.emergencyContactName?.trim() || '',
+    relationship: values.emergencyContactRelationship?.trim() || '',
+    mobile: values.emergencyContactMobile?.trim() || '',
+  };
+  if (emergency.name || emergency.relationship || emergency.mobile) {
+    payload.emergencyContact = emergency;
+  }
+
+  return payload;
+}
+
 export const employeesApi = {
   list: (query: EmployeeListQuery = {}) =>
     api.get<EmployeeListResponse>(`/api/employees${buildQuery(query)}`),
@@ -159,9 +210,9 @@ export const employeesApi = {
       .patch<{ employee: Employee }>(`/api/employees/${id}`, toPayload(values))
       .then((res) => res.employee),
 
-  updateMine: (values: EmployeeFormValues) =>
+  updateMine: (values: SelfProfileValues) =>
     api
-      .patch<{ employee: Employee }>('/api/employees/me', toPayload(values))
+      .patch<{ employee: Employee }>('/api/employees/me', toSelfPayload(values))
       .then((res) => res.employee),
 
   deactivate: (id: string) => api.delete<{ id: string }>(`/api/employees/${id}`),

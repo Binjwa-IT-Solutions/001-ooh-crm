@@ -20,6 +20,8 @@ export interface AuthUser {
   designation?: string;
   gender?: 'Male' | 'Female' | null;
   isProfileComplete?: boolean;
+  /** Show the skippable "complete your profile" prompt. */
+  needsSelfProfile?: boolean;
   employeeId?: string | null;
 }
 

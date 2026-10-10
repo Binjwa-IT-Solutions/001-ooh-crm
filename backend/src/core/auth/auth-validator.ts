@@ -56,7 +56,9 @@ export const loginSchema = z.object({
     .object({
       latitude: z.number().finite().min(-90).max(90),
       longitude: z.number().finite().min(-180).max(180),
-      accuracyMeters: z.number().finite().min(0).max(100_000),
+      // No upper bound: IP-based guesses can exceed 100 km. A vague fix must not block
+      // sign-in — the risk check treats it as `location_accuracy_low`.
+      accuracyMeters: z.number().finite().min(0),
     })
     .nullable()
     .optional(),

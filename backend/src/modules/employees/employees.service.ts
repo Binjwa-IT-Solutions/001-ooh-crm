@@ -15,10 +15,12 @@ import Campaign from '../campaigns/campaign.model.js';
 import Attendance from '../HR/models/attendance.model.js';
 import { LeaveRequest, LeaveType } from '../HR/models/leave.model.js';
 import { leaveTypeService } from '../HR/services/leave.service.js';
+import { notifyMany } from '../../core/notifications/index.js';
 import type {
   CreateEmployeeInput,
   ListEmployeesQuery,
   UpdateEmployeeInput,
+  UpdateMyProfileInput,
   CreateTeamInput,
   UpdateTeamInput,
 } from './employees.validator.js';
@@ -202,6 +204,49 @@ function stripSensitiveInput<T extends Record<string, unknown>>(input: T, ctx: R
   return cleaned;
 }
 
+/** The HR-owned fields that make a profile "complete". */
+function hasHrFields(employee: IEmployee): boolean {
+  return Boolean(
+    employee.department && employee.designation && employee.dateOfJoining && employee.mobile,
+  );
+}
+
+/**
+ * Tells HR (or admins, when there is no HR user) that an employee's HR-owned
+ * fields are still empty. Sent at most once per employee; never throws, because
+ * a failed reminder must not break the employee's own request.
+ */
+async function remindHrIfIncomplete(employee: IEmployee): Promise<void> {
+  if (hasHrFields(employee) || employee.hrReminderSentAt) return;
+
+  try {
+    // Claim the reminder first so two concurrent requests cannot both send it.
+    const claimed = await Employee.updateOne(
+      { _id: employee._id, hrReminderSentAt: null },
+      { $set: { hrReminderSentAt: new Date() } },
+    );
+    if (claimed.modifiedCount === 0) return;
+
+    let recipients = await AuthUser.find({ role: 'hr', status: 'Active', deletedAt: null }).select('_id');
+    if (recipients.length === 0) {
+      recipients = await AuthUser.find({ role: 'admin', status: 'Active', deletedAt: null }).select('_id');
+    }
+    if (recipients.length === 0) return;
+
+    await notifyMany(
+      recipients.map((user) => user._id),
+      {
+        type: 'employees.profile_incomplete',
+        title: 'Employee profile needs HR details',
+        body: `${employee.fullName} has signed in, but their department, designation, date of joining or other HR details are missing.`,
+        link: `/employees/${String(employee._id)}`,
+      },
+    );
+  } catch (error) {
+    console.error('[employees] failed to send HR profile reminder', error);
+  }
+}
+
 /** Empty strings from the form mean "not provided", not "set to empty". */
 function dropBlanks<T extends Record<string, unknown>>(input: T): T {
   const cleaned = { ...input };
@@ -337,12 +382,18 @@ export const employeeService = {
       throw new NotFoundError('No employee record is linked to your account yet');
     }
 
+    await remindHrIfIncomplete(employee);
+
     // You may always see your own sensitive details.
     return toDto(employee, true);
   },
 
-  /** Updates the authenticated user's own employee record (e.g. mandatory profile completion). */
-  async updateMine(input: UpdateEmployeeInput, ctx: RequestContext): Promise<EmployeeDto> {
+  /**
+   * Updates the authenticated user's own employee record. Only the self-service
+   * fields in `updateMyProfileSchema` can reach this; HR-owned fields are never
+   * written here.
+   */
+  async updateMine(input: UpdateMyProfileInput, ctx: RequestContext): Promise<EmployeeDto> {
     let employee = await Employee.findOne({
       userId: ctx.user.id,
       deletedAt: null,
@@ -379,52 +430,18 @@ export const employeeService = {
       throw new NotFoundError('No employee record is linked to your account yet');
     }
 
-    const payload = dropBlanks(stripSensitiveInput({ ...input }, ctx));
+    // No stripSensitiveInput here: you may set your own PAN, Aadhaar and bank
+    // details. The schema already excludes CTC and every HR-owned field.
+    const payload = dropBlanks({ ...input });
 
-    // Validate email uniqueness if changing
-    if (payload.workEmail && payload.workEmail !== employee.workEmail) {
-      const clash = await Employee.findOne({ workEmail: payload.workEmail, _id: { $ne: employee._id } });
-      if (clash) throw new ConflictError('An employee with this work email already exists');
-    }
-
-    // Non-admin/HR users cannot change their status or reassign their own manager arbitrarily if already assigned
-    if (!['admin', 'hr'].includes(ctx.user.role)) {
-      delete payload.status;
-      if (employee.reportingManagerId) {
-        delete payload.reportingManagerId;
-      }
-    }
-
-    if (payload.reportingManagerId) {
-      const rawId = String(payload.reportingManagerId).trim();
-      const objId = toObjectId(rawId);
-      let targetManagerId: Types.ObjectId | null = null;
-      const manager = await Employee.findOne({ _id: objId, deletedAt: null });
-      if (manager) {
-        targetManagerId = manager._id as Types.ObjectId;
-      } else {
-        const managerByUser = await Employee.findOne({ userId: objId, deletedAt: null });
-        if (managerByUser) {
-          targetManagerId = managerByUser._id as Types.ObjectId;
-        } else {
-          throw new ValidationError('The selected reporting manager does not exist');
-        }
-      }
-
-      await assertNoManagerCycle(employee._id as Types.ObjectId, targetManagerId);
-      employee.reportingManagerId = targetManagerId;
-      delete payload.reportingManagerId;
-    }
-
-    Object.assign(employee, payload, { updatedBy: toObjectId(ctx.user.id) });
-    employee.isProfileComplete = Boolean(
-      employee.department &&
-      employee.designation &&
-      employee.dateOfJoining &&
-      employee.mobile
-    );
+    Object.assign(employee, payload, {
+      updatedBy: toObjectId(ctx.user.id),
+      selfProfileSubmittedAt: new Date(),
+    });
+    employee.isProfileComplete = hasHrFields(employee);
     await employee.save();
     await employee.populate('reportingManagerId', 'fullName designation');
+    await remindHrIfIncomplete(employee);
 
     if (payload.fullName) {
       await AuthUser.updateOne(

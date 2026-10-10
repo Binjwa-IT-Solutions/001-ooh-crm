@@ -55,6 +55,11 @@ export interface PublicUser {
   designation?: string;
   gender?: 'Male' | 'Female' | null;
   isProfileComplete?: boolean;
+  /**
+   * Show the skippable self-service profile prompt: the employee hasn't saved it
+   * yet and is still missing their mobile or date of birth.
+   */
+  needsSelfProfile?: boolean;
   employeeId?: string | null;
 }
 
@@ -169,6 +174,9 @@ export class AuthService {
       isProfileComplete = false;
     }
 
+    const needsSelfProfile =
+      !employeeDoc?.selfProfileSubmittedAt && !(employeeDoc?.mobile && employeeDoc?.dateOfBirth);
+
     const phone = user.phone || employeeDoc?.mobile || '';
     const designation = user.designation || employeeDoc?.designation || '';
     const gender = user.gender ?? null;
@@ -189,6 +197,7 @@ export class AuthService {
       reportingManager,
       reportingManagerId,
       isProfileComplete,
+      needsSelfProfile,
       employeeId,
     };
   }

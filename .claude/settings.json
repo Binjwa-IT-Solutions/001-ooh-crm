@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(npx tsx scratch/trusted-devices.ts)",
+      "PowerShell(npx tsx scratch/recent-logins.ts)"
+    ]
+  }
+}

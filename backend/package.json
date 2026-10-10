@@ -14,6 +14,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "seed": "tsx src/scripts/seed.ts",
+    "seed:live-users": "tsx \"src/scripts/01 seed-live-users.ts\"",
     "cleanup:campaigns": "tsx src/scripts/cleanup-campaigns.ts",
     "import:leads": "tsx src/scripts/import-leads-csv.ts",
     "test": "tsx --test --test-concurrency=1 \"src/**/*.test.ts\"",
