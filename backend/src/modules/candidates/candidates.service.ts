@@ -62,7 +62,14 @@ export const candidateService = {
       .limit(query.pageSize)
       .lean();
 
-    return { data, total, page: query.page, pageSize: query.pageSize };
+    const populated = await Promise.all(
+      data.map(async (c: any) => ({
+        ...c,
+        resumeUrl: c.resumeFileKey ? await fileService.url(c.resumeFileKey) : null,
+      }))
+    );
+
+    return { data: populated, total, page: query.page, pageSize: query.pageSize };
   },
 
   async getById(id: string, ctx: RequestContext) {

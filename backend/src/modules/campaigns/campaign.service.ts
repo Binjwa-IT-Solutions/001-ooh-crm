@@ -27,23 +27,17 @@ type CreateCampaignInput = {
   name: string;
   leadId: string;
   quotationId?: string;
-  quotationNo?: string;
-  quotationName?: string;
-  piNo?: string;
-  state?: string;
   city: string;
   startDate: Date;
   endDate: Date;
-  siteIds?: string[];
+  siteIds: string[];
   contractedValue: number;
-  status?: CampaignStatus;
   assignedManager?: string;
 };
 
 type CampaignFilters = {
   status?: CampaignStatus;
   leadId?: string;
-  state?: string;
   city?: string;
   manager?: string;
   startDate?: Date;
@@ -58,39 +52,28 @@ type CampaignFilters = {
 /* Status Transitions                                                         */
 /* -------------------------------------------------------------------------- */
 
-const STATUS_TRANSITIONS: Record<string, string[]> = {
-  "In Progress": ["Campaign Live", "Campaign End", "Completed", "Rejected"],
-  "Campaign Live": ["Campaign End", "Completed", "Rejected", "In Progress"],
-  "Campaign End": ["Completed", "Campaign Live", "Rejected", "In Progress"],
-  "Rejected": ["Draft", "Campaign Live", "In Progress"],
+const STATUS_TRANSITIONS: Record<
+  CampaignStatus,
+  CampaignStatus[]
+> = {
   [CampaignStatus.DRAFT]: [
     CampaignStatus.APPROVED,
     CampaignStatus.CANCELLED,
-    "In Progress",
-    "Campaign Live",
-    "Campaign End",
-    "Completed",
-    "Rejected",
   ],
+
   [CampaignStatus.APPROVED]: [
-    CampaignStatus.INPROGRESS,
+    CampaignStatus.IN_PROGRESS,
     CampaignStatus.CANCELLED,
-    "In Progress",
-    "Campaign Live",
-    "Campaign End",
-    "Completed",
-    "Rejected",
   ],
-  [CampaignStatus.INPROGRESS]: [
+
+  [CampaignStatus.IN_PROGRESS]: [
     CampaignStatus.COMPLETED,
     CampaignStatus.CANCELLED,
-    "In Progress",
-    "Campaign Live",
-    "Campaign End",
-    "Rejected",
   ],
-  [CampaignStatus.COMPLETED]: ["Campaign End", "Campaign Live", "In Progress"],
-  [CampaignStatus.CANCELLED]: ["Draft", "In Progress"],
+
+  [CampaignStatus.COMPLETED]: [],
+
+  [CampaignStatus.CANCELLED]: [],
 };
 
 /* -------------------------------------------------------------------------- */
@@ -388,17 +371,10 @@ export async function createCampaign(
 
       /* -------------------------- Validate Sites ------------------------- */
 
-      let siteIds = input.siteIds || [];
-      if (siteIds.length === 0 && quotation?.sites?.length) {
-        siteIds = quotation.sites.map((s: any) => String(s.siteId));
-      }
-
-      if (siteIds.length > 0) {
-        await validateSitesExist(
-          siteIds,
-          session ?? undefined,
-        );
-      }
+      await validateSitesExist(
+        input.siteIds,
+        session ?? undefined,
+      );
 
       /* --------------------------- Validate Lead ------------------------ */
 
@@ -454,18 +430,6 @@ export async function createCampaign(
           quotationId:
             quotation?._id,
 
-          quotationNo:
-            input.quotationNo || quotation?.quoteNumber || "",
-
-          quotationName:
-            input.quotationName || "",
-
-          piNo:
-            input.piNo || "",
-
-          state:
-            input.state || "",
-
           city: input.city,
 
           startDate:
@@ -475,7 +439,7 @@ export async function createCampaign(
             input.endDate,
 
           siteIds:
-            siteIds.map(
+            input.siteIds.map(
               (id) =>
                 new Types.ObjectId(id),
             ),
@@ -484,7 +448,7 @@ export async function createCampaign(
             input.contractedValue,
 
           status:
-            input.status || CampaignStatus.IN_PROGRESS,
+            CampaignStatus.DRAFT,
 
           assignedManager,
         });
@@ -712,13 +676,6 @@ export async function listCampaigns(
     query.status = filters.status;
   }
 
-  if (filters.state?.trim()) {
-    query.state = new RegExp(
-      filters.state.trim(),
-      "i",
-    );
-  }
-
   if (filters.city?.trim()) {
     query.city = new RegExp(
       filters.city.trim(),
@@ -790,10 +747,6 @@ export async function listCampaigns(
       { name: searchRegex },
       { campaignCode: searchRegex },
       { city: searchRegex },
-      { state: searchRegex },
-      { quotationNo: searchRegex },
-      { quotationName: searchRegex },
-      { piNo: searchRegex },
     ];
 
     if (leadIds.length > 0) {
@@ -926,23 +879,10 @@ export async function updateCampaign(
     campaign.leadId = new Types.ObjectId(input.leadId);
   }
   if (input.city !== undefined) campaign.city = input.city;
-  if (input.state !== undefined) campaign.state = input.state;
-  if (input.quotationNo !== undefined) campaign.quotationNo = input.quotationNo;
-  if (input.quotationName !== undefined) campaign.quotationName = input.quotationName;
-  if (input.status !== undefined) campaign.status = input.status;
-  if (input.piNo !== undefined) campaign.piNo = input.piNo;
-  if (input.quotationId !== undefined) {
-    campaign.quotationId =
-      input.quotationId && Types.ObjectId.isValid(input.quotationId)
-        ? new Types.ObjectId(input.quotationId)
-        : undefined;
-  }
   if (input.startDate !== undefined) campaign.startDate = input.startDate;
   if (input.endDate !== undefined) campaign.endDate = input.endDate;
   if (input.siteIds !== undefined) {
-    if (input.siteIds.length > 0) {
-      await validateSitesExist(input.siteIds);
-    }
+    await validateSitesExist(input.siteIds);
     campaign.siteIds = input.siteIds.map((sid) => new Types.ObjectId(sid));
   }
   if (input.contractedValue !== undefined) campaign.contractedValue = input.contractedValue;
@@ -1027,11 +967,10 @@ export async function updateCampaignStatus(
 
       /* ---------------------- Transition Check --------------------------- */
 
-      const allowedTransitions = STATUS_TRANSITIONS[campaign.status];
       if (
-        allowedTransitions &&
-        allowedTransitions.length > 0 &&
-        !allowedTransitions.includes(nextStatus)
+        !STATUS_TRANSITIONS[
+          campaign.status
+        ].includes(nextStatus)
       ) {
         throw new Error(
           `Invalid campaign status transition: ${campaign.status} → ${nextStatus}`,
@@ -1043,8 +982,8 @@ export async function updateCampaignStatus(
       /* -------------------------------------------------------------------- */
 
       if (
-        (nextStatus === CampaignStatus.APPROVED || nextStatus === CampaignStatus.CAMPAIGN_LIVE || nextStatus === ("Campaign Live" as any)) &&
-        campaign.siteIds.length > 0
+        nextStatus ===
+        CampaignStatus.APPROVED
       ) {
         /*
          * Validate campaign sites first.

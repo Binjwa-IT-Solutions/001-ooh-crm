@@ -31,15 +31,57 @@ function bool(name: string, fallback: boolean): boolean {
   return raw.toLowerCase() === 'true' || raw === '1';
 }
 
-const nodeEnv = process.env.NODE_ENV ?? 'development';
+export function deriveTestMongoUri(baseUri: string): string {
+  if (process.env.MONGO_URI_TEST && process.env.MONGO_URI_TEST.trim() !== '') {
+    return process.env.MONGO_URI_TEST.trim();
+  }
+
+  try {
+    const parsed = new URL(baseUri);
+    let pathname = parsed.pathname.replace(/^\//, '');
+    if (!pathname || pathname === '') {
+      pathname = 'media-octus-crm-test';
+    } else if (!pathname.endsWith('-test')) {
+      pathname = `${pathname}-test`;
+    }
+    parsed.pathname = `/${pathname}`;
+    return parsed.toString();
+  } catch {
+    const qIndex = baseUri.indexOf('?');
+    const base = qIndex !== -1 ? baseUri.slice(0, qIndex) : baseUri;
+    const query = qIndex !== -1 ? baseUri.slice(qIndex) : '';
+    const lastSlash = base.lastIndexOf('/');
+    if (lastSlash !== -1) {
+      const dbName = base.slice(lastSlash + 1);
+      const newDb = dbName.endsWith('-test') ? dbName : (dbName ? `${dbName}-test` : 'media-octus-crm-test');
+      return `${base.slice(0, lastSlash + 1)}${newDb}${query}`;
+    }
+    return `${base}/media-octus-crm-test${query}`;
+  }
+}
+
+const isTestRun =
+  process.env.NODE_ENV === 'test' ||
+  process.execArgv.some((arg) => arg.includes('test')) ||
+  process.argv.some((arg) => arg.includes('--test') || arg.includes('.test.'));
+
+const nodeEnv = process.env.NODE_ENV ?? (isTestRun ? 'test' : 'development');
 const isProduction = nodeEnv === 'production';
+const isTest = nodeEnv === 'test' || isTestRun;
+
+const baseMongoUri = required('MONGO_URI', 'mongodb://localhost:27017/media-octus-crm?retryWrites=false');
+const testMongoUri = deriveTestMongoUri(baseMongoUri);
+const activeMongoUri = isTest ? testMongoUri : baseMongoUri;
 
 export const config = {
   nodeEnv,
   isProduction,
+  isTest,
   port: num('PORT', 5000),
 
-  mongoUri: required('MONGO_URI', 'mongodb://localhost:27017/media-octus-crm?retryWrites=false'),
+  mongoUri: activeMongoUri,
+  mongoBaseUri: baseMongoUri,
+  mongoTestUri: testMongoUri,
 
   cors: {
     // Comma-separated list. "*" allows everything (fine for local dev only).

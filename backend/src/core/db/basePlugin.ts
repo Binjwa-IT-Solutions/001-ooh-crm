@@ -1,4 +1,5 @@
 import { Schema, Types, type Document } from 'mongoose';
+import { ValidationError } from '../errors/index.js';
 
 /**
  * Standard fields on every document in the system. Apply this plugin to your
@@ -28,10 +29,17 @@ export function basePlugin(schema: Schema) {
 }
 
 /**
- * Converts the string id on `ctx.user` into the ObjectId the schema expects.
+ * Converts the string id on `ctx.user` (or any string) into the ObjectId the schema expects.
+ * Safely handles existing ObjectId instances and validates string IDs to prevent unhandled BSONError.
  *
  *   await Employee.create({ ...payload, createdBy: actorId(ctx) });
  */
-export function toObjectId(id: string): Types.ObjectId {
+export function toObjectId(id: string | Types.ObjectId): Types.ObjectId {
+  if (id instanceof Types.ObjectId) {
+    return id;
+  }
+  if (!id || typeof id !== 'string' || !Types.ObjectId.isValid(id)) {
+    throw new ValidationError(`Invalid ObjectId: "${id}"`);
+  }
   return new Types.ObjectId(id);
 }

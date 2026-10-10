@@ -13,6 +13,10 @@ const objectId = z
   .regex(/^[0-9a-fA-F]{24}$/, 'Not a valid id');
 
 const isoDate = z.coerce.date();
+const optionalDate = z
+  .union([z.coerce.date(), z.literal(''), z.null()])
+  .optional()
+  .transform((val) => (val === '' || val === null || val === undefined ? null : val));
 
 /**
  * Money arrives from the UI in **rupees** and is stored in **integer paise**.
@@ -41,14 +45,14 @@ const baseEmployeeShape = {
     .optional()
     .or(z.literal('')),
   mobile: z.string().trim().regex(MOBILE, 'Enter a valid 10-digit Indian mobile number'),
-  dateOfBirth: isoDate.optional().nullable(),
+  dateOfBirth: optionalDate,
 
   department: z.enum(DEPARTMENTS),
   designation: z.string().trim().min(2, 'Designation is required').max(120),
   employmentType: z.enum(EMPLOYMENT_TYPES).default('Full-time'),
   dateOfJoining: isoDate,
-  dateOfExit: isoDate.optional().nullable(),
-  reportingManagerId: objectId.optional().nullable(),
+  dateOfExit: optionalDate,
+  reportingManagerId: objectId.optional().nullable().or(z.literal('')),
   teamName: z.string().trim().max(100).optional().or(z.literal('')),
   workLocation: z.string().trim().min(2, 'Work location is required').max(120),
   status: z.enum(EMPLOYEE_STATUSES).default('Active'),

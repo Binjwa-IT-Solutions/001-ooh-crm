@@ -61,6 +61,25 @@ export async function getAbsenceReport(req: Request, res: Response, next: NextFu
   }
 }
 
+export async function getOvertimeReport(req: Request, res: Response, next: NextFunction) {
+  try {
+    const fromMonth = parseInt((req.query.fromMonth || req.query.month) as string, 10);
+    const fromYear = parseInt((req.query.fromYear || req.query.year) as string, 10);
+    const toMonth = parseInt((req.query.toMonth || req.query.month) as string, 10);
+    const toYear = parseInt((req.query.toYear || req.query.year) as string, 10);
+    const minHours = parseFloat((req.query.minHours as string) || '0');
+
+    if (isNaN(fromMonth) || isNaN(fromYear) || isNaN(toMonth) || isNaN(toYear)) {
+      return res.status(400).json({ error: { message: 'Valid month and year parameters are required' } });
+    }
+
+    const data = await service.getOvertimeReport(fromMonth, fromYear, toMonth, toYear, minHours, req.ctx!);
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function exportReport(req: Request, res: Response, next: NextFunction) {
   try {
     const reportType = (req.query.reportType as any) || 'monthly';
@@ -72,9 +91,10 @@ export async function exportReport(req: Request, res: Response, next: NextFuncti
     const toMonth = req.query.toMonth ? parseInt(req.query.toMonth as string, 10) : undefined;
     const toYear = req.query.toYear ? parseInt(req.query.toYear as string, 10) : undefined;
     const department = req.query.department as string;
+    const employeeId = req.query.employeeId as string;
 
     const { filename, csv } = await service.exportAttendanceCsv(
-      { reportType, date, fromDate, toDate, fromMonth, fromYear, toMonth, toYear, department },
+      { reportType, date, fromDate, toDate, fromMonth, fromYear, toMonth, toYear, department, employeeId },
       req.ctx!,
     );
 

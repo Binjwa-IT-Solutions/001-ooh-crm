@@ -31,6 +31,26 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+
+  async redirects() {
+    return [
+      {
+        source: "/finance",
+        destination: "/finance/payments-in",
+        permanent: false,
+      },
+      {
+        source: "/payments-in",
+        destination: "/finance/payments-in",
+        permanent: false,
+      },
+      {
+        source: "/payments-out",
+        destination: "/finance/payments-out",
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

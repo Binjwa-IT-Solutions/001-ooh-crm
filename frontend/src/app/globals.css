@@ -149,4 +149,10 @@ select option:checked {
   thead {
     display: table-header-group;
   }
+
+  /* Prevent page cutoff on scrollable app containers */
+  html, body, .overflow-auto, .overflow-y-auto, .overflow-x-auto {
+    overflow: visible !important;
+    height: auto !important;
+  }
 }

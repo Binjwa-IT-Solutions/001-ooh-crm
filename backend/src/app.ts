@@ -113,6 +113,9 @@ app.use('/api/purchase-orders', purchaseOrderRoutes);
 app.use('/api/proofs', proofRoutes);
 app.use('/api/quotations', quotationsRoutes);
 
+import financeRoutes from './modules/finance/routes/finance.routes.js';
+app.use('/api/finance', financeRoutes);
+
 //attendance & shift configs
 app.use('/api/attendance', attendanceRoutes);
 
@@ -132,6 +135,10 @@ app.use('/api/holidays', holidayRoutes);
 
 import candidateRoutes from './modules/candidates/candidates.routes.js';
 app.use('/api/candidates', candidateRoutes);
+
+import payrollRoutes from './modules/payroll/payroll.routes.js';
+app.use('/api/payroll', payrollRoutes);
+
 
 // 404 then the central error handler — both must stay last.
 app.use(notFoundHandler);

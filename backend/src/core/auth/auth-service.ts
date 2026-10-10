@@ -48,6 +48,8 @@ export interface PublicUser {
   phone?: string;
   designation?: string;
   gender?: 'Male' | 'Female' | null;
+  isProfileComplete?: boolean;
+  employeeId?: string | null;
 }
 
 export interface LoginChallenge {
@@ -97,8 +99,11 @@ export class AuthService {
   static toPublicUser(user: IUser, employeeDoc?: any): PublicUser {
     let reportingManager: { id: string; fullName: string; designation: string } | null = null;
     let reportingManagerId: string | null = null;
+    let isProfileComplete = false;
+    let employeeId: string | null = null;
 
     if (employeeDoc) {
+      employeeId = String(employeeDoc._id);
       if (employeeDoc.reportingManagerId) {
         if (typeof employeeDoc.reportingManagerId === 'object' && 'fullName' in employeeDoc.reportingManagerId) {
           reportingManager = {
@@ -111,6 +116,17 @@ export class AuthService {
           reportingManagerId = String(employeeDoc.reportingManagerId);
         }
       }
+
+      const hasRequiredFields = Boolean(
+        employeeDoc.department &&
+        employeeDoc.designation &&
+        employeeDoc.dateOfJoining &&
+        employeeDoc.mobile
+      );
+
+      isProfileComplete = employeeDoc.isProfileComplete === true ? true : hasRequiredFields;
+    } else {
+      isProfileComplete = false;
     }
 
     const phone = user.phone || employeeDoc?.mobile || '';
@@ -131,6 +147,8 @@ export class AuthService {
       gender,
       reportingManager,
       reportingManagerId,
+      isProfileComplete,
+      employeeId,
     };
   }
 
@@ -165,8 +183,20 @@ export class AuthService {
     const accessToken = AuthService.signAccessToken(user);
     const refreshToken = await AuthService.issueRefreshToken(user, meta);
 
+    const { Employee } = await import('../../modules/employees/employees.model.js');
+    let employee = await Employee.findOne({ userId: user._id, deletedAt: null }).populate(
+      'reportingManagerId',
+      'fullName designation',
+    );
+    if (!employee && user.email) {
+      employee = await Employee.findOne({ workEmail: user.email.toLowerCase(), deletedAt: null }).populate(
+        'reportingManagerId',
+        'fullName designation',
+      );
+    }
+
     return {
-      user: AuthService.toPublicUser(user),
+      user: AuthService.toPublicUser(user, employee),
       accessToken,
       refreshToken,
       accessTokenExpiresIn: config.jwt.accessTokenTtl,
@@ -597,10 +627,16 @@ export class AuthService {
     }
 
     const { Employee } = await import('../../modules/employees/employees.model.js');
-    const employee = await Employee.findOne({ userId: user._id, deletedAt: null }).populate(
+    let employee = await Employee.findOne({ userId: user._id, deletedAt: null }).populate(
       'reportingManagerId',
       'fullName designation',
     );
+    if (!employee && user.email) {
+      employee = await Employee.findOne({ workEmail: user.email.toLowerCase(), deletedAt: null }).populate(
+        'reportingManagerId',
+        'fullName designation',
+      );
+    }
 
     return AuthService.toPublicUser(user, employee);
   }
