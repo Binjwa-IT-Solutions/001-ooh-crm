@@ -1457,13 +1457,21 @@ export class LeadsService {
     unclaimedCount: number;
     wonCount: number;
     wonRevenue: number;
+    stageCounts?: Record<string, number>;
+    todayFollowUpsCount?: number;
+    topCities?: Array<{ city: string; count: number }>;
+    targetRevenue?: number;
   }> {
     const matchBase: Record<string, any> = { deletedAt: null };
     if (!['admin', 'manager', 'finance', 'hr', 'ops'].includes(ctx.user.role)) {
       matchBase.assignedTo = toObjectId(ctx.user.id);
     }
 
-    const [totalActive, overdueCount, unclaimedCount, wonStats] = await Promise.all([
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+    const [totalActive, overdueCount, unclaimedCount, wonStats, stageAgg, todayFollowUps, cityAgg] = await Promise.all([
       Lead.countDocuments({
         ...matchBase,
         status: { $nin: ['Won', 'Lost', 'Rejected', 'Duplicate', 'duplicate'] },
@@ -1476,14 +1484,39 @@ export class LeadsService {
       Lead.countDocuments({
         ...matchBase,
         status: { $nin: ['Won', 'Lost', 'Rejected', 'Duplicate', 'duplicate'] },
-        nextActionDate: { $ne: null, $lt: new Date() },
+        nextActionDate: { $ne: null, $lt: now },
       }),
       Lead.countDocuments({ status: 'New', assignedTo: null, claimedBy: null, deletedAt: null }),
       Lead.aggregate([
         { $match: { ...matchBase, status: 'Won' } },
         { $group: { _id: null, count: { $sum: 1 }, totalRevenue: { $sum: '$qualification.budget' } } },
       ]),
+      Lead.aggregate([
+        { $match: matchBase },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
+      Lead.countDocuments({
+        ...matchBase,
+        status: { $nin: ['Won', 'Lost', 'Rejected', 'Duplicate', 'duplicate'] },
+        nextActionDate: { $gte: startOfToday, $lte: endOfToday },
+      }),
+      Lead.aggregate([
+        { $match: { deletedAt: null, city: { $ne: null, $nin: ['', 'null'] } } },
+        { $group: { _id: '$city', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 5 },
+      ]),
     ]);
+
+    const stageCounts: Record<string, number> = {};
+    for (const item of stageAgg) {
+      if (item._id) stageCounts[item._id] = item.count;
+    }
+
+    const topCities = cityAgg.map((c) => ({
+      city: String(c._id).replace(/^.*?\]/, '').trim(),
+      count: c.count,
+    })).filter((c) => Boolean(c.city));
 
     return {
       totalActive,
@@ -1491,6 +1524,10 @@ export class LeadsService {
       unclaimedCount,
       wonCount: wonStats[0]?.count || 0,
       wonRevenue: wonStats[0]?.totalRevenue || 0,
+      stageCounts,
+      todayFollowUpsCount: todayFollowUps,
+      topCities,
+      targetRevenue: 100000000, // ₹10,00,000 in paise
     };
   }
 }

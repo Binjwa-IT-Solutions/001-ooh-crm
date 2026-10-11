@@ -120,6 +120,10 @@ export const leadsApi = {
       unclaimedCount: number;
       wonCount: number;
       wonRevenue: number;
+      stageCounts?: Record<string, number>;
+      todayFollowUpsCount?: number;
+      topCities?: Array<{ city: string; count: number }>;
+      targetRevenue?: number;
     }>('/api/leads/stats'),
 
   uploadDocument: (id: string, formData: FormData) =>
