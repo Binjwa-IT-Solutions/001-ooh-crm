@@ -92,3 +92,29 @@ select option:checked {
   color: #8B2424;
   font-weight: 600;
 }
+
+/* Print Styles: Ensures clean A4 Purchase Order PDF generation without headers/steppers/sidebars */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #111827 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  header,
+  nav,
+  aside,
+  .print-hidden,
+  [data-print-hidden="true"] {
+    display: none !important;
+  }
+}

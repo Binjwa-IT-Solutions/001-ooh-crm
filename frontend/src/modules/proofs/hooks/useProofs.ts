@@ -18,7 +18,7 @@ import type {
   ProofFilters,
 } from "../types";
 
-export function useProofs() {
+export function useProofs(initialFilters?: Partial<ProofFilters>) {
   const [proofs, setProofs] =
     useState<Proof[]>([]);
 
@@ -33,11 +33,11 @@ export function useProofs() {
 
   const [filters, setFilters] =
     useState<ProofFilters>({
-      campaignId: "",
-      vendorId: "",
-      atrId: "",
-      status: "",
-      uploadedBy: "",
+      campaignId: initialFilters?.campaignId || "",
+      vendorId: initialFilters?.vendorId || "",
+      atrId: initialFilters?.atrId || "",
+      status: initialFilters?.status || "",
+      uploadedBy: initialFilters?.uploadedBy || "",
     });
 
   const loadProofs = useCallback(
@@ -61,6 +61,18 @@ export function useProofs() {
     },
     [filters]
   );
+
+  useEffect(() => {
+    if (initialFilters?.campaignId !== undefined) {
+      setFilters((prev) => {
+        if (prev.campaignId === initialFilters.campaignId) return prev;
+        return {
+          ...prev,
+          campaignId: initialFilters.campaignId || "",
+        };
+      });
+    }
+  }, [initialFilters?.campaignId]);
 
   useEffect(() => {
     loadProofs();

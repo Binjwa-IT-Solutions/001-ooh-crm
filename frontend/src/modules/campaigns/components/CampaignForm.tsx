@@ -65,7 +65,7 @@ function toFormData(
       startDate: "",
       endDate: "",
       contractedValue: "",
-      status: "Draft",
+      status: "In Progress",
       assignedManager: "",
     };
   }
@@ -109,13 +109,13 @@ function toFormData(
     ),
 
     status:
-      campaign.status === "InProgress"
-        ? "In Progress"
-        : campaign.status === "Completed"
-          ? "Campaign End"
-          : campaign.status === "Cancelled"
+      campaign.status === "Completed" || campaign.status === "Complete" || campaign.status === "Campaign End"
+        ? "Campaign End"
+        : campaign.status === "InProgress" || campaign.status === "Draft" || campaign.status === "Approved"
+          ? "In Progress"
+          : campaign.status === "Cancelled" || campaign.status === "Rejected"
             ? "Rejected"
-            : campaign.status,
+            : (campaign.status as CampaignStatus) || "In Progress",
 
     assignedManager:
       typeof campaign.assignedManager === "string"
@@ -837,11 +837,28 @@ function StatusDropdown({
   const [open, setOpen] = useState(false);
 
   const options: CampaignStatus[] = [
-    "Draft",
+    "In Progress",
     "Campaign Live",
     "Campaign End",
     "Rejected",
   ];
+
+  const displayLabel = (() => {
+    const s = (value || "").trim().toLowerCase();
+    if (s === "complete" || s === "completed" || s === "campaign end") {
+      return "Campaign End";
+    }
+    if (s === "in progress" || s === "inprogress" || s === "draft" || s === "approved") {
+      return "In Progress";
+    }
+    if (s === "campaign live") {
+      return "Campaign Live";
+    }
+    if (s === "rejected" || s === "cancelled") {
+      return "Rejected";
+    }
+    return value || "In Progress";
+  })();
 
   return (
     <div className="relative">
@@ -857,7 +874,7 @@ function StatusDropdown({
         className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
       >
         <span>
-          {value}
+          {displayLabel}
         </span>
 
         <span className="text-gray-500">

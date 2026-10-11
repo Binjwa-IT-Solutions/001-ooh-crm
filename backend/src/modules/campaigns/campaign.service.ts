@@ -11,7 +11,6 @@ import { Quotation } from "../quotations/quotations.model.js";
 import { Lead } from "../leads/leads.model.js";
 import { AuthUser } from "../../core/auth/auth-model.js";
 import { checkSitesExist } from "../sites/site.service.js";
-import { generateForCampaign } from "../tasks/task.service.js";
 import { employeeService } from "../employees/employees.service.js";
 
 /* -------------------------------------------------------------------------- */
@@ -58,39 +57,30 @@ type CampaignFilters = {
 /* Status Transitions                                                         */
 /* -------------------------------------------------------------------------- */
 
+const ALL_TARGET_STATUSES = [
+  "Campaign Live",
+  "In Progress",
+  "InProgress",
+  "Campaign End",
+  "Complete",
+  "Completed",
+  "Rejected",
+  "Draft",
+  "Approved",
+  "Cancelled",
+];
+
 const STATUS_TRANSITIONS: Record<string, string[]> = {
-  "In Progress": ["Campaign Live", "Campaign End", "Completed", "Rejected"],
-  "Campaign Live": ["Campaign End", "Completed", "Rejected", "In Progress"],
-  "Campaign End": ["Completed", "Campaign Live", "Rejected", "In Progress"],
-  "Rejected": ["Draft", "Campaign Live", "In Progress"],
-  [CampaignStatus.DRAFT]: [
-    CampaignStatus.APPROVED,
-    CampaignStatus.CANCELLED,
-    "In Progress",
-    "Campaign Live",
-    "Campaign End",
-    "Completed",
-    "Rejected",
-  ],
-  [CampaignStatus.APPROVED]: [
-    CampaignStatus.INPROGRESS,
-    CampaignStatus.CANCELLED,
-    "In Progress",
-    "Campaign Live",
-    "Campaign End",
-    "Completed",
-    "Rejected",
-  ],
-  [CampaignStatus.INPROGRESS]: [
-    CampaignStatus.COMPLETED,
-    CampaignStatus.CANCELLED,
-    "In Progress",
-    "Campaign Live",
-    "Campaign End",
-    "Rejected",
-  ],
-  [CampaignStatus.COMPLETED]: ["Campaign End", "Campaign Live", "In Progress"],
-  [CampaignStatus.CANCELLED]: ["Draft", "In Progress"],
+  "In Progress": ALL_TARGET_STATUSES,
+  "InProgress": ALL_TARGET_STATUSES,
+  "Campaign Live": ALL_TARGET_STATUSES,
+  "Campaign End": ALL_TARGET_STATUSES,
+  "Complete": ALL_TARGET_STATUSES,
+  "Completed": ALL_TARGET_STATUSES,
+  "Rejected": ALL_TARGET_STATUSES,
+  "Draft": ALL_TARGET_STATUSES,
+  "Approved": ALL_TARGET_STATUSES,
+  "Cancelled": ALL_TARGET_STATUSES,
 };
 
 /* -------------------------------------------------------------------------- */
@@ -918,6 +908,19 @@ export async function updateCampaign(
     throw new Error("Campaign not found");
   }
 
+  const lockedStatuses = [
+    "Campaign End",
+    "Completed",
+    "Complete",
+    "Rejected",
+    "Cancelled",
+  ];
+  if (lockedStatuses.includes(campaign.status)) {
+    throw new Error(
+      `Cannot edit campaign in ${campaign.status} status.`,
+    );
+  }
+
   if (input.name !== undefined) campaign.name = input.name;
   if (input.leadId !== undefined) {
     if (!Types.ObjectId.isValid(input.leadId)) {
@@ -990,6 +993,7 @@ export async function updateCampaignStatus(
   id: string,
   nextStatus: CampaignStatus,
   ctx: RequestContext,
+  reason?: string,
 ) {
   if (
     !Types.ObjectId.isValid(id)
@@ -1063,35 +1067,13 @@ export async function updateCampaignStatus(
       campaign.status =
         nextStatus;
 
+      if (reason && reason.trim()) {
+        campaign.rejectionReason = reason.trim();
+      }
+
       await campaign.save({
         session,
       });
-
-      /* -------------------------------------------------------------------- */
-      /* Auto Generate Tasks After Approval                                   */
-      /* -------------------------------------------------------------------- */
-
-      if (
-        nextStatus ===
-        CampaignStatus.APPROVED
-      ) {
-        try {
-          await generateForCampaign(
-            campaign,
-            {
-              userId: String(
-                ctx.userId,
-              ),
-              role: ctx.role,
-            },
-          );
-        } catch (taskErr) {
-          console.error(
-            `[D1] Failed to auto-generate tasks for campaign ${campaign._id}:`,
-            taskErr,
-          );
-        }
-      }
 
       return campaign;
     },

@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import CampaignFilters from "./CampaignFilters";
 import CampaignForm from "./CampaignForm";
 import CampaignStatusTimeline from "./CampaignStatusTimeline";
-import CampaignTable from "./CampaignTable";
+import CampaignTable, { isCampaignLocked } from "./CampaignTable";
 
 import {
   useCampaigns,
@@ -67,23 +67,30 @@ useEffect(() => {
     useState<string | null>(null);
 
   const stateOptions = useMemo(() => {
-    const values = campaigns
-      .map((campaign) => campaign.state?.trim())
-      .filter((value): value is string => Boolean(value));
-
-    return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b));
+    const map = new Map<string, string>();
+    for (const c of campaigns) {
+      const s = c.state?.trim();
+      if (s && !map.has(s.toLowerCase())) {
+        map.set(s.toLowerCase(), s);
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
   }, [campaigns]);
 
   const cityOptions = useMemo(() => {
-    const values = campaigns
-      .filter((campaign) => {
-        if (!filters.state) return false;
-        return (campaign.state?.trim() || "").toLowerCase() === filters.state.trim().toLowerCase();
-      })
-      .map((campaign) => campaign.city?.trim())
-      .filter((value): value is string => Boolean(value));
-
-    return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b));
+    const map = new Map<string, string>();
+    for (const c of campaigns) {
+      if (filters.state) {
+        if ((c.state?.trim() || "").toLowerCase() !== filters.state.trim().toLowerCase()) {
+          continue;
+        }
+      }
+      const city = c.city?.trim();
+      if (city && !map.has(city.toLowerCase())) {
+        map.set(city.toLowerCase(), city);
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
   }, [campaigns, filters.state]);
 
   const filteredCampaigns = useMemo(() => {
@@ -141,8 +148,23 @@ useEffect(() => {
         (campaign.city || "").trim().toLowerCase() === filters.city.trim().toLowerCase();
 
       const statusMatch =
-        !filters.status ||
-        campaign.status === filters.status;
+        !filters.status || (() => {
+          const fs = filters.status.trim().toLowerCase();
+          const cs = (campaign.status || "").trim().toLowerCase();
+          if (fs === "campaign end") {
+            return cs === "campaign end" || cs === "complete" || cs === "completed";
+          }
+          if (fs === "in progress") {
+            return cs === "in progress" || cs === "inprogress" || cs === "draft" || cs === "approved";
+          }
+          if (fs === "campaign live") {
+            return cs === "campaign live";
+          }
+          if (fs === "rejected") {
+            return cs === "rejected" || cs === "cancelled" || cs === "campaign rejected";
+          }
+          return cs === fs;
+        })();
 
       const managerMatch =
         !filters.manager || (() => {
@@ -184,12 +206,7 @@ useEffect(() => {
   function handleEditCampaign(
     campaign: Campaign,
   ) {
-    if (
-      campaign.status === "Campaign End" ||
-      campaign.status === "Rejected" ||
-      campaign.status === "Completed" ||
-      campaign.status === "Cancelled"
-    ) {
+    if (isCampaignLocked(campaign.status)) {
       return;
     }
     setActiveCampaignId(campaign._id);
@@ -225,6 +242,7 @@ useEffect(() => {
   async function handleStatusChange(
     campaign: Campaign,
     status: CampaignStatus,
+    reason?: string,
   ) {
     setActiveCampaignId(campaign._id);
     try {
@@ -232,6 +250,7 @@ useEffect(() => {
       await onUpdateStatus(
         campaign._id,
         status,
+        reason,
       );
       await onReload();
     } catch (err) {

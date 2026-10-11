@@ -66,7 +66,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: '/sites', label: 'ATR', icon: MapPin, permission: 'sites.view' },
       { href: '/purchase-orders', label: 'Purchase Orders', icon: ShoppingCart, permission: 'purchase_orders.view' },
       { href: '/campaigns', label: 'Campaigns', icon: Megaphone, permission: 'campaigns.view' },
-      { href: '/tasks', label: 'Tasks', icon: ClipboardCheck, permission: 'tasks.view' },
       { href: '/escalations', label: 'Escalations', icon: ArrowUpRight, permission: 'tasks.view' },
       { href: '/proofs', label: 'Proofs', icon: Camera, permission: 'proofs.view' },
     ],
@@ -114,7 +113,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-slate-900/80 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-slate-900/80 backdrop-blur-sm lg:hidden print:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -122,7 +121,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Sidebar (Fixed on Desktop, Drawer on Mobile) */}
       <div
         className={cx(
-          'fixed inset-y-0 left-0 z-50 w-64 flex-col border-r border-[#E6E8EC] bg-white transition-transform duration-300 lg:flex',
+          'fixed inset-y-0 left-0 z-50 w-64 flex-col border-r border-[#E6E8EC] bg-white transition-transform duration-300 lg:flex print:hidden',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         )}
       >
@@ -191,9 +190,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Main content wrapper */}
       <PageHeaderProvider>
-        <div className="flex flex-1 flex-col lg:pl-64 min-h-screen">
+        <div className="flex flex-1 flex-col lg:pl-64 min-h-screen print:pl-0 print:min-h-0">
           {/* Header (Sticky) */}
-          <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between gap-x-4 border-b border-[#E6E8EC] bg-white px-4 sm:gap-x-6 sm:px-6 lg:px-8">
+          <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between gap-x-4 border-b border-[#E6E8EC] bg-white px-4 sm:gap-x-6 sm:px-6 lg:px-8 print:hidden">
             <div className="flex items-center gap-4">
               <button
                 type="button"
@@ -243,8 +242,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           </header>
 
           {/* Main content */}
-          <main className="flex-1 bg-white p-4 sm:p-6 lg:p-8">
-            <div className="mx-auto w-full max-w-[1200px]">
+          <main className="flex-1 bg-white p-4 sm:p-6 lg:p-8 print:p-0 print:m-0">
+            <div className="mx-auto w-full max-w-[1200px] print:max-w-none print:w-full print:m-0 print:p-0">
               {children}
             </div>
           </main>

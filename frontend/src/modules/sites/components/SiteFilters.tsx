@@ -59,10 +59,6 @@ const STATUSES: MediaPlanStatus[] = [
   "On Mail",
   "WhatsApp",
   "Manual",
-  "Draft",
-  "Pending",
-  "Approved",
-  "Rejected",
 ];
 
 const inputClass =

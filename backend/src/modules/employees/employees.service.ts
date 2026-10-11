@@ -9,7 +9,6 @@ import { Employee, SENSITIVE_FIELDS, type IEmployee, type Department } from './e
 import { Team, type ITeam } from './team.model.js';
 import { AuthUser } from '../../core/auth/auth-model.js';
 import { Lead } from '../leads/leads.model.js';
-import { Task } from '../tasks/task.model.js';
 import { Quotation } from '../quotations/quotations.model.js';
 import Campaign from '../campaigns/campaign.model.js';
 import Attendance from '../HR/models/attendance.model.js';
@@ -1208,7 +1207,7 @@ export const employeeService = {
     const nextMidnight = new Date(todayMidnight);
     nextMidnight.setDate(nextMidnight.getDate() + 1);
 
-    const [leads, tasks, attendances] = await Promise.all([
+    const [leads, attendances] = await Promise.all([
       allUserIds.length > 0
         ? Lead.find({
           deletedAt: null,
@@ -1220,12 +1219,6 @@ export const employeeService = {
         }).select('_id assignedTo claimedBy createdBy status')
         : [],
       allEmpIds.length > 0
-        ? Task.find({
-          deletedAt: null,
-          assignedTo: { $in: allEmpIds },
-        }).select('_id assignedTo status deadline')
-        : [],
-      allEmpIds.length > 0
         ? Attendance.find({
           employeeId: { $in: allEmpIds },
           date: { $gte: todayMidnight, $lt: nextMidnight },
@@ -1233,6 +1226,7 @@ export const employeeService = {
         }).select('employeeId status')
         : [],
     ]);
+    const tasks: any[] = [];
 
     const leadIds = leads.map((l) => l._id);
 
@@ -1492,7 +1486,8 @@ export const employeeService = {
     const nextMidnight = new Date(todayMidnight);
     nextMidnight.setDate(nextMidnight.getDate() + 1);
 
-    const [rawLeads, rawTasks, todayAtt, monthAtt, leaveBalances] = await Promise.all([
+    const rawTasks: any[] = [];
+    const [rawLeads, todayAtt, monthAtt, leaveBalances] = await Promise.all([
       userId
         ? Lead.find({
           deletedAt: null,
@@ -1501,13 +1496,6 @@ export const employeeService = {
           .sort({ createdAt: -1 })
           .lean()
         : [],
-      Task.find({
-        deletedAt: null,
-        assignedTo: empId,
-      })
-        .populate('campaignId', 'name campaignCode')
-        .sort({ deadline: 1 })
-        .lean(),
       Attendance.findOne({
         employeeId: empId,
         date: { $gte: todayMidnight, $lt: nextMidnight },

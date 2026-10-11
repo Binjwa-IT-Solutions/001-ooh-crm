@@ -5,7 +5,7 @@ import "../campaigns/campaign.model.js";
 import "../vendors/vendor.model.js";
 
 import { fileService } from "../../core/files/index.js";
-import { Proof } from "./proof.model.js";
+import { Proof, CampaignPow } from "./proof.model.js";
 
 import {
   createProofSchema,
@@ -33,11 +33,14 @@ export async function generateProofLink(data?: unknown) {
       ? new mongoose.Types.ObjectId(input.vendorId)
       : undefined;
 
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
   await Proof.create({
     proofLinkToken: token,
     proofLinkUses: 0,
     proofLinkMaxUses: 999999,
     proofLinkActive: true,
+    proofLinkExpiresAt: expiresAt,
     campaignId,
     vendorId,
   });
@@ -45,7 +48,8 @@ export async function generateProofLink(data?: unknown) {
   return {
     token,
     link: `/proof/${token}`,
-    message: "Proof link generated successfully",
+    expiresAt,
+    message: "Proof link generated successfully (Valid for 24 hours)",
   };
 }
 
@@ -85,10 +89,19 @@ export async function validateProofLinkToken(token: string) {
     };
   }
 
+  if (proof.proofLinkExpiresAt && new Date() > new Date(proof.proofLinkExpiresAt)) {
+    return {
+      valid: false,
+      message: "This proof link has expired (24 hours limit exceeded).",
+      uses,
+    };
+  }
+
   return {
     valid: true,
     message: "Proof link is valid",
     uses,
+    expiresAt: proof.proofLinkExpiresAt,
     campaign: proof.campaignId,
     vendor: proof.vendorId,
   };
@@ -101,16 +114,10 @@ export async function validateProofLinkToken(token: string) {
 export async function createProof(
   data: unknown,
   file: Express.Multer.File,
-  userId: string
+  userId?: string
 ) {
   if (!file) {
     throw new Error("Proof image is required");
-  }
-
-  if (
-    !mongoose.Types.ObjectId.isValid(userId)
-  ) {
-    throw new Error("Invalid user ID");
   }
 
   const input =
@@ -129,7 +136,12 @@ export async function createProof(
       ? new mongoose.Types.ObjectId(input.vendorId)
       : undefined;
 
-  return Proof.create({
+  const uploadedBy =
+    userId && mongoose.Types.ObjectId.isValid(userId)
+      ? new mongoose.Types.ObjectId(userId)
+      : undefined;
+
+  const created = await Proof.create({
     originalImageKey: stored.key,
     locationName: input.locationName,
     campaignId,
@@ -145,14 +157,28 @@ export async function createProof(
     capturedAt:
       new Date(input.capturedAt),
 
-    uploadedBy:
-      new mongoose.Types.ObjectId(userId),
+    uploadedBy,
 
     deviceInfo:
-      input.deviceInfo || "Unknown",
+      input.deviceInfo || "Manual Upload",
 
     status: "Pending",
   });
+
+  if (campaignId) {
+    try {
+      await syncCampaignPow(String(campaignId), userId);
+    } catch {
+      // ignore
+    }
+  }
+
+  const populated = await Proof.findById(created._id)
+    .populate("campaignId", "name campaignCode")
+    .populate("vendorId", "name primaryContact companyName")
+    .lean();
+
+  return populated || created;
 }
 
 // =====================================================
@@ -183,27 +209,26 @@ export async function createProofByToken(
    * Atomically increase link usage.
    * Allows unlimited photos as requested.
    */
-  const link =
-    await Proof.findOneAndUpdate(
-      {
-        proofLinkToken: token,
-        proofLinkActive: true,
-      },
-      {
-        $inc: {
-          proofLinkUses: 1,
-        },
-      },
-      {
-        new: true,
-      }
-    );
+  const link = await Proof.findOne({
+    proofLinkToken: token,
+    proofLinkActive: true,
+  });
 
   if (!link) {
     throw new Error(
       "Proof link is invalid or inactive"
     );
   }
+
+  if (link.proofLinkExpiresAt && new Date() > new Date(link.proofLinkExpiresAt)) {
+    throw new Error(
+      "This proof link has expired (24 hours limit exceeded)"
+    );
+  }
+
+  // Atomically increase link usage
+  link.proofLinkUses = (link.proofLinkUses ?? 0) + 1;
+  await link.save();
 
   // Save the image buffer to disk/storage
   const stored = await fileService.save(file, { folder: "proofs" });
@@ -232,6 +257,14 @@ export async function createProofByToken(
       status: "Pending",
     });
 
+  if (link.campaignId) {
+    try {
+      await syncCampaignPow(String(link.campaignId));
+    } catch {
+      // ignore
+    }
+  }
+
   return proof;
 }
 
@@ -250,24 +283,24 @@ export async function getProofs(
     unknown
   > = {};
 
-  if (filters.taskId) {
+  if (filters.taskId && mongoose.Types.ObjectId.isValid(filters.taskId)) {
     mongoQuery.taskId =
-      filters.taskId;
+      new mongoose.Types.ObjectId(filters.taskId);
   }
 
-  if (filters.campaignId) {
+  if (filters.campaignId && mongoose.Types.ObjectId.isValid(filters.campaignId)) {
     mongoQuery.campaignId =
-      filters.campaignId;
+      new mongoose.Types.ObjectId(filters.campaignId);
   }
 
-  if (filters.vendorId) {
+  if (filters.vendorId && mongoose.Types.ObjectId.isValid(filters.vendorId)) {
     mongoQuery.vendorId =
-      filters.vendorId;
+      new mongoose.Types.ObjectId(filters.vendorId);
   }
 
-  if (filters.atrId) {
+  if (filters.atrId && mongoose.Types.ObjectId.isValid(filters.atrId)) {
     mongoQuery.atrId =
-      filters.atrId;
+      new mongoose.Types.ObjectId(filters.atrId);
   }
 
   if (filters.status) {
@@ -324,7 +357,7 @@ export async function getTaskProofs(
 export async function reviewProof(
   proofId: string,
   data: unknown,
-  reviewerId: string
+  reviewerId?: string
 ) {
   if (
     !mongoose.Types.ObjectId.isValid(
@@ -333,16 +366,6 @@ export async function reviewProof(
   ) {
     throw new Error(
       "Invalid proof ID"
-    );
-  }
-
-  if (
-    !mongoose.Types.ObjectId.isValid(
-      reviewerId
-    )
-  ) {
-    throw new Error(
-      "Invalid reviewer ID"
     );
   }
 
@@ -358,12 +381,6 @@ export async function reviewProof(
     );
   }
 
-  if (proof.status !== "Pending") {
-    throw new Error(
-      "Only pending proofs can be reviewed"
-    );
-  }
-
   proof.status = input.status;
 
   proof.rejectionReason =
@@ -371,16 +388,62 @@ export async function reviewProof(
       ? input.rejectionReason
       : undefined;
 
-  proof.reviewedBy =
-    new mongoose.Types.ObjectId(
-      reviewerId
-    );
+  if (reviewerId && mongoose.Types.ObjectId.isValid(reviewerId)) {
+    proof.reviewedBy =
+      new mongoose.Types.ObjectId(
+        reviewerId
+      );
+  }
 
   proof.reviewedAt = new Date();
 
   await proof.save();
 
-  return proof;
+  if (proof.campaignId) {
+    try {
+      const { Campaign } = await import("../campaigns/campaign.model.js");
+      if (input.status === "Complete") {
+        await Campaign.findByIdAndUpdate(proof.campaignId, {
+          status: "Completed",
+          isPowUpdated: true,
+        });
+        await CampaignPow.findOneAndUpdate(
+          { campaignId: proof.campaignId },
+          {
+            campaignId: proof.campaignId,
+            status: "Complete",
+            message: "Campaign status has been saved as Complete for this campaign's POW.",
+            savedAt: new Date(),
+          },
+          { upsert: true }
+        );
+      } else if (input.status === "Rejected") {
+        await Campaign.findByIdAndUpdate(proof.campaignId, {
+          status: "Rejected",
+          isPowUpdated: true,
+        });
+        await CampaignPow.findOneAndUpdate(
+          { campaignId: proof.campaignId },
+          {
+            campaignId: proof.campaignId,
+            status: "Rejected",
+            message: "Campaign status has been saved as Rejected for this campaign's POW.",
+            savedAt: new Date(),
+          },
+          { upsert: true }
+        );
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const updatedProof = await Proof.findById(proof._id)
+    .populate("campaignId", "name campaignCode")
+    .populate("vendorId", "name primaryContact companyName")
+    .lean();
+
+  return updatedProof || proof;
 }
 
 // =====================================================
@@ -435,4 +498,76 @@ export async function getCampaignsByVendor(vendorId: string) {
     .select("name campaignCode city startDate endDate status")
     .sort({ name: 1 })
     .lean();
+}
+
+// =====================================================
+// Sync / Save Campaign POW
+// =====================================================
+
+export async function syncCampaignPow(campaignId: string, userId?: string) {
+  if (!mongoose.Types.ObjectId.isValid(campaignId)) {
+    throw new Error("Invalid campaign ID");
+  }
+
+  const { Campaign } = await import(
+    "../campaigns/campaign.model.js"
+  );
+  const campaign = await Campaign.findById(campaignId);
+  if (!campaign) {
+    throw new Error("Campaign not found");
+  }
+
+  const cStatus = (campaign.status || "").toLowerCase().trim();
+  let proofStatus: "Complete" | "Rejected" = "Complete";
+  if (
+    cStatus === "rejected" ||
+    cStatus === "campaign rejected" ||
+    cStatus === "cancelled"
+  ) {
+    proofStatus = "Rejected";
+  }
+
+  const location = campaign.city
+    ? `${campaign.city}${campaign.state ? `, ${campaign.state}` : ""}`
+    : campaign.name || "Campaign Location";
+
+  const message =
+    proofStatus === "Complete"
+      ? "Campaign status has been saved as Complete for this campaign's POW."
+      : "Campaign status has been saved as Rejected for this campaign's POW.";
+
+  const record = await CampaignPow.findOneAndUpdate(
+    { campaignId: new mongoose.Types.ObjectId(campaignId) },
+    {
+      campaignId: new mongoose.Types.ObjectId(campaignId),
+      campaignCode: campaign.campaignCode,
+      campaignName: campaign.name,
+      status: proofStatus,
+      locationName: location,
+      message,
+      savedAt: new Date(),
+      savedBy:
+        userId && mongoose.Types.ObjectId.isValid(userId)
+          ? new mongoose.Types.ObjectId(userId)
+          : undefined,
+    },
+    { upsert: true, new: true }
+  );
+
+  campaign.isPowUpdated = true;
+  campaign.powUpdatedAt = new Date();
+  await campaign.save();
+
+  return record;
+}
+
+export async function getAllCampaignPows() {
+  return CampaignPow.find().sort({ savedAt: -1 }).lean();
+}
+
+export async function getCampaignPow(campaignId: string) {
+  if (!mongoose.Types.ObjectId.isValid(campaignId)) return null;
+  return CampaignPow.findOne({
+    campaignId: new mongoose.Types.ObjectId(campaignId),
+  }).lean();
 }

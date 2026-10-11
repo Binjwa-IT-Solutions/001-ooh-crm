@@ -5,19 +5,27 @@ export const createProofSchema =
     lat: z.coerce
       .number()
       .min(-90)
-      .max(90),
+      .max(90)
+      .optional()
+      .default(22.7196),
 
     lng: z.coerce
       .number()
       .min(-180)
-      .max(180),
+      .max(180)
+      .optional()
+      .default(75.8577),
 
     gpsAccuracy: z.coerce
       .number()
-      .positive(),
+      .positive()
+      .optional()
+      .default(15),
 
-    capturedAt:
-      z.string().datetime(),
+    capturedAt: z
+      .string()
+      .optional()
+      .default(() => new Date().toISOString()),
 
     deviceInfo:
       z.string().optional(),

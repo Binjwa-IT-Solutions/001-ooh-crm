@@ -21,10 +21,10 @@ interface Props {
 }
 
 const STATUS_OPTIONS = [
-  { label: "Draft", value: "Draft" },
+  { label: "In Progress", value: "In Progress" },
   { label: "Campaign Live", value: "Campaign Live" },
   { label: "Campaign End", value: "Campaign End" },
-  { label: "Campaign Rejected", value: "Rejected" },
+  { label: "Rejected", value: "Rejected" },
 ];
 
 export default function CampaignFilters({

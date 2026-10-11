@@ -10,8 +10,8 @@ interface Props {
 
 const steps = [
   {
-    key: "Draft",
-    label: "Draft",
+    key: "In Progress",
+    label: "In Progress",
   },
   {
     key: "Campaign Live",
@@ -24,17 +24,18 @@ const steps = [
 ] as const;
 
 function getStepIndex(status: string): number {
-  if (status === "Draft" || status === "Approved") return 0;
-  if (status === "Campaign Live" || status === "InProgress" || status === "In Progress") return 1;
-  if (status === "Campaign End" || status === "Completed" || status === "Complete") return 2;
-  return 0;
+  const s = (status || "").trim().toLowerCase();
+  if (s === "campaign end" || s === "completed" || s === "complete") return 2;
+  if (s === "campaign live") return 1;
+  return 0; // "In Progress"
 }
 
 function getDisplayStatus(status: string): string {
-  if (status === "Campaign End" || status === "Completed" || status === "Complete") return "Campaign End (Lifecycle Complete)";
-  if (status === "Rejected" || status === "Cancelled") return "Campaign Rejected";
-  if (status === "InProgress" || status === "In Progress") return "Campaign Live";
-  return status;
+  const s = (status || "").trim().toLowerCase();
+  if (s === "campaign end" || s === "completed" || s === "complete") return "Campaign End";
+  if (s === "rejected" || s === "cancelled") return "Rejected";
+  if (s === "campaign live") return "Campaign Live";
+  return "In Progress";
 }
 
 export default function CampaignStatusTimeline({
@@ -57,7 +58,7 @@ export default function CampaignStatusTimeline({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-rose-900">
-                  Campaign Rejected
+                  Rejected
                 </h2>
                 {campaignCode && (
                   <span className="rounded-md bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-700">
@@ -75,7 +76,7 @@ export default function CampaignStatusTimeline({
           </div>
 
           <span className="inline-flex items-center rounded-full bg-rose-100 px-3.5 py-1 text-xs font-bold text-rose-700">
-            Campaign Rejected
+            Rejected
           </span>
         </div>
       </div>

@@ -94,6 +94,12 @@ export interface Campaign {
     | CampaignManager
     | null;
 
+  rejectionReason?: string;
+
+  isPowUpdated?: boolean;
+
+  powUpdatedAt?: string;
+
   createdAt: string;
 
   updatedAt: string;

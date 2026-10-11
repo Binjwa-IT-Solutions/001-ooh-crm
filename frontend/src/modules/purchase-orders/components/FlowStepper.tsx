@@ -24,7 +24,7 @@ export default function FlowStepper({
   onSelectStep,
 }: Props) {
   return (
-    <div className="mb-6 overflow-x-auto rounded-2xl border border-gray-200 bg-white p-3 shadow-xs">
+    <div className="mb-6 overflow-x-auto rounded-2xl border border-gray-200 bg-white p-3 shadow-xs print:hidden">
       <div className="flex min-w-[700px] items-center justify-between">
         {STEPS.map((s, index) => {
           const isActive = currentStep === s.step;
