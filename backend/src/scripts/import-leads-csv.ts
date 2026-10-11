@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { connectDatabase, disconnectDatabase } from '../core/db/connect.js';
+import mongoose from 'mongoose';
 import { Lead } from '../modules/leads/leads.model.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -77,21 +77,44 @@ async function run() {
   // 1. Locate CSV file
   const customPath = process.argv[2];
   const homeDir = process.env.USERPROFILE || process.env.HOME || 'C:/Users/risha';
-  const candidatePaths = [
-    customPath,
-    path.resolve(process.cwd(), 'leads.csv'),
-    path.resolve(process.cwd(), 'leads_export.csv'),
-    path.resolve(__dirname, '../../../leads.csv'),
-    path.resolve(__dirname, '../../../leads_export.csv'),
-    path.resolve(__dirname, '../../leads.csv'),
-    path.resolve(homeDir, 'Downloads/leads_export_2026-10-09.csv'),
-  ].filter(Boolean) as string[];
+  const downloadsDir = path.resolve(homeDir, 'Downloads');
 
   let csvPath: string | null = null;
-  for (const p of candidatePaths) {
-    if (fs.existsSync(p) && fs.statSync(p).isFile()) {
-      csvPath = p;
-      break;
+
+  if (customPath && fs.existsSync(customPath) && fs.statSync(customPath).isFile()) {
+    csvPath = customPath;
+  } else {
+    // Check for newest leads_export_*.csv in Downloads
+    if (fs.existsSync(downloadsDir)) {
+      const files = fs
+        .readdirSync(downloadsDir)
+        .filter((f) => f.startsWith('leads_export_') && f.endsWith('.csv'))
+        .map((f) => {
+          const fullPath = path.join(downloadsDir, f);
+          return { fullPath, mtime: fs.statSync(fullPath).mtimeMs };
+        })
+        .sort((a, b) => b.mtime - a.mtime);
+
+      if (files.length > 0) {
+        csvPath = files[0].fullPath;
+      }
+    }
+
+    // Fallbacks
+    if (!csvPath) {
+      const fallbackCandidates = [
+        path.resolve(process.cwd(), 'leads.csv'),
+        path.resolve(process.cwd(), 'leads_export.csv'),
+        path.resolve(__dirname, '../../../leads.csv'),
+        path.resolve(__dirname, '../../../leads_export.csv'),
+        path.resolve(__dirname, '../../leads.csv'),
+      ];
+      for (const p of fallbackCandidates) {
+        if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+          csvPath = p;
+          break;
+        }
+      }
     }
   }
 
@@ -132,7 +155,12 @@ async function run() {
   };
 
   // 3. Connect Database
-  await connectDatabase();
+  const targetUri =
+    process.env.MONGO_URI || 'mongodb://localhost:27017/media-octus-crm?retryWrites=false';
+  await mongoose.connect(targetUri);
+  const sanitizedUri = targetUri.replace(/\/\/([^:]+):([^@]+)@/, '//$1:****@');
+  console.log(`🔗 Target Database: ${sanitizedUri}`);
+  console.log(`🗄️  Connected DB Name: ${mongoose.connection.name}`);
 
   let importedCount = 0;
   let skippedDuplicateCount = 0;
@@ -262,7 +290,7 @@ async function run() {
     }
   }
 
-  await disconnectDatabase();
+  await mongoose.disconnect();
 
   console.log('\n\n====================================================');
   console.log('🎉 Import Summary:');
@@ -275,6 +303,6 @@ async function run() {
 
 run().catch(async (err) => {
   console.error('\n❌ Import script failed:', err);
-  await disconnectDatabase().catch(() => {});
+  await mongoose.disconnect().catch(() => {});
   process.exit(1);
 });

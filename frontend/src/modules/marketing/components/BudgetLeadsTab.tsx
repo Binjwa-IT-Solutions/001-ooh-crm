@@ -35,7 +35,7 @@ export default function BudgetLeadsTab() {
   const [spendSubmitting, setSpendSubmitting] = useState(false);
   const [spDate, setSpDate] = useState(new Date().toISOString().slice(0, 10));
   const [spCampaign, setSpCampaign] = useState('');
-  const [spPlatform, setSpPlatform] = useState('Meta Ads');
+  const [spPlatform, setSpPlatform] = useState('Instagram Ads');
   const [spCity, setSpCity] = useState('Jaipur');
   const [spAmount, setSpAmount] = useState<number>(5000);
   const [spType, setSpType] = useState('Ad Spend');
@@ -55,7 +55,7 @@ export default function BudgetLeadsTab() {
   const [ldPhone, setLdPhone] = useState('');
   const [ldEmail, setLdEmail] = useState('');
   const [ldCity, setLdCity] = useState('Jaipur');
-  const [ldPlatform, setLdPlatform] = useState('Meta Ads');
+  const [ldPlatform, setLdPlatform] = useState('Instagram');
   const [ldService, setLdService] = useState('Billboards');
 
   // Lead Won prompt modal
@@ -603,13 +603,16 @@ export default function BudgetLeadsTab() {
                     onChange={(e) => setSpPlatform(e.target.value)}
                     className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B2424]"
                   >
-                    <option value="Meta Ads">Meta Ads</option>
+                    <option value="Instagram Ads">Instagram Ads</option>
+                    <option value="Facebook Ads">Facebook Ads</option>
                     <option value="Google Ads">Google Ads</option>
+                    <option value="Justdial">Justdial</option>
+                    <option value="WhatsApp Business">WhatsApp Business</option>
                     <option value="LinkedIn Ads">LinkedIn Ads</option>
-                    <option value="Print/Hoardings">Print/Hoardings</option>
+                    <option value="Print/Hoardings">Print / Hoardings</option>
                     <option value="Influencer">Influencer</option>
-                    <option value="Tools/Software">Tools/Software</option>
-                    <option value="Agency/Freelancer">Agency/Freelancer</option>
+                    <option value="Tools/Software">Tools / Software</option>
+                    <option value="Agency/Freelancer">Agency / Freelancer</option>
                     <option value="Other">Other</option>
                   </select>
                 </div>
@@ -755,9 +758,11 @@ export default function BudgetLeadsTab() {
                     onChange={(e) => setLdPlatform(e.target.value)}
                     className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B2424]"
                   >
-                    <option value="Meta Ads">Meta Ads</option>
+                    <option value="Instagram">Instagram</option>
+                    <option value="Facebook">Facebook</option>
                     <option value="Google Ads">Google Ads</option>
-                    <option value="Instagram Organic">Instagram Organic</option>
+                    <option value="Justdial">Justdial</option>
+                    <option value="WhatsApp">WhatsApp</option>
                     <option value="LinkedIn">LinkedIn</option>
                     <option value="Website">Website Form</option>
                     <option value="Direct Call">Direct Call</option>

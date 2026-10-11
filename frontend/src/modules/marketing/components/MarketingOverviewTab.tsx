@@ -170,7 +170,7 @@ export default function MarketingOverviewTab() {
             <TrendingUp className="h-4 w-4 text-[#8B2424]" />
           </div>
           <div className="mt-3">
-            <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400">
+            <div className="text-2xl font-black text-[#8B2424]">
               {metrics?.roas || 0}x ROAS
             </div>
             <div className="text-xs text-slate-400">
@@ -178,7 +178,7 @@ export default function MarketingOverviewTab() {
             </div>
           </div>
           <div className="mt-3 text-[11px] text-slate-500 flex items-center gap-1">
-            <BarChart3 className="h-3 w-3 text-indigo-500" />
+            <BarChart3 className="h-3 w-3 text-[#8B2424]" />
             <span>(Revenue - Spend) &divide; Spend</span>
           </div>
         </div>
@@ -218,7 +218,7 @@ export default function MarketingOverviewTab() {
                     <td className="py-2.5 font-semibold text-slate-900 dark:text-white">{row.leadsCount}</td>
                     <td className="py-2.5 text-emerald-600 font-bold">{row.wonCount}</td>
                     <td className="py-2.5 text-slate-700 dark:text-slate-300 font-semibold">{formatINR(row.revenue)}</td>
-                    <td className="py-2.5 text-right font-extrabold text-indigo-600 dark:text-indigo-400">
+                    <td className="py-2.5 text-right font-extrabold text-[#8B2424]">
                       {row.roasMultiplier > 0 ? `${row.roasMultiplier}x` : '—'}
                     </td>
                   </tr>

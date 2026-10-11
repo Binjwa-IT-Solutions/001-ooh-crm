@@ -386,18 +386,44 @@ export class MarketingService {
     const roas = totalSpend > 0 ? parseFloat((totalWonRevenue / totalSpend).toFixed(2)) : 0;
     const cpl = totalLeads > 0 ? Math.round(totalSpend / totalLeads) : 0;
 
-    // Platform Breakdown Matrix
-    const platforms = ['Instagram', 'Facebook', 'LinkedIn', 'Google', 'WhatsApp', 'Other'];
-    const platformMatrix = platforms.map((p) => {
-      const pSpends = spends.filter((s) => s.platform.toLowerCase().includes(p.toLowerCase()));
-      const pLeads = leads.filter((l) => l.sourcePlatform.toLowerCase().includes(p.toLowerCase()));
-      const pSpendAmount = pSpends.reduce((sum, s) => sum + s.amount, 0);
+    // Platform Breakdown Matrix (Aligned with Spend & Lead Dropdown options)
+    const platformDefs = [
+      { id: 'Instagram', aliases: ['instagram', 'insta', 'meta'] },
+      { id: 'Facebook', aliases: ['facebook', 'fb'] },
+      { id: 'Google Ads', aliases: ['google'] },
+      { id: 'Justdial', aliases: ['justdial'] },
+      { id: 'WhatsApp Business', aliases: ['whatsapp'] },
+      { id: 'LinkedIn', aliases: ['linkedin'] },
+      { id: 'Print / Hoardings', aliases: ['print', 'hoarding', 'ooh'] },
+      { id: 'Other', aliases: [] },
+    ];
+
+    const knownKeywords = ['meta', 'facebook', 'instagram', 'google', 'justdial', 'linkedin', 'whatsapp', 'print', 'hoarding'];
+
+    const platformMatrix = platformDefs.map(({ id, aliases }) => {
+      const pSpends = spends.filter((s) => {
+        const plat = (s.platform || '').toLowerCase();
+        if (id === 'Other') {
+          return !knownKeywords.some((k) => plat.includes(k));
+        }
+        return aliases.some((a) => plat.includes(a));
+      });
+
+      const pLeads = leads.filter((l) => {
+        const plat = (l.sourcePlatform || '').toLowerCase();
+        if (id === 'Other') {
+          return !knownKeywords.some((k) => plat.includes(k));
+        }
+        return aliases.some((a) => plat.includes(a));
+      });
+
+      const pSpendAmount = pSpends.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
       const pWon = pLeads.filter((l) => l.stage === 'Won');
-      const pRevenue = pWon.reduce((sum, l) => sum + (l.dealValue || 0), 0);
+      const pRevenue = pWon.reduce((sum, l) => sum + (Number(l.dealValue) || 0), 0);
       const pRoi = pSpendAmount > 0 ? parseFloat((pRevenue / pSpendAmount).toFixed(1)) : 0;
 
       return {
-        platform: p,
+        platform: id,
         spend: pSpendAmount,
         leadsCount: pLeads.length,
         wonCount: pWon.length,
@@ -406,14 +432,22 @@ export class MarketingService {
       };
     });
 
-    // City Breakdown Matrix
-    const cities = ['Indore', 'Bhopal', 'Ujjain', 'National'];
-    const cityMatrix = cities.map((c) => {
-      const cSpends = spends.filter((s) => s.city.toLowerCase() === c.toLowerCase());
-      const cLeads = leads.filter((l) => l.city.toLowerCase() === c.toLowerCase());
-      const cSpendAmount = cSpends.reduce((sum, s) => sum + s.amount, 0);
+    // City Breakdown Matrix (Dynamic, capturing standard cities + active cities from DB)
+    const standardCities = ['Jaipur', 'Indore', 'Delhi NCR', 'Mumbai', 'Bangalore', 'National'];
+    const activeCities = Array.from(
+      new Set([
+        ...spends.map((s) => s.city).filter(Boolean),
+        ...leads.map((l) => l.city).filter(Boolean),
+        ...standardCities,
+      ])
+    ).slice(0, 6);
+
+    const cityMatrix = activeCities.map((c) => {
+      const cSpends = spends.filter((s) => (s.city || '').toLowerCase() === c.toLowerCase());
+      const cLeads = leads.filter((l) => (l.city || '').toLowerCase() === c.toLowerCase());
+      const cSpendAmount = cSpends.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
       const cWon = cLeads.filter((l) => l.stage === 'Won');
-      const cRevenue = cWon.reduce((sum, l) => sum + (l.dealValue || 0), 0);
+      const cRevenue = cWon.reduce((sum, l) => sum + (Number(l.dealValue) || 0), 0);
 
       return {
         city: c,
