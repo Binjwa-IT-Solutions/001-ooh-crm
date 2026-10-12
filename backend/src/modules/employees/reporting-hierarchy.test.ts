@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test, { before, after } from 'node:test';
 import mongoose, { Types } from 'mongoose';
 
-import { connectDatabase, disconnectDatabase } from '../../core/db/connect.js';
+import { connectDatabase, disconnectDatabase, assertTestDatabase } from '../../core/db/connect.js';
 import type { RequestContext } from '../../core/context.js';
 import { AuthUser } from '../../core/auth/auth-model.js';
 import { AuthService } from '../../core/auth/auth-service.js';
@@ -20,7 +20,8 @@ const adminCtx: RequestContext = {
 };
 
 before(async () => {
-  await connectDatabase();
+  await connectDatabase({ isTestConnection: true });
+  assertTestDatabase();
 
   // Cleanup test users and employees
   await AuthUser.deleteMany({ email: { $regex: /@mediaoctus\.test$/i } });
@@ -33,6 +34,7 @@ before(async () => {
 });
 
 after(async () => {
+  assertTestDatabase();
   await AuthUser.deleteMany({ email: { $regex: /@mediaoctus\.test$/i } });
   await Employee.deleteMany({
     $or: [

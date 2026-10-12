@@ -11,6 +11,7 @@ import {
   listEmployeesSchema,
   reassignTeamMemberSchema,
   updateEmployeeSchema,
+  updateMyProfileSchema,
   updateTeamNameSchema,
   updateTeamSchema,
 } from './employees.validator.js';
@@ -42,6 +43,13 @@ export class EmployeesController {
   static async me(req: Request, res: Response) {
     const employee = await employeeService.getMine(context(req));
     res.status(200).json({ employee });
+  }
+
+  /** PATCH /api/employees/me */
+  static async updateMine(req: Request, res: Response) {
+    const input = updateMyProfileSchema.parse(req.body);
+    const employee = await employeeService.updateMine(input, context(req));
+    res.status(200).json({ message: 'Profile updated', employee });
   }
 
   /** GET /api/employees/manager-options */

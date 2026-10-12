@@ -17,6 +17,7 @@ quotationsRoutes.post('/:id/pdf', requireAuth, requirePermission('quotations.vie
 quotationsRoutes.get('/:id/pdf', requireAuth, requirePermission('quotations.view'), asyncHandler(QuotationsController.getPdf));
 quotationsRoutes.post('/:id/upload-pdf', requireAuth, requirePermission('quotations.update'), uploadSingle('file'), asyncHandler(QuotationsController.uploadPdf));
 quotationsRoutes.post('/:id/send', requireAuth, requirePermission('quotations.update'), asyncHandler(QuotationsController.send));
+quotationsRoutes.post('/:id/accept', requireAuth, requirePermission('quotations.update'), asyncHandler(QuotationsController.acceptInternal));
 
 // --- Public Client Proposal Routes (/q) ---
 export const publicQuotationsRoutes = Router();

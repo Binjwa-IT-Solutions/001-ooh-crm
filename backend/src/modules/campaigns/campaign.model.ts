@@ -2,13 +2,9 @@ import { Schema, model, Types } from "mongoose";
 import { basePlugin, type BaseDocument } from "../../core/db/basePlugin.js";
 
 export enum CampaignStatus {
-  IN_PROGRESS = "In Progress",
-  CAMPAIGN_LIVE = "Campaign Live",
-  CAMPAIGN_END = "Campaign End",
-  REJECTED = "Rejected",
   DRAFT = "Draft",
   APPROVED = "Approved",
-  INPROGRESS = "InProgress",
+  IN_PROGRESS = "InProgress",
   COMPLETED = "Completed",
   COMPLETE = "Complete",
   CANCELLED = "Cancelled",
@@ -19,12 +15,8 @@ export interface ICampaign extends BaseDocument {
   name: string;
 
   leadId: Types.ObjectId;
-  quotationId?: Types.ObjectId;
-  quotationNo?: string;
-  quotationName?: string;
-  piNo?: string;
+  quotationId: Types.ObjectId;
 
-  state?: string;
   city: string;
 
   startDate: Date;
@@ -66,37 +58,14 @@ const campaignSchema = new Schema<ICampaign>(
       index: true,
     },
 
-    quotationId: {
-      type: Schema.Types.ObjectId,
-      ref: "Quotation",
-      required: false,
-      sparse: true,
-      index: true,
-    },
-
-    quotationNo: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-
-    quotationName: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-
-    piNo: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-
-    state: {
-      type: String,
-      trim: true,
-      default: "",
-    },
+   quotationId: {
+  type: Schema.Types.ObjectId,
+  ref: "Quotation",
+  required: false,
+  unique: true,
+  sparse: true,
+  index: true,
+},
     city: {
       type: String,
       required: true,
@@ -130,7 +99,7 @@ const campaignSchema = new Schema<ICampaign>(
     status: {
       type: String,
       enum: Object.values(CampaignStatus),
-      default: CampaignStatus.IN_PROGRESS,
+      default: CampaignStatus.DRAFT,
       required: true,
       index: true,
     },

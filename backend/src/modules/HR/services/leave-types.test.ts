@@ -1,8 +1,10 @@
+// @ts-ignore
 import assert from 'node:assert/strict';
+// @ts-ignore
 import test, { before, after } from 'node:test';
 import { Types } from 'mongoose';
 
-import { connectDatabase, disconnectDatabase } from '../../../core/db/connect.js';
+import { connectDatabase, disconnectDatabase, assertTestDatabase } from '../../../core/db/connect.js';
 import type { RequestContext } from '../../../core/context.js';
 import { permissionsForRole } from '../../../core/rbac/permissions.js';
 import { LeaveType, LeaveBalance } from '../models/leave.model.js';
@@ -122,7 +124,8 @@ const otherCtx = {
 } as unknown as RequestContext;
 
 before(async () => {
-  await connectDatabase();
+  await connectDatabase({ isTestConnection: true });
+  assertTestDatabase();
 
   // Clean test databases
   await LeaveType.deleteMany({ code: { $in: ['TEST_CL', 'TEST_PL', 'TEST_LWP'] } });
@@ -215,6 +218,7 @@ before(async () => {
 });
 
 after(async () => {
+  assertTestDatabase();
   // Clean up
   await LeaveType.deleteMany({ code: { $in: ['TEST_CL', 'TEST_PL', 'TEST_LWP'] } });
   await Employee.deleteMany({ workEmail: { $regex: /@test-leave-module\.test$/ } });

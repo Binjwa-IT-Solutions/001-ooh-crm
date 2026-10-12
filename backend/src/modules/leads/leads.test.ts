@@ -8,18 +8,15 @@ import { leadQualificationSchema, listLeadsSchema, uploadLeadDocumentSchema } fr
 
 const FAKE_USER_CTX = { user: { id: '64b7f9a1c2d3e4f5a6b7c8d9', role: 'sales' } } as any;
 
-function withPatchedModel(patches: Partial<typeof Lead>, fn: () => Promise<void>) {
-  const originals: Partial<Record<string, any>> = {};
+function withPatchedModel(patches: Record<string, any>, fn: () => Promise<void>) {
+  const originals: Record<string, any> = {};
   for (const k of Object.keys(patches)) {
-    // @ts-expect-error testing mock
     originals[k] = (Lead as any)[k];
-    // @ts-expect-error testing mock
     (Lead as any)[k] = (patches as any)[k];
   }
 
   return fn().finally(() => {
     for (const k of Object.keys(patches)) {
-      // @ts-expect-error testing mock
       (Lead as any)[k] = originals[k];
     }
   });
@@ -183,10 +180,10 @@ test('logFollowUpLead records followUpType, reason, and nextActionDate', async (
       FAKE_USER_CTX,
     );
 
-    assert.equal(updated.callLogs.length, 1);
-    assert.equal(updated.callLogs[0].followUpType, 'Meeting');
-    assert.equal(updated.callLogs[0].reason, 'Quotation Review');
-    assert.equal(updated.callLogs[0].remarks, 'Met with client in Bandra office');
+    assert.equal(updated.callLogs!.length, 1);
+    assert.equal(updated.callLogs![0].followUpType, 'Meeting');
+    assert.equal(updated.callLogs![0].reason, 'Quotation Review');
+    assert.equal(updated.callLogs![0].remarks, 'Met with client in Bandra office');
     assert.equal(updated.nextActionDate, nextDate);
   } finally {
     LeadsService.getLead = origGetLead;
@@ -218,9 +215,9 @@ test('logFollowUpLead auto-clears nextActionDate when empty or omitted (Option 1
       FAKE_USER_CTX,
     );
 
-    assert.equal(updated.callLogs.length, 1);
+    assert.equal(updated.callLogs!.length, 1);
     assert.equal(updated.nextActionDate, null);
-    assert.equal(updated.callLogs[0].nextActionDate, null);
+    assert.equal(updated.callLogs![0].nextActionDate, null);
   } finally {
     LeadsService.getLead = origGetLead;
   }
@@ -247,9 +244,9 @@ test('managerApproveLead records approval and remarks', async () => {
       FAKE_USER_CTX,
     );
 
-    assert.equal(updated.managerApproval.approved, true);
-    assert.equal(updated.managerApproval.remarks, 'Approved for proposal discount');
-    assert.ok(updated.managerApproval.approvedAt instanceof Date);
+    assert.equal(updated.managerApproval!.approved, true);
+    assert.equal(updated.managerApproval!.remarks, 'Approved for proposal discount');
+    assert.ok(updated.managerApproval!.approvedAt instanceof Date);
   } finally {
     LeadsService.getLead = origGetLead;
   }
@@ -526,8 +523,8 @@ test('changeStatus transitions New lead to Rejected and records reason', async (
     );
 
     assert.equal(res.status, 'Rejected');
-    assert.equal(res.statusHistory[0].to, 'Rejected');
-    assert.equal(res.statusHistory[0].reason, 'Spam / Fake Number');
+    assert.equal(res.statusHistory![0].to, 'Rejected');
+    assert.equal(res.statusHistory![0].reason, 'Spam / Fake Number');
   } finally {
     LeadsService.getLead = origGetLead;
   }
@@ -557,8 +554,8 @@ test('changeStatus allows restoring Rejected lead back to New and clears assigne
     assert.equal(res.status, 'New');
     assert.equal(res.assignedTo, undefined);
     assert.equal(res.claimedBy, undefined);
-    assert.equal(res.statusHistory[0].to, 'New');
-    assert.equal(res.statusHistory[0].reason, 'Restored to Unclaimed pool');
+    assert.equal(res.statusHistory![0].to, 'New');
+    assert.equal(res.statusHistory![0].reason, 'Restored to Unclaimed pool');
   } finally {
     LeadsService.getLead = origGetLead;
   }

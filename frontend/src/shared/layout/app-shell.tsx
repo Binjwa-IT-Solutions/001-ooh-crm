@@ -6,10 +6,8 @@ import { type ReactNode, useState } from 'react';
 import {
   LayoutDashboard,
   Users,
-  Plus,
   FileText,
   MapPin,
-  CalendarCheck,
   Building2,
   ShoppingCart,
   Megaphone,
@@ -24,26 +22,32 @@ import {
   CalendarDays,
   ShieldCheck,
   AlertTriangle,
+  CreditCard,
   Search,
-  Bell,
   Menu,
   X,
   LogOut,
-  ChevronDown,
+  type LucideIcon,
 } from 'lucide-react';
 
 import { useAuth } from '../auth/auth-context';
 import { ROLE_LABELS } from '../auth/types';
 import { Button, cx } from '../ui';
-import { type LucideIcon } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import ProfileMenu from './ProfileMenu';
 import { PageHeaderProvider } from './page-header-context';
 import { PageHeader } from './page-header';
+import { EmployeesNavIcon, InterviewsNavIcon, UserManagementNavIcon } from './nav-icons';
 
 interface NavGroup {
   label: string;
-  items: Array<{ href: string; label: string; icon: LucideIcon; permission?: string }>;
+  items: Array<{
+    href: string;
+    label: string;
+    icon: LucideIcon | React.ComponentType<{ className?: string }>;
+    permission?: string;
+    roles?: string[];
+  }>;
 }
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -56,7 +60,12 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/leads', label: 'Leads', icon: Users, permission: 'leads.view' },
       { href: '/quotations', label: 'Quotations', icon: FileText, permission: 'quotations.view' },
-      { href: '/my-campaigns', label: 'My Campaigns', icon: Megaphone, permission: 'campaigns.view' },
+      {
+        href: '/my-campaigns',
+        label: 'My Campaigns',
+        icon: Megaphone,
+        permission: 'campaigns.view',
+      },
     ],
   },
   {
@@ -64,7 +73,12 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/vendors', label: 'Vendors', icon: Building2, permission: 'vendors.view' },
       { href: '/sites', label: 'ATR', icon: MapPin, permission: 'sites.view' },
-      { href: '/purchase-orders', label: 'Purchase Orders', icon: ShoppingCart, permission: 'purchase_orders.view' },
+      {
+        href: '/purchase-orders',
+        label: 'Purchase Orders',
+        icon: ShoppingCart,
+        permission: 'purchase_orders.view',
+      },
       { href: '/campaigns', label: 'Campaigns', icon: Megaphone, permission: 'campaigns.view' },
       { href: '/escalations', label: 'Escalations', icon: ArrowUpRight, permission: 'tasks.view' },
       { href: '/proofs', label: 'Proofs', icon: Camera, permission: 'proofs.view' },
@@ -73,32 +87,46 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'FINANCE & ANALYTICS',
     items: [
-      { href: '/payments-in', label: 'Payments In', icon: ArrowDownToLine, permission: 'finance.view' },
-      { href: '/payments-out', label: 'Payments Out', icon: ArrowUpFromLine, permission: 'finance.view' },
-      { href: '/analytics', label: 'Sales Analytics', icon: BarChart3, permission: 'analytics.view' },
-      { href: '/profitability', label: 'Profitability', icon: TrendingUp, permission: 'profitability.view' },
+      { href: '/finance/sales-dashboard', label: 'Sales Revenue', icon: BarChart3, permission: 'finance.view_reports' },
+      { href: '/finance/profit-dashboard', label: 'Profit Dashboard', icon: TrendingUp, permission: 'finance.view_leadership_reports' },
+      { href: '/finance/invoices', label: 'Invoices', icon: FileText, permission: 'finance.view_payments' },
+      { href: '/finance/payments-in', label: 'Client Payments', icon: ArrowDownToLine, permission: 'finance.view_payments' },
+      { href: '/finance/payments-out', label: 'Vendor Payments', icon: ArrowUpFromLine, permission: 'finance.view_payments' },
+      { href: '/finance/payroll', label: 'Payroll / Salary Payments', icon: CreditCard, permission: 'payroll.view' },
     ],
   },
   {
     label: 'HR',
     items: [
-      { href: '/employees', label: 'Employees', icon: Users, permission: 'employees.view' },
-      { href: '/candidates', label: 'Interviews', icon: Users, permission: 'candidates.view' },
+      { href: '/employees', label: 'Employees', icon: EmployeesNavIcon, permission: 'employees.view' },
+      { href: '/candidates', label: 'Interviews', icon: InterviewsNavIcon, permission: 'candidates.view' },
       { href: '/attendance', label: 'Attendance', icon: Clock, permission: 'attendance.self' },
       { href: '/leave', label: 'Leave', icon: CalendarDays, permission: 'leave.self' },
+      { href: '/hr/salary', label: 'Salary Management', icon: CreditCard, permission: 'salary.view' },
     ],
   },
   {
     label: 'COMPLIANCE',
     items: [
       { href: '/audit', label: 'Audit', icon: ShieldCheck, permission: 'audit.view' },
-      { href: '/exceptions', label: 'Exceptions', icon: AlertTriangle, permission: 'exceptions.view' },
+      {
+        href: '/exceptions',
+        label: 'Exceptions',
+        icon: AlertTriangle,
+        permission: 'exceptions.view',
+      },
     ],
   },
   {
     label: 'ADMINISTRATION',
     items: [
-      { href: '/users', label: 'Users', icon: Users, permission: 'users.view' },
+      { href: '/users', label: 'Users', icon: UserManagementNavIcon, permission: 'users.view' },
+      {
+        href: '/security/approvals',
+        label: 'Login approvals',
+        icon: ShieldCheck,
+        roles: ['admin'],
+      },
     ],
   },
 ];
@@ -122,13 +150,17 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div
         className={cx(
           'fixed inset-y-0 left-0 z-50 w-64 flex-col border-r border-[#E6E8EC] bg-white transition-transform duration-300 lg:flex print:hidden',
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
       >
         <div className="relative flex h-16 shrink-0 items-center justify-center px-4">
           <Link href="/dashboard" className="flex items-center justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png?v=4" alt="Media Octus" className="h-[52px] w-auto max-w-[190px] object-contain" />
+            <img
+              src="/logo.png?v=4"
+              alt="Media Octus"
+              className="h-[52px] w-auto max-w-[190px] object-contain"
+            />
           </Link>
           <button
             onClick={() => setSidebarOpen(false)}
@@ -142,7 +174,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           <nav className="flex-1 space-y-6">
             {NAV_GROUPS.map((group) => {
               const visibleItems = group.items.filter(
-                (item) => !item.permission || hasPermission(item.permission)
+                (item) =>
+                  (!item.permission || hasPermission(item.permission)) &&
+                  (!item.roles || item.roles.includes(user?.role ?? '')),
               );
 
               if (visibleItems.length === 0) return null;
@@ -158,7 +192,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                   )}
                   <ul className="space-y-0.5">
                     {visibleItems.map((item) => {
-                      const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                      const isActive =
+                        pathname === item.href || pathname.startsWith(item.href + '/');
                       const Icon = item.icon;
 
                       return (
@@ -170,11 +205,16 @@ export function AppShell({ children }: { children: ReactNode }) {
                               'flex items-center gap-3 px-6 py-2.5 text-sm transition-colors border-l-4',
                               isActive
                                 ? 'bg-[#F8E6E6] text-[#6E1D1D] border-[#6E1D1D] font-medium'
-                                : 'border-transparent text-slate-500 hover:bg-[#F8E6E6] hover:text-[#6E1D1D]'
+                                : 'border-transparent text-slate-500 hover:bg-[#F8E6E6] hover:text-[#6E1D1D]',
                             )}
                             onClick={() => setSidebarOpen(false)}
                           >
-                            <Icon className={cx('h-5 w-5', isActive ? 'text-[#6E1D1D]' : 'text-slate-500')} />
+                            <Icon
+                              className={cx(
+                                'h-5 w-5',
+                                isActive ? 'text-[#6E1D1D]' : 'text-slate-500',
+                              )}
+                            />
                             {item.label}
                           </Link>
                         </li>
@@ -190,7 +230,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Main content wrapper */}
       <PageHeaderProvider>
-        <div className="flex flex-1 flex-col lg:pl-64 min-h-screen print:pl-0 print:min-h-0">
+        <div className="flex flex-1 flex-col lg:pl-64 min-h-screen print:pl-0 print:m-0 print:min-h-0 print:w-full">
           {/* Header (Sticky) */}
           <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between gap-x-4 border-b border-[#E6E8EC] bg-white px-4 sm:gap-x-6 sm:px-6 lg:px-8 print:hidden">
             <div className="flex items-center gap-4">
@@ -209,7 +249,12 @@ export function AppShell({ children }: { children: ReactNode }) {
 
               <div className="flex items-center justify-end gap-x-4 lg:gap-x-6">
                 {/* Search Bar - aligned to the right */}
-                <form className="relative flex w-64 items-center" action="#" method="GET" onSubmit={(e) => e.preventDefault()}>
+                <form
+                  className="relative flex w-64 items-center"
+                  action="#"
+                  method="GET"
+                  onSubmit={(e) => e.preventDefault()}
+                >
                   <label htmlFor="search-field" className="sr-only">
                     Search
                   </label>
@@ -232,7 +277,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                   {/* Shared Profile Menu */}
                   <ProfileMenu />
 
-                  <Button variant="ghost" onClick={() => void signOut()} className="h-10 px-3 text-[#687280] hover:text-primary transition-colors border border-transparent" title="Sign out">
+                  <Button
+                    variant="ghost"
+                    onClick={() => void signOut()}
+                    className="h-10 px-3 text-[#687280] hover:text-primary transition-colors border border-transparent"
+                    title="Sign out"
+                  >
                     <LogOut className="h-4 w-4" />
                     <span className="sr-only">Sign out</span>
                   </Button>
@@ -242,7 +292,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </header>
 
           {/* Main content */}
-          <main className="flex-1 bg-white p-4 sm:p-6 lg:p-8 print:p-0 print:m-0">
+          <main className="flex-1 bg-white p-4 sm:p-6 lg:p-8 print:p-0 print:m-0 print:w-full">
             <div className="mx-auto w-full max-w-[1200px] print:max-w-none print:w-full print:m-0 print:p-0">
               {children}
             </div>

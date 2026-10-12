@@ -14,7 +14,9 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "seed": "tsx src/scripts/seed.ts",
+    "seed:live-users": "tsx \"src/scripts/01 seed-live-users.ts\"",
     "cleanup:campaigns": "tsx src/scripts/cleanup-campaigns.ts",
+    "import:leads": "tsx src/scripts/import-leads-csv.ts",
     "test": "tsx --test --test-concurrency=1 \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
@@ -32,6 +34,7 @@
     "multer": "^2.2.0",
     "node-cron": "^4.6.0",
     "nodemon": "^3.1.14",
+    "otpauth": "^9.5.2",
     "pdfkit": "^0.19.1",
     "sharp": "^0.35.3",
     "zod": "^3.25.76"

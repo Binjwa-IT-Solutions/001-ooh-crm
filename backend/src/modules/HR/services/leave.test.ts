@@ -1,8 +1,10 @@
+// @ts-ignore
 import assert from 'node:assert/strict';
+// @ts-ignore
 import test, { before, after } from 'node:test';
 import mongoose, { Types } from 'mongoose';
 
-import { connectDatabase, disconnectDatabase } from '../../../core/db/connect.js';
+import { connectDatabase, disconnectDatabase, assertTestDatabase } from '../../../core/db/connect.js';
 import type { RequestContext } from '../../../core/context.js';
 import { LeaveType, LeaveBalance, LeaveRequest } from '../models/leave.model.js';
 import { Employee } from '../../employees/employees.model.js';
@@ -42,15 +44,16 @@ const employeeCtx = {
 } as unknown as RequestContext;
 
 before(async () => {
-  await connectDatabase();
+  await connectDatabase({ isTestConnection: true });
+  assertTestDatabase();
 
   // Mock startSession to support standalone MongoDB environments without replica sets
   // (Disabled to verify real replica set transactions)
   originalStartSession = mongoose.startSession;
   mongoose.startSession = async (options?: any) => {
     const session = await originalStartSession.call(mongoose, options);
-    session.withTransaction = async (fn: () => Promise<any>) => {
-      return fn();
+    (session.withTransaction as any) = async (fn: any) => {
+      return fn(session);
     };
     return session;
   };
@@ -146,6 +149,7 @@ before(async () => {
 });
 
 after(async () => {
+  assertTestDatabase();
   // Restore startSession
   if (originalStartSession) {
     mongoose.startSession = originalStartSession;

@@ -1,0 +1,178 @@
+{
+    "EMPLOYEES": [
+        {
+            "id": 1,
+            "name": "Admin User",
+            "role": "admin",
+            "department": "Management",
+            "manager_id": null,
+            "email": "admin@mediaoctus.com",
+            "phone": "9000000001"
+        },
+        {
+            "id": 201,
+            "name": "Suresh Kumar",
+            "role": "manager",
+            "department": "Sales",
+            "manager_id": 1,
+            "email": "suresh@mediaoctus.com",
+            "phone": "9000000201"
+        },
+        {
+            "id": 202,
+            "name": "Neha Sharma",
+            "role": "agent",
+            "department": "Engineering",
+            "manager_id": 101,
+            "email": "neha.sharma@gmail.com",
+            "phone": "9000000202"
+        },
+        {
+            "id": 101,
+            "name": "Rahul Sharma",
+            "role": "manager",
+            "department": "Engineering",
+            "manager_id": 1,
+            "email": "rahul@example.com",
+            "phone": "9876543210"
+        },
+        {
+            "id": 102,
+            "name": "Priya Singh",
+            "role": "agent",
+            "department": "Engineering",
+            "manager_id": 101,
+            "email": "priya@example.com",
+            "phone": "9876543210"
+        },
+        {
+            "id": 103,
+            "name": "Aman Verma",
+            "role": "agent",
+            "department": "Sales",
+            "manager_id": 201,
+            "email": "aman@example.com",
+            "phone": "9876543212"
+        },
+        {
+            "id": 105,
+            "name": "Vikash Patel",
+            "role": "agent",
+            "department": "Engineering",
+            "manager_id": 101,
+            "email": "vikash@example.com",
+            "phone": "9876543214"
+        },
+        {
+            "id": 106,
+            "name": "Vikash Patel",
+            "role": "agent",
+            "department": "Sales",
+            "manager_id": 201,
+            "email": "vikash1025@example.com",
+            "phone": "9876543684"
+        },
+        {
+            "id": 107,
+            "name": "Mohit",
+            "role": "agent",
+            "department": "Sales",
+            "manager_id": 201,
+            "email": "mohit@example.com",
+            "phone": "9876543212"
+        },
+        {
+            "id": 203,
+            "name": "Anuj",
+            "role": "Ai engineer",
+            "department": "Ai and automation",
+            "manager_id": 202,
+            "email": "anuj@gmail.com",
+            "phone": "999900008"
+        }
+    ],
+    "LEAVE_BALANCES": {
+        "1": {
+            "annual": 30,
+            "used": 6,
+            "remaining": 24
+        },
+        "201": {
+            "annual": 30,
+            "used": 6,
+            "remaining": 24
+        },
+        "202": {
+            "annual": 40,
+            "used": 4,
+            "remaining": 36
+        },
+        "101": {
+            "annual": 20,
+            "used": 5,
+            "remaining": 15
+        },
+        "102": {
+            "annual": 20,
+            "used": 9,
+            "remaining": 11
+        },
+        "103": {
+            "annual": 20,
+            "used": 7,
+            "remaining": 13
+        },
+        "105": {
+            "annual": 20,
+            "used": 2,
+            "remaining": 18
+        },
+        "106": {
+            "annual": 20,
+            "used": 6,
+            "remaining": 14
+        },
+        "107": {
+            "annual": 20,
+            "used": 6,
+            "remaining": 14
+        },
+        "203": {
+            "annual": 50,
+            "used": 0,
+            "remaining": 50
+        }
+    },
+    "ATTENDANCE": {
+        "1": {
+            "status": "Present"
+        },
+        "201": {
+            "status": "Present"
+        },
+        "202": {
+            "status": "Present"
+        },
+        "101": {
+            "status": "Present"
+        },
+        "102": {
+            "status": "Present"
+        },
+        "103": {
+            "status": "Absent"
+        },
+        "105": {
+            "status": "Present"
+        },
+        "106": {
+            "status": "Present"
+        },
+        "107": {
+            "status": "Absent"
+        },
+        "203": {
+            "status": "Present"
+        }
+    }
+}

@@ -6,9 +6,12 @@ import { AuthService } from './auth-service.js';
 import {
   listUsersSchema,
   loginSchema,
+  emailFallbackSchema,
+  completeMfaEnrollmentSchema,
   logoutSchema,
   refreshSchema,
   registerSchema,
+  resetUserMfaSchema,
   resendOtpSchema,
   updateUserSchema,
   userIdParamSchema,
@@ -62,10 +65,24 @@ export class AuthController {
       role: input.role,
       status: input.status,
       passwordPlain: input.password,
-      reportingManagerId: input.reportingManagerId !== undefined ? input.reportingManagerId : undefined,
+      reportingManagerId:
+        input.reportingManagerId !== undefined ? input.reportingManagerId : undefined,
     });
 
     res.status(200).json({ message: 'User updated', user });
+  }
+
+  /** POST /api/auth/users/:id/reset-mfa — admin recovery with fresh MFA proof. */
+  static async resetUserMfa(req: Request, res: Response) {
+    const { id } = userIdParamSchema.parse(req.params);
+    if (!req.ctx) throw new UnauthorizedError();
+    const input = resetUserMfaSchema.parse(req.body);
+    const result = await AuthService.resetUserMfa(id, req.ctx.user.id, input);
+
+    res.status(200).json({
+      message: 'Authenticator reset. The user must enroll again at next sign-in.',
+      ...result,
+    });
   }
 
   /** DELETE /api/auth/users/:id — soft delete / deactivate user. */
@@ -75,16 +92,25 @@ export class AuthController {
     res.status(200).json({ message: 'User deactivated', ...result });
   }
 
-  /** POST /api/auth/login — step 1: password check, then OTP is issued. */
+  /** POST /api/auth/login — step 1: validate password and request a second factor. */
   static async login(req: Request, res: Response) {
     const input = loginSchema.parse(req.body);
-    const challenge = await AuthService.startLogin(input.email, input.password);
+    const result = await AuthService.startLogin(input.email, input.password, {
+      userAgent: req.headers['user-agent'],
+      deviceId: input.deviceId,
+      location: input.location,
+    });
+
+    if ('requiresAdminApproval' in result) {
+      res.status(202).json({ message: 'Admin approval required', ...result });
+      return;
+    }
 
     res.status(200).json({
-      message: 'Verification code sent',
+      message: result.method === 'email' ? 'Verification code sent' : 'Authenticator required',
       // The client uses this to decide whether to show the dev-mode OTP hint.
       devMode: config.otp.exposeInResponse,
-      challenge,
+      challenge: result,
     });
   }
 
@@ -100,15 +126,42 @@ export class AuthController {
     });
   }
 
+  /** POST /api/auth/email-fallback — explicitly use email instead of TOTP. */
+  static async requestEmailFallback(req: Request, res: Response) {
+    const input = emailFallbackSchema.parse(req.body);
+    const challenge = await AuthService.requestEmailFallback(input.challengeId);
+
+    res.status(200).json({
+      message: 'A verification code has been sent by email',
+      devMode: config.otp.exposeInResponse,
+      challenge,
+    });
+  }
+
   /** POST /api/auth/verify-otp — step 2: code check, session issued. */
   static async verifyOtp(req: Request, res: Response) {
     const input = verifyOtpSchema.parse(req.body);
 
-    const session = await AuthService.verifyOtp(input.challengeId, input.code, {
+    const result = await AuthService.verifyOtp(input.challengeId, input.code, {
       userAgent: req.headers['user-agent'],
     });
 
-    res.status(200).json({ message: 'Signed in', ...session });
+    if ('requiresMfaEnrollment' in result) {
+      res.status(200).json({ message: 'Authenticator enrollment required', ...result });
+      return;
+    }
+
+    res.status(200).json({ message: 'Signed in', ...result });
+  }
+
+  /** POST /api/auth/complete-mfa-enrollment — verify TOTP setup and issue session. */
+  static async completeMfaEnrollment(req: Request, res: Response) {
+    const input = completeMfaEnrollmentSchema.parse(req.body);
+    const session = await AuthService.completeMfaEnrollment(input.enrollmentToken, input.code, {
+      userAgent: req.headers['user-agent'],
+    });
+
+    res.status(200).json({ message: 'Authenticator enabled', ...session });
   }
 
   /** POST /api/auth/refresh — rotate the refresh token. */
@@ -148,4 +201,3 @@ export class AuthController {
     res.status(200).json({ user });
   }
 }
-

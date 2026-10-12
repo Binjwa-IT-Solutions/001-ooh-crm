@@ -1,34 +1,28 @@
 import type { Request, Response, NextFunction } from "express";
+
 import {
   createPurchaseOrderSchema,
   updatePurchaseOrderSchema,
   purchaseOrderListQuerySchema,
-  documentSchema,
-  paymentSchema,
 } from "./purchase-order.validator.js";
-import * as service from "./purchase-order.service.js";
 
-const id = (req: Request) => String(req.params.id);
+import * as purchaseOrderService from "./purchase-order.service.js";
 
-export async function list(req: Request, res: Response, next: NextFunction) {
+export async function list(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
   try {
-    const data = await service.listPurchaseOrders(
-      purchaseOrderListQuerySchema.parse(req.query),
-    );
-    res.json({ success: true, data });
-  } catch (e) {
-    next(e);
-  }
-}
+    const query = purchaseOrderListQuerySchema.parse(req.query);
+    const data = await purchaseOrderService.listPurchaseOrders(query);
 
-export async function getById(req: Request, res: Response, next: NextFunction) {
-  try {
-    res.json({
+    res.status(200).json({
       success: true,
-      data: await service.getPurchaseOrderById(id(req)),
+      data,
     });
-  } catch (e) {
-    next(e);
+  } catch (error) {
+    next(error);
   }
 }
 
@@ -38,12 +32,14 @@ export async function campaignOptions(
   next: NextFunction,
 ) {
   try {
-    res.json({
+    const data = await purchaseOrderService.listCampaignOptionsForPO();
+
+    res.status(200).json({
       success: true,
-      data: await service.listCampaignOptionsForPO(),
+      data,
     });
-  } catch (e) {
-    next(e);
+  } catch (error) {
+    next(error);
   }
 }
 
@@ -53,106 +49,121 @@ export async function vendorOptions(
   next: NextFunction,
 ) {
   try {
-    res.json({
+    const data = await purchaseOrderService.listVendorOptionsForPO();
+
+    res.status(200).json({
       success: true,
-      data: await service.listVendorOptionsForPO(),
+      data,
     });
-  } catch (e) {
-    next(e);
+  } catch (error) {
+    next(error);
   }
 }
 
-export async function create(req: Request, res: Response, next: NextFunction) {
+export async function getById(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
   try {
-    const data = await service.createPurchaseOrder(
-      createPurchaseOrderSchema.parse(req.body),
+    const data = await purchaseOrderService.getPurchaseOrderById(
+      String(req.params.id),
+    );
+
+    res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function create(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const input = createPurchaseOrderSchema.parse(req.body);
+
+    const data = await purchaseOrderService.createPurchaseOrder(
+      input,
       req.ctx!,
     );
 
     res.status(201).json({
       success: true,
-      message: "Purchase order created",
+      message: "Purchase order created successfully",
       data,
     });
-  } catch (e) {
-    next(e);
+  } catch (error) {
+    next(error);
   }
 }
 
-export async function update(req: Request, res: Response, next: NextFunction) {
+export async function update(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
   try {
-    const data = await service.updatePurchaseOrder(
-      id(req),
-      updatePurchaseOrderSchema.parse(req.body),
+    const input = updatePurchaseOrderSchema.parse(req.body);
+
+    const data = await purchaseOrderService.updatePurchaseOrder(
+      String(req.params.id),
+      input,
       req.ctx!,
     );
 
-    res.json({ success: true, data });
-  } catch (e) {
-    next(e);
-  }
-}
-
-export async function issue(req: Request, res: Response, next: NextFunction) {
-  try {
-    res.json({
+    res.status(200).json({
       success: true,
-      data: await service.issuePurchaseOrder(id(req), req.ctx!),
+      message: "Purchase order updated successfully",
+      data,
     });
-  } catch (e) {
-    next(e);
+  } catch (error) {
+    next(error);
   }
 }
 
-export async function cancel(req: Request, res: Response, next: NextFunction) {
-  try {
-    res.json({
-      success: true,
-      data: await service.cancelPurchaseOrder(id(req), req.ctx!),
-    });
-  } catch (e) {
-    next(e);
-  }
-}
-
-export async function document(
+export async function issue(
   req: Request,
   res: Response,
   next: NextFunction,
 ) {
   try {
-    const data = await service.addDocument(
-      id(req),
-      documentSchema.parse(req.body),
+    const data = await purchaseOrderService.issuePurchaseOrder(
+      String(req.params.id),
+      req.ctx!,
     );
 
-    res.json({
+    res.status(200).json({
       success: true,
-      message: "Document updated",
+      message: "Purchase order issued successfully",
       data,
     });
-  } catch (e) {
-    next(e);
+  } catch (error) {
+    next(error);
   }
 }
 
-export async function payment(
+export async function cancel(
   req: Request,
   res: Response,
   next: NextFunction,
 ) {
   try {
-    const data = await service.addPayment(
-      id(req),
-      paymentSchema.parse(req.body),
+    const data = await purchaseOrderService.cancelPurchaseOrder(
+      String(req.params.id),
+      req.ctx!,
     );
 
-    res.json({
+    res.status(200).json({
       success: true,
-      message: "Payment and invoice updated",
+      message: "Purchase order cancelled successfully",
       data,
     });
-  } catch (e) {
-    next(e);
+  } catch (error) {
+    next(error);
   }
 }

@@ -93,7 +93,7 @@ select option:checked {
   font-weight: 600;
 }
 
-/* Print Styles: Ensures clean A4 Purchase Order PDF generation without headers/steppers/sidebars */
+/* Document & Print Optimizations */
 @media print {
   @page {
     size: A4 portrait;
@@ -110,11 +110,54 @@ select option:checked {
     print-color-adjust: exact !important;
   }
 
+  /* Suppress dashboard chrome in print */
   header,
-  nav,
   aside,
+  nav,
   .print-hidden,
+  .print\:hidden,
+  [data-print-hidden='true'],
   [data-print-hidden="true"] {
     display: none !important;
+    height: 0 !important;
+    width: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* Reset layout constraints for full-width print */
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .invoice-document {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  tr,
+  .invoice-row {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  /* Prevent page cutoff on scrollable app containers */
+  html, body, .overflow-auto, .overflow-y-auto, .overflow-x-auto {
+    overflow: visible !important;
+    height: auto !important;
   }
 }

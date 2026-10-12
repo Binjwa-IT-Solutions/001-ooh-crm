@@ -9,6 +9,7 @@ import Campaign, {
 
 import { Quotation } from "../quotations/quotations.model.js";
 import { Lead } from "../leads/leads.model.js";
+import { Site } from "../sites/site.model.js";
 import { AuthUser } from "../../core/auth/auth-model.js";
 import { checkSitesExist } from "../sites/site.service.js";
 import { employeeService } from "../employees/employees.service.js";
@@ -26,23 +27,17 @@ type CreateCampaignInput = {
   name: string;
   leadId: string;
   quotationId?: string;
-  quotationNo?: string;
-  quotationName?: string;
-  piNo?: string;
-  state?: string;
   city: string;
   startDate: Date;
   endDate: Date;
-  siteIds?: string[];
+  siteIds: string[];
   contractedValue: number;
-  status?: CampaignStatus;
   assignedManager?: string;
 };
 
 type CampaignFilters = {
   status?: CampaignStatus;
   leadId?: string;
-  state?: string;
   city?: string;
   manager?: string;
   startDate?: Date;
@@ -378,17 +373,10 @@ export async function createCampaign(
 
       /* -------------------------- Validate Sites ------------------------- */
 
-      let siteIds = input.siteIds || [];
-      if (siteIds.length === 0 && quotation?.sites?.length) {
-        siteIds = quotation.sites.map((s: any) => String(s.siteId));
-      }
-
-      if (siteIds.length > 0) {
-        await validateSitesExist(
-          siteIds,
-          session ?? undefined,
-        );
-      }
+      await validateSitesExist(
+        input.siteIds,
+        session ?? undefined,
+      );
 
       /* --------------------------- Validate Lead ------------------------ */
 
@@ -444,18 +432,6 @@ export async function createCampaign(
           quotationId:
             quotation?._id,
 
-          quotationNo:
-            input.quotationNo || quotation?.quoteNumber || "",
-
-          quotationName:
-            input.quotationName || "",
-
-          piNo:
-            input.piNo || "",
-
-          state:
-            input.state || "",
-
           city: input.city,
 
           startDate:
@@ -465,7 +441,7 @@ export async function createCampaign(
             input.endDate,
 
           siteIds:
-            siteIds.map(
+            input.siteIds.map(
               (id) =>
                 new Types.ObjectId(id),
             ),
@@ -474,7 +450,7 @@ export async function createCampaign(
             input.contractedValue,
 
           status:
-            input.status || CampaignStatus.IN_PROGRESS,
+            CampaignStatus.DRAFT,
 
           assignedManager,
         });
@@ -554,7 +530,7 @@ export async function createFromQuotation(
           Math.min(
             ...sites.map((site) =>
               new Date(
-                site.startDate,
+                site.startDate || Date.now(),
               ).getTime(),
             ),
           ),
@@ -565,7 +541,7 @@ export async function createFromQuotation(
           Math.max(
             ...sites.map((site) =>
               new Date(
-                site.endDate,
+                site.endDate || (Date.now() + (site.days || 30) * 86400000),
               ).getTime(),
             ),
           ),
@@ -588,6 +564,44 @@ export async function createFromQuotation(
         session ?? undefined,
       );
 
+      /* -------------------------- Resolve City & State ------------------- */
+
+      let campaignCity = quotation.clientCity?.trim() || "";
+      let campaignState = quotation.clientState?.trim() || "";
+      let assignedManager: Types.ObjectId | undefined = undefined;
+
+      if (quotation.leadId) {
+        const leadDoc = await Lead.findById(quotation.leadId)
+          .session(session ?? null)
+          .lean();
+        if (leadDoc) {
+          if (!campaignCity) {
+            campaignCity = leadDoc.city?.trim() || leadDoc.qualification?.city?.trim() || "";
+          }
+          if (leadDoc.assignedTo && Types.ObjectId.isValid(leadDoc.assignedTo)) {
+            assignedManager = new Types.ObjectId(leadDoc.assignedTo);
+          }
+        }
+      }
+
+      if ((!campaignCity || !campaignState) && sites.length > 0) {
+        const siteDoc = await Site.findById(sites[0].siteId)
+          .session(session ?? null)
+          .lean();
+        if (siteDoc) {
+          if (!campaignCity) {
+            campaignCity = siteDoc.city?.trim() || "";
+          }
+          if (!campaignState) {
+            campaignState = siteDoc.state?.trim() || "";
+          }
+        }
+      }
+
+      if (!campaignCity) {
+        campaignCity = "National";
+      }
+
       /* -------------------------- Create Campaign ------------------------ */
 
       const campaign =
@@ -607,7 +621,17 @@ export async function createFromQuotation(
           quotationId:
             quotation._id,
 
-          city: "",
+          quotationNo:
+            quotation.quoteNumber || "",
+
+          quotationName:
+            quotation.clientName || "",
+
+          state:
+            campaignState || "",
+
+          city:
+            campaignCity,
 
           startDate,
 
@@ -624,6 +648,8 @@ export async function createFromQuotation(
 
           status:
             CampaignStatus.DRAFT,
+
+          assignedManager,
         });
 
       await campaign.save({
@@ -702,13 +728,6 @@ export async function listCampaigns(
     query.status = filters.status;
   }
 
-  if (filters.state?.trim()) {
-    query.state = new RegExp(
-      filters.state.trim(),
-      "i",
-    );
-  }
-
   if (filters.city?.trim()) {
     query.city = new RegExp(
       filters.city.trim(),
@@ -780,10 +799,6 @@ export async function listCampaigns(
       { name: searchRegex },
       { campaignCode: searchRegex },
       { city: searchRegex },
-      { state: searchRegex },
-      { quotationNo: searchRegex },
-      { quotationName: searchRegex },
-      { piNo: searchRegex },
     ];
 
     if (leadIds.length > 0) {
@@ -929,23 +944,10 @@ export async function updateCampaign(
     campaign.leadId = new Types.ObjectId(input.leadId);
   }
   if (input.city !== undefined) campaign.city = input.city;
-  if (input.state !== undefined) campaign.state = input.state;
-  if (input.quotationNo !== undefined) campaign.quotationNo = input.quotationNo;
-  if (input.quotationName !== undefined) campaign.quotationName = input.quotationName;
-  if (input.status !== undefined) campaign.status = input.status;
-  if (input.piNo !== undefined) campaign.piNo = input.piNo;
-  if (input.quotationId !== undefined) {
-    campaign.quotationId =
-      input.quotationId && Types.ObjectId.isValid(input.quotationId)
-        ? new Types.ObjectId(input.quotationId)
-        : undefined;
-  }
   if (input.startDate !== undefined) campaign.startDate = input.startDate;
   if (input.endDate !== undefined) campaign.endDate = input.endDate;
   if (input.siteIds !== undefined) {
-    if (input.siteIds.length > 0) {
-      await validateSitesExist(input.siteIds);
-    }
+    await validateSitesExist(input.siteIds);
     campaign.siteIds = input.siteIds.map((sid) => new Types.ObjectId(sid));
   }
   if (input.contractedValue !== undefined) campaign.contractedValue = input.contractedValue;
@@ -1031,11 +1033,10 @@ export async function updateCampaignStatus(
 
       /* ---------------------- Transition Check --------------------------- */
 
-      const allowedTransitions = STATUS_TRANSITIONS[campaign.status];
       if (
-        allowedTransitions &&
-        allowedTransitions.length > 0 &&
-        !allowedTransitions.includes(nextStatus)
+        !STATUS_TRANSITIONS[
+          campaign.status
+        ].includes(nextStatus)
       ) {
         throw new Error(
           `Invalid campaign status transition: ${campaign.status} → ${nextStatus}`,
@@ -1047,8 +1048,8 @@ export async function updateCampaignStatus(
       /* -------------------------------------------------------------------- */
 
       if (
-        (nextStatus === CampaignStatus.APPROVED || nextStatus === CampaignStatus.CAMPAIGN_LIVE || nextStatus === ("Campaign Live" as any)) &&
-        campaign.siteIds.length > 0
+        nextStatus ===
+        CampaignStatus.APPROVED
       ) {
         /*
          * Validate campaign sites first.
