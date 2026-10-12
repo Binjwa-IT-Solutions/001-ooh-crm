@@ -351,7 +351,7 @@ export default function BudgetLeadsTab() {
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold">
                 <tr>
                   <th className="px-4 py-3">Date</th>
-                  <th className="px-4 py-3">Campaign</th>
+                  <th className="px-4 py-3">Marketing Initiative</th>
                   <th className="px-4 py-3">Platform</th>
                   <th className="px-4 py-3">City</th>
                   <th className="px-4 py-3">Category</th>
@@ -581,12 +581,12 @@ export default function BudgetLeadsTab() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Campaign Name *
+                  Marketing Initiative / Purpose *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Diwali Billboard Awareness Jaipur"
+                  placeholder="e.g. Media Octus Brand Promotion, Diwali Agency Ads"
                   value={spCampaign}
                   onChange={(e) => setSpCampaign(e.target.value)}
                   className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B2424]"

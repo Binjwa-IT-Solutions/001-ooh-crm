@@ -40,6 +40,7 @@ export interface MarketingTaskItem {
   staleAlert?: boolean;
   carryForwardCount?: number;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface MarketingSpendItem {

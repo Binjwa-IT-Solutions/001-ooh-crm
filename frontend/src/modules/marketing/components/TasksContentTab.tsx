@@ -17,6 +17,7 @@ import {
   Search,
   X,
   ClipboardCheck,
+  History,
 } from 'lucide-react';
 import { useAuth } from '@/shared/auth/auth-context';
 import { marketingApi } from '../api';
@@ -48,6 +49,7 @@ export default function TasksContentTab() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showAllCompleted, setShowAllCompleted] = useState<boolean>(false);
 
   // Team Member Dropdown Filter ('all' | 'my' | memberId)
   const [selectedMemberFilter, setSelectedMemberFilter] = useState<string>('all');
@@ -229,6 +231,25 @@ export default function TasksContentTab() {
     return counts;
   }, [tasks]);
 
+  // Count older completed tasks archived by 7-day rule
+  const hiddenArchivedCount = useMemo(() => {
+    let list = tasks;
+    if (!isManagerOrAdmin) {
+      list = list.filter((t) => t.assignedTo?._id === user?.id || t.assignedTo?.email === user?.email);
+    } else if (selectedMemberFilter === 'my' && user?.id) {
+      list = list.filter((t) => t.assignedTo?._id === user.id || t.assignedTo?.email === user.email);
+    } else if (selectedMemberFilter !== 'all') {
+      list = list.filter((t) => t.assignedTo?._id === selectedMemberFilter);
+    }
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    return list.filter((t) => {
+      if (t.status !== 'Done') return false;
+      const d = t.updatedAt || t.dueDate || t.createdAt;
+      if (!d) return false;
+      return new Date(d) < sevenDaysAgo;
+    }).length;
+  }, [tasks, selectedMemberFilter, isManagerOrAdmin, user]);
+
   // Group tasks by status for Kanban columns
   const getTasksForColumn = (columnStatus: string) => {
     let list = tasks;
@@ -261,6 +282,18 @@ export default function TasksContentTab() {
     }
     if (columnStatus === 'In Review') {
       return list.filter((t) => t.status === 'In Review' || t.status === 'Revision Needed');
+    }
+    if (columnStatus === 'Done') {
+      const doneList = list.filter((t) => t.status === 'Done');
+      if (showAllCompleted) {
+        return doneList;
+      }
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      return doneList.filter((t) => {
+        const d = t.updatedAt || t.dueDate || t.createdAt;
+        if (!d) return true;
+        return new Date(d) >= sevenDaysAgo;
+      });
     }
     return list.filter((t) => t.status === columnStatus);
   };
@@ -478,6 +511,30 @@ export default function TasksContentTab() {
               <Sparkles className="w-3.5 h-3.5" />
               <span>{filterContentOnly ? 'Content Deliverables Only' : 'All Formats'}</span>
             </button>
+
+            {/* Completed Tasks 7-Day Auto-Filter Toggle */}
+            <button
+              type="button"
+              onClick={() => setShowAllCompleted(!showAllCompleted)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg border flex items-center gap-1.5 transition cursor-pointer ${
+                showAllCompleted
+                  ? 'bg-[#F8E6E6] border-[#8B2424] text-[#8B2424] font-bold'
+                  : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'
+              }`}
+              title={
+                showAllCompleted
+                  ? 'Showing all completed tasks history'
+                  : 'Done column shows tasks completed in last 7 days. Click to view all.'
+              }
+            >
+              <History className="w-3.5 h-3.5 text-[#8B2424]" />
+              <span>{showAllCompleted ? 'All Completed Tasks' : 'Recent Done (7D)'}</span>
+              {hiddenArchivedCount > 0 && !showAllCompleted && (
+                <span className="text-[10px] px-1.5 py-0.2 bg-slate-100 text-slate-600 rounded-full font-semibold">
+                  +{hiddenArchivedCount}
+                </span>
+              )}
+            </button>
           </div>
 
           {/* Right Action Buttons */}
@@ -550,6 +607,24 @@ export default function TasksContentTab() {
                   <span className="text-[10px] text-blue-700 font-semibold bg-blue-100/80 px-1.5 py-0.5 rounded">
                     Max 3/person
                   </span>
+                )}
+                {col.key === 'Done' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllCompleted((prev) => !prev)}
+                    className={`text-[10px] px-2 py-0.5 rounded transition flex items-center gap-1 cursor-pointer font-semibold ${
+                      showAllCompleted
+                        ? 'bg-[#8B2424] text-white shadow-2xs'
+                        : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                    }`}
+                    title={
+                      showAllCompleted
+                        ? 'Showing all completed tasks history. Click to show last 7 days.'
+                        : 'Showing last 7 days only. Click to show all completed history.'
+                    }
+                  >
+                    <span>{showAllCompleted ? 'All Time' : 'Last 7 Days'}</span>
+                  </button>
                 )}
               </div>
 
@@ -767,6 +842,20 @@ export default function TasksContentTab() {
                       )}
                     </div>
                   ))
+                )}
+
+                {/* Indicator for older archived tasks in Done column */}
+                {col.key === 'Done' && !showAllCompleted && hiddenArchivedCount > 0 && (
+                  <div className="pt-2 text-center border-t border-slate-200/60 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowAllCompleted(true)}
+                      className="text-[11px] text-slate-500 hover:text-[#8B2424] hover:underline font-semibold cursor-pointer inline-flex items-center gap-1.5 py-1 px-2 rounded-md hover:bg-slate-50 transition"
+                    >
+                      <History className="w-3.5 h-3.5 text-[#8B2424]" />
+                      <span>+ {hiddenArchivedCount} older completed {hiddenArchivedCount === 1 ? 'task' : 'tasks'} archived (View All)</span>
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
