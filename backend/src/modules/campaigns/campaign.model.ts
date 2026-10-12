@@ -18,6 +18,7 @@ export interface ICampaign extends BaseDocument {
   quotationId: Types.ObjectId;
 
   city: string;
+  state?: string;
 
   startDate: Date;
   endDate: Date;
@@ -71,6 +72,11 @@ const campaignSchema = new Schema<ICampaign>(
       required: true,
       trim: true,
       index: true,
+    },
+    state: {
+      type: String,
+      trim: true,
+      default: "",
     },
 
     startDate: {
