@@ -584,7 +584,7 @@ export default function PurchaseOrderDocument({
                 Terms & Conditions:
               </p>
               <ol className="list-decimal list-inside space-y-0.5 leading-relaxed text-[11px]">
-                {terms.map((t, idx) => (
+                {terms.map((t: string, idx: number) => (
                   <li key={idx}>{t}</li>
                 ))}
               </ol>

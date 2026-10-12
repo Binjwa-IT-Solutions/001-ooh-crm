@@ -13,10 +13,15 @@ export type AvailabilityStatus =
   | "Booked";
 
 export type MediaPlanStatus =
+  | "On Call"
+  | "On Mail"
+  | "WhatsApp"
+  | "Manual"
   | "Draft"
   | "Pending"
   | "Approved"
-  | "Rejected";
+  | "Rejected"
+  | (string & {});
 
 export type ATRStatus = MediaPlanStatus;
 
