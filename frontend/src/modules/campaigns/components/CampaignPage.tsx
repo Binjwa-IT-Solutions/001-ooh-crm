@@ -34,6 +34,13 @@ useEffect(() => {
   }
 }, [urlSearch]);
 
+  const apiQuery = useMemo(
+    () => ({
+      leadId: urlLeadId || undefined,
+    }),
+    [urlLeadId],
+  );
+
   const {
     campaigns,
     loading,
@@ -42,7 +49,7 @@ useEffect(() => {
     addCampaign: onCreate,
     editCampaign: onUpdate,
     changeStatus: onUpdateStatus,
-  } = useCampaigns(filters);
+  } = useCampaigns(apiQuery);
 
   const [showForm, setShowForm] =
     useState(false);
@@ -85,6 +92,7 @@ useEffect(() => {
     }
     return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
   }, [campaigns, filters.state]);
+
   const filteredCampaigns = useMemo(() => {
     return campaigns.filter((campaign) => {
       const searchMatch = !filters.search?.trim() || (() => {
@@ -92,6 +100,10 @@ useEffect(() => {
         const nameMatch = (campaign.name || "").toLowerCase().includes(term);
         const codeMatch = (campaign.campaignCode || "").toLowerCase().includes(term);
         const cityMatch2 = (campaign.city || "").toLowerCase().includes(term);
+        const stateMatch2 = (campaign.state || "").toLowerCase().includes(term);
+        const quotationNoMatch = (campaign.quotationNo || "").toLowerCase().includes(term);
+        const quotationNameMatch = (campaign.quotationName || "").toLowerCase().includes(term);
+        const piNoMatch = (campaign.piNo || "").toLowerCase().includes(term);
 
         let leadMatch = false;
         if (campaign.leadId) {
@@ -114,16 +126,26 @@ useEffect(() => {
           }
         }
 
-        return nameMatch || codeMatch || cityMatch2 || leadMatch || managerMatch2;
+        return (
+          nameMatch ||
+          codeMatch ||
+          cityMatch2 ||
+          stateMatch2 ||
+          quotationNoMatch ||
+          quotationNameMatch ||
+          piNoMatch ||
+          leadMatch ||
+          managerMatch2
+        );
       })();
+
+      const stateMatch =
+        !filters.state ||
+        (campaign.state || "").trim().toLowerCase() === filters.state.trim().toLowerCase();
 
       const cityMatch =
         !filters.city ||
-        campaign.city
-          .toLowerCase()
-          .includes(
-            filters.city.toLowerCase(),
-          );
+        (campaign.city || "").trim().toLowerCase() === filters.city.trim().toLowerCase();
 
       const statusMatch =
         !filters.status || (() => {
@@ -157,23 +179,12 @@ useEffect(() => {
           return campaign.assignedManager === filters.manager;
         })();
 
-      const startDateMatch =
-        !filters.startDate ||
-        new Date(campaign.startDate) >=
-          new Date(filters.startDate);
-
-      const endDateMatch =
-        !filters.endDate ||
-        new Date(campaign.endDate) <=
-          new Date(filters.endDate);
-
       return (
         searchMatch &&
+        stateMatch &&
         cityMatch &&
         statusMatch &&
-        managerMatch &&
-        startDateMatch &&
-        endDateMatch
+        managerMatch
       );
     });
   }, [campaigns, filters]);
@@ -283,6 +294,8 @@ useEffect(() => {
         <div className="mb-6">
           <CampaignFilters
             filters={filters}
+            stateOptions={stateOptions}
+            cityOptions={cityOptions}
             onChange={(nextFilters) =>
               setFilters({
                 ...nextFilters,
