@@ -16,22 +16,24 @@ export function formatDate(value?: string) {
 
 export function getVendorName(
   vendor: PurchaseOrder["vendorId"],
+  fallback?: string,
 ) {
-  if (!vendor) return "—";
+  if (!vendor) return fallback || "—";
   if (typeof vendor === "string") {
-    return vendor;
+    return vendor || fallback || "—";
   }
 
-  return vendor?.name || "Unknown Vendor";
+  return vendor?.name || fallback || "Unknown Vendor";
 }
 
 export function getCampaignName(
   campaign: PurchaseOrder["campaignId"],
+  fallback?: string,
 ) {
-  if (!campaign) return "—";
+  if (!campaign) return fallback || "—";
   if (typeof campaign === "string") {
-    return campaign;
+    return campaign || fallback || "—";
   }
 
-  return campaign?.name || "Unknown Campaign";
+  return campaign?.name || fallback || "Unknown Campaign";
 }

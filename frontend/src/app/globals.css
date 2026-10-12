@@ -97,12 +97,15 @@ select option:checked {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 12mm 15mm;
+    margin: 8mm 10mm;
   }
 
+  html,
   body {
     background: #ffffff !important;
-    color: #0f172a !important;
+    color: #111827 !important;
+    margin: 0 !important;
+    padding: 0 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
@@ -111,8 +114,10 @@ select option:checked {
   header,
   aside,
   nav,
+  .print-hidden,
   .print\:hidden,
-  [data-print-hidden='true'] {
+  [data-print-hidden='true'],
+  [data-print-hidden="true"] {
     display: none !important;
     height: 0 !important;
     width: 0 !important;

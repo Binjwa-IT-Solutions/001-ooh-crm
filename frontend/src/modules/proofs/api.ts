@@ -101,6 +101,44 @@ export async function createProof(
   return getData<Proof>(response);
 }
 
+export interface ManualProofPayload {
+  file: File;
+  campaignId?: string;
+  vendorId?: string;
+  locationName?: string;
+  lat?: number;
+  lng?: number;
+  gpsAccuracy?: number;
+  capturedAt?: string;
+  deviceInfo?: string;
+}
+
+export async function createManualProof(
+  data: ManualProofPayload
+): Promise<Proof> {
+  const formData = new FormData();
+  formData.append("lat", String(data.lat ?? 22.7196));
+  formData.append("lng", String(data.lng ?? 75.8577));
+  formData.append("gpsAccuracy", String(data.gpsAccuracy ?? 15));
+  formData.append("capturedAt", data.capturedAt || new Date().toISOString());
+  if (data.locationName) {
+    formData.append("locationName", data.locationName);
+  }
+  if (data.campaignId) {
+    formData.append("campaignId", data.campaignId);
+  }
+  if (data.vendorId) {
+    formData.append("vendorId", data.vendorId);
+  }
+  if (data.deviceInfo) {
+    formData.append("deviceInfo", data.deviceInfo);
+  }
+  formData.append("file", data.file);
+
+  const response = await api.post("/api/proofs", formData);
+  return getData<Proof>(response);
+}
+
 export async function getProofs(
   filters?: Partial<ProofFilters>
 ): Promise<Proof[]> {
@@ -189,4 +227,37 @@ export async function getCampaignsByVendor(
     `/api/proofs/vendor-campaigns/${vendorId}`
   );
   return getData<Array<{ _id: string; name: string; campaignCode?: string }>>(response) || [];
+}
+
+export interface SavedCampaignPow {
+  _id: string;
+  campaignId: string;
+  campaignCode?: string;
+  campaignName: string;
+  status: "Complete" | "Rejected";
+  locationName?: string;
+  message?: string;
+  savedAt: string;
+}
+
+export async function getAllCampaignPows(): Promise<SavedCampaignPow[]> {
+  const response = await api.get("/api/proofs/campaign-pow");
+  return getData<SavedCampaignPow[]>(response) || [];
+}
+
+export async function getCampaignPow(
+  campaignId: string
+): Promise<SavedCampaignPow | null> {
+  if (!campaignId) return null;
+  const response = await api.get(
+    `/api/proofs/campaign-pow?campaignId=${campaignId}`
+  );
+  return getData<SavedCampaignPow | null>(response);
+}
+
+export async function syncCampaignPow(
+  campaignId: string
+): Promise<SavedCampaignPow> {
+  const response = await api.post("/api/proofs/campaign-pow", { campaignId });
+  return getData<SavedCampaignPow>(response);
 }

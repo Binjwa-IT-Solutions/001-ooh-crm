@@ -59,20 +59,14 @@ export const validateProofLink = async (
   }
 };
 
-// Create Proof - authenticated flow
+// Create Proof - authenticated/manual flow
 export const createProof = async (
-  req: AuthRequest,
+  req: Request,
   res: Response
 ) => {
   try {
     const userId =
-      req.user?._id || req.user?.id;
-
-    if (!userId) {
-      return res.status(401).json({
-        message: "Unauthorized",
-      });
-    }
+      req.ctx?.user?.id || (req as any).user?._id || (req as any).user?.id;
 
     if (!req.file) {
       return res.status(400).json({
@@ -84,7 +78,7 @@ export const createProof = async (
       await proofService.createProof(
         req.body,
         req.file,
-        userId
+        userId ? String(userId) : undefined
       );
 
     return res.status(201).json(proof);
@@ -190,7 +184,7 @@ export const getTaskProofs = async (
 
 // Review Proof
 export const reviewProof = async (
-  req: AuthRequest,
+  req: Request,
   res: Response
 ) => {
   try {
@@ -199,13 +193,7 @@ export const reviewProof = async (
     );
 
     const userId =
-      req.user?._id || req.user?.id;
-
-    if (!userId) {
-      return res.status(401).json({
-        message: "Unauthorized",
-      });
-    }
+      req.ctx?.user?.id || (req as any).user?._id || (req as any).user?.id;
 
     if (!proofId) {
       return res.status(400).json({
@@ -217,7 +205,7 @@ export const reviewProof = async (
       await proofService.reviewProof(
         proofId,
         req.body,
-        userId
+        userId ? String(userId) : undefined
       );
 
     return res.status(200).json(proof);
@@ -294,10 +282,22 @@ export const getProofImage = async (
           res.setHeader("Cache-Control", "public, max-age=86400");
           return res.send(buffer);
         } catch {
-          return res.status(404).send("Image file not found on storage");
+          // fallback placeholder
         }
       }
-      return res.status(404).send("Image file not found on storage");
+      const placeholderSvg = Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400" fill="#f1f5f9">
+          <rect width="600" height="400" fill="#f8fafc"/>
+          <rect x="20" y="20" width="560" height="360" rx="16" fill="#f1f5f9" stroke="#e2e8f0" stroke-width="2"/>
+          <circle cx="300" cy="180" r="45" fill="#e2e8f0"/>
+          <path d="M280 170h40v20h-40z" fill="#94a3b8"/>
+          <text x="300" y="260" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="600" fill="#64748b" text-anchor="middle">Proof Photo Not Found on Storage</text>
+          <text x="300" y="285" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#94a3b8" text-anchor="middle">Please upload a new proof photo via link</text>
+        </svg>`
+      );
+      res.setHeader("Content-Type", "image/svg+xml");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.send(placeholderSvg);
     }
   } catch (error: any) {
     return res.status(400).send(error?.message || "Failed to load proof image");
@@ -319,6 +319,51 @@ export const getCampaignsByVendor = async (
   } catch (error: any) {
     return res.status(400).json({
       message: error?.message || "Failed to fetch vendor campaigns",
+    });
+  }
+};
+
+// Sync / Save Campaign POW
+export const syncCampaignPow = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    const campaignId = req.body?.campaignId || req.query?.campaignId;
+    if (!campaignId) {
+      return res.status(400).json({ message: "Campaign ID is required" });
+    }
+    const userId = req.user?._id || req.user?.id;
+    const proof = await proofService.syncCampaignPow(
+      String(campaignId),
+      userId ? String(userId) : undefined
+    );
+    return res.status(200).json({ success: true, data: proof });
+  } catch (error: any) {
+    return res.status(400).json({
+      message: error?.message || "Failed to sync campaign POW",
+    });
+  }
+};
+
+// Get Saved Campaign POW (single or all)
+export const getCampaignPow = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const campaignId = String(
+      req.params.campaignId || req.query.campaignId || ""
+    );
+    if (!campaignId) {
+      const allData = await proofService.getAllCampaignPows();
+      return res.status(200).json({ success: true, data: allData });
+    }
+    const data = await proofService.getCampaignPow(campaignId);
+    return res.status(200).json({ success: true, data });
+  } catch (error: any) {
+    return res.status(400).json({
+      message: error?.message || "Failed to get campaign POW",
     });
   }
 };

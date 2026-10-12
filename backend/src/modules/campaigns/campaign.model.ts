@@ -6,6 +6,7 @@ export enum CampaignStatus {
   APPROVED = "Approved",
   IN_PROGRESS = "InProgress",
   COMPLETED = "Completed",
+  COMPLETE = "Complete",
   CANCELLED = "Cancelled",
 }
 
@@ -17,6 +18,7 @@ export interface ICampaign extends BaseDocument {
   quotationId: Types.ObjectId;
 
   city: string;
+  state?: string;
 
   startDate: Date;
   endDate: Date;
@@ -29,6 +31,9 @@ export interface ICampaign extends BaseDocument {
   status: CampaignStatus;
 
   assignedManager?: Types.ObjectId;
+  rejectionReason?: string;
+  isPowUpdated?: boolean;
+  powUpdatedAt?: Date;
 }
 
 const campaignSchema = new Schema<ICampaign>(
@@ -68,6 +73,11 @@ const campaignSchema = new Schema<ICampaign>(
       trim: true,
       index: true,
     },
+    state: {
+      type: String,
+      trim: true,
+      default: "",
+    },
 
     startDate: {
       type: Date,
@@ -105,6 +115,20 @@ const campaignSchema = new Schema<ICampaign>(
       ref: "User",
       default: undefined,
       index: true,
+    },
+
+    rejectionReason: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    isPowUpdated: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    powUpdatedAt: {
+      type: Date,
     },
   }
 );

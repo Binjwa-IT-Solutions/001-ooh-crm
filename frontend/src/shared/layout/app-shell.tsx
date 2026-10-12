@@ -80,7 +80,6 @@ export const NAV_GROUPS: NavGroup[] = [
         permission: 'purchase_orders.view',
       },
       { href: '/campaigns', label: 'Campaigns', icon: Megaphone, permission: 'campaigns.view' },
-      { href: '/tasks', label: 'Tasks', icon: ClipboardCheck, permission: 'tasks.view' },
       { href: '/escalations', label: 'Escalations', icon: ArrowUpRight, permission: 'tasks.view' },
       { href: '/proofs', label: 'Proofs', icon: Camera, permission: 'proofs.view' },
     ],
@@ -142,7 +141,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-slate-900/80 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-slate-900/80 backdrop-blur-sm lg:hidden print:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -294,7 +293,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           {/* Main content */}
           <main className="flex-1 bg-white p-4 sm:p-6 lg:p-8 print:p-0 print:m-0 print:w-full">
-            <div className="mx-auto w-full max-w-[1200px] print:max-w-none print:w-full print:m-0">
+            <div className="mx-auto w-full max-w-[1200px] print:max-w-none print:w-full print:m-0 print:p-0">
               {children}
             </div>
           </main>

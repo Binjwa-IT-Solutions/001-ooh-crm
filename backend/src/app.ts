@@ -87,7 +87,6 @@ import { leadRoutes } from './modules/leads/leads.routes.js';
 import vendorRoutes from './modules/vendors/vendor.routes.js';
 import siteRoutes from './modules/sites/site.routes.js';
 import campaignRoutes from './modules/campaigns/campaign.routes.js';
-import taskRoutes from './modules/tasks/task.routes.js';
 import escalationRoutes from './modules/escalations/escalation.routes.js';
 import purchaseOrderRoutes from './modules/purchase-orders/purchase-order.routes.js';
 import proofRoutes from './modules/proofs/proof.routes.js';
@@ -108,7 +107,6 @@ app.use('/api/leads', leadRoutes);
 app.use('/api/vendors', vendorRoutes);
 app.use('/api/sites', siteRoutes);
 app.use('/api/campaigns', campaignRoutes);
-app.use('/api/tasks', taskRoutes);
 app.use('/api', escalationRoutes);
 
 app.use('/api/purchase-orders', purchaseOrderRoutes);

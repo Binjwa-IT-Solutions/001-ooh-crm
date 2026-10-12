@@ -45,6 +45,7 @@ export interface IProof extends Document {
   proofLinkUses?: number;
   proofLinkMaxUses?: number;
   proofLinkActive?: boolean;
+  proofLinkExpiresAt?: Date;
   proofLinkCreatedBy?: mongoose.Types.ObjectId;
 }
 
@@ -143,6 +144,11 @@ const proofSchema =
         index: true,
       },
 
+      proofLinkExpiresAt: {
+        type: Date,
+        index: true,
+      },
+
       proofLinkCreatedBy: {
         type: Schema.Types.ObjectId,
       },
@@ -157,3 +163,53 @@ export const Proof =
     "Proof",
     proofSchema
   );
+
+export interface ICampaignPow extends Document {
+  campaignId: mongoose.Types.ObjectId;
+  campaignCode?: string;
+  campaignName: string;
+  status: "Complete" | "Rejected";
+  locationName?: string;
+  message?: string;
+  savedAt: Date;
+  savedBy?: mongoose.Types.ObjectId;
+}
+
+const campaignPowSchema = new Schema<ICampaignPow>(
+  {
+    campaignId: {
+      type: Schema.Types.ObjectId,
+      ref: "Campaign",
+      required: true,
+      unique: true,
+      index: true,
+    },
+    campaignCode: String,
+    campaignName: {
+      type: String,
+      required: true,
+    },
+    status: {
+      type: String,
+      enum: ["Complete", "Rejected"],
+      required: true,
+    },
+    locationName: String,
+    message: String,
+    savedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    savedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+export const CampaignPow =
+  mongoose.models.CampaignPow ||
+  mongoose.model<ICampaignPow>("CampaignPow", campaignPowSchema);
