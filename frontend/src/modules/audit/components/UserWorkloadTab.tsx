@@ -132,11 +132,17 @@ export function UserWorkloadTab() {
       if (isExcludedAdmin) return false;
       const matchSearch =
         u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-        u.email.toLowerCase().includes(userSearch.toLowerCase());
+        u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
+        (u.designation && u.designation.toLowerCase().includes(userSearch.toLowerCase()));
       const matchRole =
         roleFilter === 'ALL' ||
         u.role.toLowerCase() === roleFilter.toLowerCase() ||
-        (roleFilter === 'ops' && (u.role.toLowerCase() === 'ops' || u.role.toLowerCase() === 'operations'));
+        (roleFilter === 'ops' && (u.role.toLowerCase() === 'ops' || u.role.toLowerCase() === 'operations')) ||
+        (roleFilter === 'marketing' && (
+          u.role.toLowerCase() === 'marketing' ||
+          u.role.toLowerCase() === 'media_manager' ||
+          (u.designation && u.designation.toLowerCase().includes('market'))
+        ));
       return matchSearch && matchRole;
     });
   }, [users, userSearch, roleFilter]);
@@ -157,12 +163,24 @@ export function UserWorkloadTab() {
 
   // Role detection: accurately reflects the currently selected user
   const currentRole = (selectedUserObj?.role || workloadData?.user.role || '').toLowerCase();
+  const currentDesignation = (selectedUserObj?.designation || workloadData?.user.designation || '').toLowerCase();
+  const isMarketing =
+    currentRole === 'marketing' ||
+    currentRole === 'media_manager' ||
+    currentDesignation.includes('market') ||
+    currentDesignation.includes('content') ||
+    currentDesignation.includes('video') ||
+    currentDesignation.includes('creative');
   const isFinance = currentRole === 'finance' || currentRole === 'accounts';
   const isHr = currentRole === 'hr' || currentRole === 'human_resources';
   const isManager = currentRole === 'manager';
   const isAdmin = currentRole === 'admin' || currentRole === 'superadmin' || currentRole === 'managing_director';
-  const isOps = ['ops', 'operations', 'media_manager'].includes(currentRole);
-  const isSales = currentRole === 'sales_agent' || currentRole === 'sales' || currentRole === 'sales_executive' || (!isFinance && !isHr && !isOps && !isManager && !isAdmin);
+  const isOps = ['ops', 'operations'].includes(currentRole);
+  const isSales =
+    currentRole === 'sales_agent' ||
+    currentRole === 'sales' ||
+    currentRole === 'sales_executive' ||
+    (!isFinance && !isHr && !isOps && !isMarketing && !isManager && !isAdmin);
 
   const formatCurrency = (paise: number) => {
     return (paise / 100).toLocaleString('en-IN', {
@@ -253,7 +271,7 @@ export function UserWorkloadTab() {
                 <option value="ALL">All Roles</option>
                 <option value="sales_agent">Sales Agents</option>
                 <option value="ops">Operations (Ops)</option>
-                <option value="media_manager">Media Managers</option>
+                <option value="marketing">Marketing Team</option>
                 <option value="finance">Finance</option>
                 <option value="hr">HR</option>
                 <option value="manager">Managers</option>
@@ -371,6 +389,8 @@ export function UserWorkloadTab() {
               <span className="rounded-md bg-[#8B2424]/10 px-2.5 py-0.5 font-bold text-[#8B2424] dark:bg-rose-950/40 dark:text-rose-400">
                 {isSales
                   ? 'Commercial & Sales Pipeline Focus'
+                  : isMarketing
+                  ? 'Marketing Deliverables, Content & Campaigns'
                   : isOps
                   ? 'Operations, Site Execution & Field Deliverables'
                   : isFinance
@@ -387,6 +407,8 @@ export function UserWorkloadTab() {
             <span className="text-[11px] text-slate-400">
               {isSales
                 ? 'Auditing customer acquisition, quotations sent & client follow-ups'
+                : isMarketing
+                ? 'Auditing creative deliverables, video edits, ad campaigns & daily work logs'
                 : isOps
                 ? 'Auditing mounting, printing, site verification proofs & campaign tasks'
                 : isFinance
@@ -409,6 +431,8 @@ export function UserWorkloadTab() {
                 <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider dark:text-emerald-300">
                   {isSales
                     ? 'Deals & Work Completed'
+                    : isMarketing
+                    ? 'Deliverables Completed'
                     : isOps
                     ? 'Execution Completed'
                     : isFinance
@@ -427,6 +451,8 @@ export function UserWorkloadTab() {
                 <span className="text-3xl font-extrabold text-emerald-900 dark:text-emerald-100">
                   {isSales
                     ? workloadData.metrics.completed.leadsWon + workloadData.metrics.completed.tasksCompleted
+                    : isMarketing
+                    ? workloadData.metrics.completed.tasksCompleted
                     : isOps
                     ? workloadData.metrics.completed.tasksCompleted
                     : isFinance
@@ -440,6 +466,8 @@ export function UserWorkloadTab() {
                 <span className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">
                   {isSales
                     ? 'Leads & Tasks closed'
+                    : isMarketing
+                    ? 'Creative tasks finished'
                     : isOps
                     ? 'Operations tasks finished'
                     : isFinance
@@ -603,6 +631,8 @@ export function UserWorkloadTab() {
                 <span className="text-xs font-bold text-amber-800 uppercase tracking-wider dark:text-amber-300">
                   {isSales
                     ? 'Active Pipeline (Pending)'
+                    : isMarketing
+                    ? 'Active Deliverables Queue'
                     : isOps
                     ? 'Pending Operations Queue'
                     : isFinance
@@ -621,6 +651,8 @@ export function UserWorkloadTab() {
                 <span className="text-3xl font-extrabold text-amber-900 dark:text-amber-100">
                   {isSales
                     ? workloadData.metrics.pending.leadsActive + workloadData.metrics.pending.tasksPending + workloadData.metrics.pending.tasksInProgress
+                    : isMarketing
+                    ? workloadData.metrics.pending.tasksPending + workloadData.metrics.pending.tasksInProgress
                     : isOps
                     ? workloadData.metrics.pending.tasksPending + workloadData.metrics.pending.tasksInProgress
                     : isFinance
@@ -634,6 +666,8 @@ export function UserWorkloadTab() {
                 <span className="text-xs text-amber-700 dark:text-amber-400 font-medium">
                   {isSales
                     ? 'Queue items in progress'
+                    : isMarketing
+                    ? 'In-flight creative deliverables'
                     : isOps
                     ? 'Execution tasks pending'
                     : isFinance
@@ -894,6 +928,8 @@ export function UserWorkloadTab() {
                 <span className="text-xs font-bold text-indigo-800 uppercase tracking-wider dark:text-indigo-300">
                   {isSales
                     ? 'Commercial Pipeline & Value'
+                    : isMarketing
+                    ? 'Creative Output & Velocity'
                     : isOps
                     ? 'Operational SLA & Delivery'
                     : isFinance
@@ -918,13 +954,22 @@ export function UserWorkloadTab() {
                       Won Deals
                     </span>
                   </>
+                ) : isMarketing ? (
+                  <>
+                    <span className="text-3xl font-extrabold text-indigo-900 dark:text-indigo-100">
+                      {totalAssignedTasks === 0 ? '—' : `${workloadData.metrics.performance.taskCompletionRate}%`}
+                    </span>
+                    <span className="text-xs text-indigo-700 dark:text-indigo-400 font-medium">
+                      Completion Rate
+                    </span>
+                  </>
                 ) : isFinance ? (
                   <>
                     <span className="text-2xl font-extrabold text-indigo-900 dark:text-indigo-100">
                       {formatCurrency(workloadData.metrics.finance?.totalBillingPaise ?? 0)}
                     </span>
                     <span className="text-xs text-indigo-700 dark:text-indigo-400 font-medium">
-                      Billed Pipeline
+                      Total Billed
                     </span>
                   </>
                 ) : isHr ? (
@@ -997,6 +1042,25 @@ export function UserWorkloadTab() {
                       </span>
                     </div>
                   </>
+                ) : isMarketing ? (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Task Completion Rate:</span>
+                      <span className="font-bold text-indigo-700 dark:text-indigo-300">
+                        {totalAssignedTasks === 0 ? '—' : `${workloadData.metrics.performance.taskCompletionRate}%`}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Total Creative Tasks:</span>
+                      <span className="font-semibold">{totalAssignedTasks} deliverables</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Deliverables Finished:</span>
+                      <span className="font-bold text-emerald-700 dark:text-emerald-300">
+                        {workloadData.metrics.completed.tasksCompleted}
+                      </span>
+                    </div>
+                  </>
                 ) : isOps ? (
                   <>
                     <div className="flex justify-between">
@@ -1021,9 +1085,15 @@ export function UserWorkloadTab() {
                 ) : isFinance ? (
                   <>
                     <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-400">Total Contracted Billing:</span>
-                      <span className="font-bold text-slate-900 dark:text-white">
-                        {formatCurrency(workloadData.metrics.finance?.totalBillingPaise ?? 0)}
+                      <span className="text-slate-600 dark:text-slate-400">Received (Realized):</span>
+                      <span className="font-bold text-emerald-700 dark:text-emerald-300">
+                        {formatCurrency(workloadData.metrics.finance?.realizedRevenuePaise ?? 0)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Pending Receivable:</span>
+                      <span className="font-bold text-amber-700 dark:text-amber-300">
+                        {formatCurrency(workloadData.metrics.finance?.pendingReceivablePaise ?? (workloadData.metrics.finance?.totalBillingPaise ?? 0))}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -1136,6 +1206,8 @@ export function UserWorkloadTab() {
                     <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider dark:text-white">
                       {isSales
                         ? 'Assigned Sales & Leads Queue'
+                        : isMarketing
+                        ? 'Marketing Deliverables & Content Queue'
                         : isOps
                         ? 'Assigned Operations Execution Queue'
                         : isFinance

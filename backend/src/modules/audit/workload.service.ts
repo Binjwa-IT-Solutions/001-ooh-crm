@@ -84,6 +84,8 @@ export interface UserWorkloadAuditResponse {
       paymentsOutCount: number;
       totalBillingPaise: number;
       pendingDisbursementPaise: number;
+      realizedRevenuePaise?: number;
+      pendingReceivablePaise?: number;
     };
     hr?: {
       pendingLeavesCount: number;
@@ -640,11 +642,19 @@ export class WorkloadAuditService {
       .filter((p) => p.paymentStatus !== 'Paid')
       .reduce((sum, p) => sum + (p.totalAmount || 0), 0);
 
+    // Completed/Reconciled campaigns count as collected/realized revenue
+    const realizedRevenuePaise = activeCampaignsBilling
+      .filter((c) => c.status === CampaignStatus.COMPLETED)
+      .reduce((sum, c) => sum + (c.contractedValue || 0), 0);
+    const pendingReceivablePaise = Math.max(0, totalBillingPaise - realizedRevenuePaise);
+
     const financeMetrics = {
       paymentsInCount: pendingPaymentsInList.length,
       paymentsOutCount: pendingPOs.filter((p) => p.paymentStatus !== 'Paid').length,
       totalBillingPaise,
       pendingDisbursementPaise,
+      realizedRevenuePaise,
+      pendingReceivablePaise,
     };
 
     const hrMetrics = {

@@ -151,6 +151,8 @@ export interface UserWorkloadAuditResponse {
       paymentsOutCount: number;
       totalBillingPaise: number;
       pendingDisbursementPaise: number;
+      realizedRevenuePaise?: number;
+      pendingReceivablePaise?: number;
     };
     hr?: {
       pendingLeavesCount: number;
