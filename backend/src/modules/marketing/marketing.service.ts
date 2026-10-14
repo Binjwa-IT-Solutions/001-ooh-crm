@@ -14,6 +14,7 @@ import {
   type IMarketingSpend,
   type IMarketingLead,
 } from './marketing.model.js';
+import { Lead, type LeadSource } from '../leads/leads.model.js';
 
 export class MarketingService {
   // ─── 1. DAILY LOGS ────────────────────────────────────────────────────────
@@ -329,16 +330,174 @@ export class MarketingService {
     });
   }
 
-  static async listLeads(stage?: string): Promise<any[]> {
-    const query: Record<string, any> = { deletedAt: null };
-    if (stage) query.stage = stage;
-    return await MarketingLead.find(query).sort({ createdAt: -1 }).lean();
+  static async listLeads(filters: {
+    stage?: string;
+    claimFilter?: string;
+    platform?: string;
+    page?: number;
+    limit?: number;
+  } = {}): Promise<{
+    leads: any[];
+    counts: { total: number; unclaimed: number; claimed: number; won: number; lost: number };
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+  }> {
+    const MARKETING_SOURCES: LeadSource[] = ['Instagram', 'Facebook', 'JustDial', 'Website', 'WhatsApp', 'Email', 'Referral'];
+
+    // 1. Fetch live CRM leads generated through webhooks / marketing sources
+    const crmLeads = await (Lead as any).find({
+      deletedAt: null,
+      source: { $in: MARKETING_SOURCES },
+    })
+      .populate('claimedBy', 'name email role')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const mappedCrmLeads = crmLeads.map((l: any) => {
+      const isClaimed = Boolean(l.claimedBy);
+      const claimedByName = l.claimedBy?.name || undefined;
+
+      let stage = 'New';
+      if (l.status === 'Won') stage = 'Won';
+      else if (l.status === 'Lost' || l.status === 'Rejected') stage = 'Lost';
+      else if (l.status === 'Proposal Sent') stage = 'Proposal Sent';
+      else if (l.status === 'Negotiation') stage = 'Negotiation';
+      else if (l.status === 'Qualified' || l.status === 'Interested') stage = 'Meeting Done';
+      else if (l.status === 'Contacted') stage = 'Contacted';
+      else stage = 'New';
+
+      const dealValueRupees = l.qualification?.budget ? Math.round(Number(l.qualification.budget) / 100) : 0;
+
+      return {
+        _id: String(l._id),
+        companyName: l.companyName || 'Prospective Client',
+        contactPerson: l.contactPerson || 'Contact Person',
+        designation: l.designation,
+        phone: l.mobile,
+        email: l.email,
+        city: l.city || l.qualification?.city || 'Indore',
+        sourcePlatform: l.source,
+        serviceInterested: l.qualification?.campaignObjective || 'Outdoor Advertising',
+        stage,
+        dealValue: dealValueRupees,
+        claimedStatus: (isClaimed ? 'claimed' : 'unclaimed') as 'claimed' | 'unclaimed',
+        claimedByName,
+        claimedAt: l.claimedAt,
+        createdAt: l.createdAt,
+        isLiveCrmLead: true,
+      };
+    });
+
+    // 2. Fetch manual marketing leads
+    const manualDocs = await MarketingLead.find({ deletedAt: null }).sort({ createdAt: -1 }).lean();
+    const mappedManualLeads = manualDocs.map((m: any) => ({
+      _id: String(m._id),
+      companyName: m.companyName,
+      contactPerson: m.contactPerson,
+      designation: m.designation,
+      phone: m.phone,
+      email: m.email,
+      city: m.city,
+      sourcePlatform: m.sourcePlatform,
+      serviceInterested: m.serviceInterested,
+      stage: m.stage,
+      dealValue: m.dealValue || 0,
+      claimedStatus: 'unclaimed' as const,
+      createdAt: m.createdAt,
+      isLiveCrmLead: false,
+    }));
+
+    // 3. Combine both streams
+    const allCombined = [...mappedCrmLeads, ...mappedManualLeads].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    // 4. Calculate real-time counts across the entire inbound lead pool
+    const counts = {
+      total: allCombined.length,
+      unclaimed: allCombined.filter((l) => l.claimedStatus === 'unclaimed' && l.stage !== 'Won' && l.stage !== 'Lost').length,
+      claimed: allCombined.filter((l) => l.claimedStatus === 'claimed' && l.stage !== 'Won' && l.stage !== 'Lost').length,
+      won: allCombined.filter((l) => l.stage === 'Won').length,
+      lost: allCombined.filter((l) => l.stage === 'Lost').length,
+    };
+
+    // 5. Apply filters for presentation
+    let filtered = allCombined;
+
+    if (filters.claimFilter && filters.claimFilter !== 'all') {
+      if (filters.claimFilter === 'unclaimed') {
+        filtered = filtered.filter((l) => l.claimedStatus === 'unclaimed' && l.stage !== 'Won' && l.stage !== 'Lost');
+      } else if (filters.claimFilter === 'claimed') {
+        filtered = filtered.filter((l) => l.claimedStatus === 'claimed' && l.stage !== 'Won' && l.stage !== 'Lost');
+      } else if (filters.claimFilter === 'won') {
+        filtered = filtered.filter((l) => l.stage === 'Won');
+      } else if (filters.claimFilter === 'lost') {
+        filtered = filtered.filter((l) => l.stage === 'Lost');
+      }
+    }
+
+    if (filters.platform && filters.platform !== 'All') {
+      filtered = filtered.filter((l) =>
+        (l.sourcePlatform || '').toLowerCase().includes(filters.platform!.toLowerCase())
+      );
+    }
+
+    if (filters.stage && filters.stage !== 'All') {
+      filtered = filtered.filter((l) => l.stage === filters.stage);
+    }
+
+    // 6. Slice for pagination
+    const page = Math.max(1, Number(filters.page) || 1);
+    const limit = Math.max(1, Math.min(100, Number(filters.limit) || 15));
+    const totalMatching = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(totalMatching / limit));
+    const paginatedLeads = filtered.slice((page - 1) * limit, page * limit);
+
+    return {
+      leads: paginatedLeads,
+      counts,
+      pagination: {
+        page,
+        limit,
+        total: totalMatching,
+        totalPages,
+      },
+    };
   }
 
   static async updateLeadStage(
     leadId: string,
     input: { stage: string; dealValue?: number; lostReason?: string; notes?: string }
-  ): Promise<IMarketingLead> {
+  ): Promise<any> {
+    // Check if it's a live CRM Lead
+    const crmLead = await Lead.findOne({ _id: new Types.ObjectId(leadId), deletedAt: null });
+    if (crmLead) {
+      if (input.stage === 'Won') {
+        if (!input.dealValue || input.dealValue <= 0) {
+          throw new ValidationError('Deal value is mandatory when marking a lead as Won');
+        }
+        crmLead.status = 'Won';
+        if (!crmLead.qualification) {
+          crmLead.qualification = {} as any;
+        }
+        crmLead.qualification!.budget = Math.round(input.dealValue * 100);
+      } else if (input.stage === 'Lost') {
+        crmLead.status = 'Lost';
+      } else if (input.stage === 'Contacted') {
+        crmLead.status = 'Contacted';
+      } else if (input.stage === 'Proposal Sent') {
+        crmLead.status = 'Proposal Sent';
+      } else if (input.stage === 'Negotiation') {
+        crmLead.status = 'Negotiation';
+      } else if (input.stage === 'Meeting Done') {
+        crmLead.status = 'Qualified';
+      } else if (input.stage === 'New') {
+        crmLead.status = 'New';
+      }
+      await crmLead.save();
+      return crmLead;
+    }
+
+    // Otherwise update MarketingLead
     const lead = await MarketingLead.findOne({ _id: new Types.ObjectId(leadId), deletedAt: null });
     if (!lead) throw new NotFoundError('Lead not found');
 
@@ -364,12 +523,36 @@ export class MarketingService {
     const startOfMonth = new Date(year, month - 1, 1);
     const endOfMonth = new Date(year, month, 0, 23, 59, 59);
 
-    const [budgetDoc, spends, leads, tasks] = await Promise.all([
+    const MARKETING_SOURCES: LeadSource[] = ['Instagram', 'Facebook', 'JustDial', 'Website', 'WhatsApp', 'Email', 'Referral'];
+
+    const [budgetDoc, spends, manualLeads, crmLeads, tasks] = await Promise.all([
       MarketingBudget.findOne({ month: targetMonth, deletedAt: null }).lean(),
       MarketingSpend.find({ date: { $gte: startOfMonth, $lte: endOfMonth }, deletedAt: null }).lean(),
       MarketingLead.find({ createdAt: { $gte: startOfMonth, $lte: endOfMonth }, deletedAt: null }).lean(),
+      (Lead as any).find({
+        createdAt: { $gte: startOfMonth, $lte: endOfMonth },
+        deletedAt: null,
+        source: { $in: MARKETING_SOURCES },
+      }).lean(),
       MarketingTask.find({ deletedAt: null }).lean(),
     ]);
+
+    const mappedCrmLeads = crmLeads.map((l: any) => ({
+      sourcePlatform: l.source,
+      city: l.city || l.qualification?.city || 'Indore',
+      stage: l.status === 'Won' ? 'Won' : l.status === 'Lost' || l.status === 'Rejected' ? 'Lost' : 'New',
+      dealValue: l.status === 'Won' && l.qualification?.budget ? Math.round(Number(l.qualification.budget) / 100) : 0,
+    }));
+
+    const leads = [
+      ...manualLeads.map((m) => ({
+        sourcePlatform: m.sourcePlatform,
+        city: m.city,
+        stage: m.stage,
+        dealValue: m.dealValue || 0,
+      })),
+      ...mappedCrmLeads,
+    ];
 
     const plannedBudget = budgetDoc?.plannedAmount || 150000; // Default ₹1.5L if not set
     const totalSpend = spends.reduce((sum, s) => sum + s.amount, 0);

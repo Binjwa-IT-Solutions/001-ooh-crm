@@ -99,8 +99,12 @@ export class MarketingController {
 
   static async listLeads(req: Request, res: Response) {
     const stage = req.query.stage as string | undefined;
-    const leads = await MarketingService.listLeads(stage);
-    res.status(200).json({ data: leads });
+    const claimFilter = req.query.claimFilter as string | undefined;
+    const platform = req.query.platform as string | undefined;
+    const page = req.query.page ? parseInt(req.query.page as string, 10) : undefined;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+    const { leads, counts, pagination } = await MarketingService.listLeads({ stage, claimFilter, platform, page, limit });
+    res.status(200).json({ data: leads, counts, pagination });
   }
 
   static async updateLeadStage(req: Request, res: Response) {

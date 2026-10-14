@@ -90,8 +90,28 @@ export const marketingApi = {
   }) => api.post<MarketingSpendItem>('/api/marketing/spend', data),
 
   // 5. Leads & Attribution
-  getLeads: (stage?: string) =>
-    api.get<{ data: MarketingLeadItem[] }>(`/api/marketing/leads${stage ? `?stage=${stage}` : ''}`),
+  getLeads: (
+    filters?: { stage?: string; claimFilter?: string; platform?: string; page?: number; limit?: number } | string
+  ) => {
+    let query = '';
+    if (typeof filters === 'string') {
+      if (filters) query = `?stage=${encodeURIComponent(filters)}`;
+    } else if (filters) {
+      const params = new URLSearchParams();
+      if (filters.stage) params.set('stage', filters.stage);
+      if (filters.claimFilter) params.set('claimFilter', filters.claimFilter);
+      if (filters.platform) params.set('platform', filters.platform);
+      if (filters.page) params.set('page', String(filters.page));
+      if (filters.limit) params.set('limit', String(filters.limit));
+      const qs = params.toString();
+      if (qs) query = `?${qs}`;
+    }
+    return api.get<{
+      data: MarketingLeadItem[];
+      counts?: import('./types').MarketingLeadCounts;
+      pagination?: import('./types').MarketingPagination;
+    }>(`/api/marketing/leads${query}`);
+  },
 
   createLead: (data: {
     companyName: string;

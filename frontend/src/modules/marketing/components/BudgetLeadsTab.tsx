@@ -11,6 +11,8 @@ import {
   TrendingUp,
   Users,
   Target,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { marketingApi } from '../api';
 import type { MarketingSpendItem, MarketingLeadItem } from '../types';
@@ -63,13 +65,37 @@ export default function BudgetLeadsTab() {
   const [dealValueInput, setDealValueInput] = useState<number>(100000);
   const [stageSubmitting, setStageSubmitting] = useState(false);
 
+  // Filters & Pagination for Leads
+  const [claimFilter, setClaimFilter] = useState<'all' | 'unclaimed' | 'claimed' | 'won' | 'lost'>('all');
+  const [platformFilter, setPlatformFilter] = useState<string>('All');
+  const [leadCounts, setLeadCounts] = useState<{ total: number; unclaimed: number; claimed: number; won: number; lost: number }>({
+    total: 0,
+    unclaimed: 0,
+    claimed: 0,
+    won: 0,
+    lost: 0,
+  });
+  const [leadPage, setLeadPage] = useState<number>(1);
+  const [leadLimit] = useState<number>(15);
+  const [leadPagination, setLeadPagination] = useState<{ page: number; limit: number; total: number; totalPages: number }>({
+    page: 1,
+    limit: 15,
+    total: 0,
+    totalPages: 1,
+  });
+
   const loadData = async () => {
     try {
       setLoading(true);
       const [budgetRes, spendsRes, leadsRes] = await Promise.all([
         marketingApi.getBudget(selectedMonth).catch(() => null),
         marketingApi.getSpends(selectedMonth).catch(() => ({ data: [] })),
-        marketingApi.getLeads().catch(() => ({ data: [] })),
+        marketingApi.getLeads({
+          claimFilter: claimFilter === 'all' ? undefined : claimFilter,
+          platform: platformFilter === 'All' ? undefined : platformFilter,
+          page: leadPage,
+          limit: leadLimit,
+        }).catch(() => ({ data: [], counts: undefined, pagination: undefined })),
       ]);
 
       const bData = (budgetRes as any)?.data || budgetRes;
@@ -83,6 +109,12 @@ export default function BudgetLeadsTab() {
 
       setSpends(spendsRes?.data || []);
       setLeads(leadsRes?.data || []);
+      if (leadsRes?.counts) {
+        setLeadCounts(leadsRes.counts);
+      }
+      if (leadsRes?.pagination) {
+        setLeadPagination(leadsRes.pagination);
+      }
     } catch (err) {
       console.error('Failed to load marketing budget & leads:', err);
     } finally {
@@ -90,9 +122,33 @@ export default function BudgetLeadsTab() {
     }
   };
 
+  const loadFilteredLeads = async (cFilter: string, pFilter: string, pageNum: number) => {
+    try {
+      const leadsRes = await marketingApi.getLeads({
+        claimFilter: cFilter === 'all' ? undefined : cFilter,
+        platform: pFilter === 'All' ? undefined : pFilter,
+        page: pageNum,
+        limit: leadLimit,
+      });
+      setLeads(leadsRes?.data || []);
+      if (leadsRes?.counts) {
+        setLeadCounts(leadsRes.counts);
+      }
+      if (leadsRes?.pagination) {
+        setLeadPagination(leadsRes.pagination);
+      }
+    } catch (err) {
+      console.error('Failed to load filtered leads:', err);
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, [selectedMonth]);
+
+  useEffect(() => {
+    loadFilteredLeads(claimFilter, platformFilter, leadPage);
+  }, [claimFilter, platformFilter, leadPage]);
 
   const handleSaveBudget = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -424,73 +480,278 @@ export default function BudgetLeadsTab() {
 
       {/* Subtab Content: Leads Pipeline */}
       {subTab === 'leads' && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-600">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold">
-                <tr>
-                  <th className="px-4 py-3">Company &amp; Contact</th>
-                  <th className="px-4 py-3">Phone</th>
-                  <th className="px-4 py-3">City</th>
-                  <th className="px-4 py-3">Source Platform</th>
-                  <th className="px-4 py-3">Service</th>
-                  <th className="px-4 py-3 text-center">Stage</th>
-                  <th className="px-4 py-3 text-right">Deal Value</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {leads.length === 0 ? (
+        <div className="space-y-3">
+          {/* Quick Filter Status Bar with Real-time Counts */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider mr-1">Status:</span>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setClaimFilter('all');
+                  setLeadPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                  claimFilter === 'all'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                All Leads
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                    claimFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  {leadCounts.total}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setClaimFilter('unclaimed');
+                  setLeadPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                  claimFilter === 'unclaimed'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                Unclaimed
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                    claimFilter === 'unclaimed' ? 'bg-white/25 text-white' : 'bg-amber-200/70 text-amber-900'
+                  }`}
+                >
+                  {leadCounts.unclaimed}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setClaimFilter('claimed');
+                  setLeadPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                  claimFilter === 'claimed'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-200'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                Claimed / In-Progress
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                    claimFilter === 'claimed' ? 'bg-white/25 text-white' : 'bg-blue-200/70 text-blue-900'
+                  }`}
+                >
+                  {leadCounts.claimed}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setClaimFilter('won');
+                  setLeadPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                  claimFilter === 'won'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                Won Deals
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                    claimFilter === 'won' ? 'bg-white/25 text-white' : 'bg-emerald-200/70 text-emerald-900'
+                  }`}
+                >
+                  {leadCounts.won}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setClaimFilter('lost');
+                  setLeadPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                  claimFilter === 'lost'
+                    ? 'bg-rose-600 text-white shadow-xs'
+                    : 'bg-rose-50 text-rose-800 hover:bg-rose-100 border border-rose-200'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-rose-400"></span>
+                Lost
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                    claimFilter === 'lost' ? 'bg-white/25 text-white' : 'bg-rose-200/70 text-rose-900'
+                  }`}
+                >
+                  {leadCounts.lost}
+                </span>
+              </button>
+            </div>
+
+            {/* Platform Dropdown */}
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Channel:</label>
+              <select
+                value={platformFilter}
+                onChange={(e) => {
+                  setPlatformFilter(e.target.value);
+                  setLeadPage(1);
+                }}
+                className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#8B2424]"
+              >
+                <option value="All">All Channels</option>
+                <option value="Instagram">Instagram</option>
+                <option value="Facebook">Facebook</option>
+                <option value="JustDial">Justdial</option>
+                <option value="WhatsApp">WhatsApp</option>
+                <option value="Website">Website</option>
+                <option value="Google">Google Ads</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Leads Table */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-600">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold">
                   <tr>
-                    <td colSpan={7} className="text-center py-12 text-slate-400">
-                      No marketing leads registered yet. Click &quot;Add Marketing Lead&quot; to create one.
-                    </td>
+                    <th className="px-4 py-3">Company &amp; Contact</th>
+                    <th className="px-4 py-3">Phone</th>
+                    <th className="px-4 py-3">City</th>
+                    <th className="px-4 py-3">Source Channel</th>
+                    <th className="px-4 py-3 text-center">Sales Ownership</th>
+                    <th className="px-4 py-3 text-center">Stage</th>
+                    <th className="px-4 py-3 text-right">Deal Value</th>
                   </tr>
-                ) : (
-                  leads.map((ld) => (
-                    <tr key={ld._id} className="hover:bg-slate-50/80 transition">
-                      <td className="px-4 py-3">
-                        <p className="font-bold text-slate-900">{ld.companyName}</p>
-                        <p className="text-[11px] text-slate-500">
-                          {ld.contactPerson} {ld.email ? `• ${ld.email}` : ''}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3 font-mono">{ld.phone}</td>
-                      <td className="px-4 py-3 font-medium">{ld.city}</td>
-                      <td className="px-4 py-3">
-                        <span className="bg-[#F8E6E6] text-[#8B2424] px-2 py-0.5 rounded font-medium border border-[#8B2424]/20">
-                          {ld.sourcePlatform}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">{ld.serviceInterested || '-'}</td>
-                      <td className="px-4 py-3 text-center">
-                        <select
-                          value={ld.stage}
-                          onChange={(e) => handleStageSelect(ld._id, e.target.value)}
-                          className={`text-xs font-semibold px-2 py-1 rounded border cursor-pointer focus:outline-none ${
-                            ld.stage === 'Won'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                              : ld.stage === 'Lost'
-                              ? 'bg-rose-50 text-rose-700 border-rose-300'
-                              : 'bg-slate-50 text-slate-700 border-slate-300'
-                          }`}
-                        >
-                          <option value="New">New</option>
-                          <option value="Contacted">Contacted</option>
-                          <option value="Meeting Done">Meeting Done</option>
-                          <option value="Proposal Sent">Proposal Sent</option>
-                          <option value="Negotiation">Negotiation</option>
-                          <option value="Won">🏆 Won (Closed)</option>
-                          <option value="Lost">Lost</option>
-                        </select>
-                      </td>
-                      <td className="px-4 py-3 text-right font-bold text-slate-900 whitespace-nowrap">
-                        {ld.dealValue ? `₹${ld.dealValue.toLocaleString()}` : '-'}
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {leads.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="text-center py-12 text-slate-400">
+                        No marketing leads found matching current filter.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    leads.map((ld) => (
+                      <tr key={ld._id} className="hover:bg-slate-50/80 transition">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-slate-900">{ld.companyName}</p>
+                            {ld.isLiveCrmLead && (
+                              <span className="px-1.5 py-0.2 rounded text-[9px] bg-slate-100 text-slate-500 font-semibold border border-slate-200 whitespace-nowrap">
+                                Webhook Sync
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-500">
+                            {ld.contactPerson} {ld.email ? `• ${ld.email}` : ''}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3 font-mono">{ld.phone}</td>
+                        <td className="px-4 py-3 font-medium">{ld.city}</td>
+                        <td className="px-4 py-3">
+                          <span className="bg-[#F8E6E6] text-[#8B2424] px-2 py-0.5 rounded font-medium border border-[#8B2424]/20 whitespace-nowrap">
+                            {ld.sourcePlatform}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {ld.claimedStatus === 'unclaimed' ? (
+                            <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded font-medium text-[11px] whitespace-nowrap">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                              Unclaimed
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-medium text-[11px] whitespace-nowrap">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                              {ld.claimedByName || 'Claimed'}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center whitespace-nowrap">
+                          {ld.stage === 'Won' ? (
+                            <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 font-bold px-2.5 py-1 rounded-full text-[11px] border border-emerald-200 shadow-2xs">
+                              🏆 Won (Closed)
+                            </span>
+                          ) : ld.stage === 'Lost' ? (
+                            <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-700 font-semibold px-2.5 py-0.5 rounded-full text-[11px] border border-rose-200">
+                              Lost
+                            </span>
+                          ) : ld.stage === 'Proposal Sent' || ld.stage === 'Negotiation' ? (
+                            <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 font-semibold px-2.5 py-0.5 rounded-full text-[11px] border border-purple-200">
+                              {ld.stage}
+                            </span>
+                          ) : ld.stage === 'Meeting Done' || ld.stage === 'Contacted' ? (
+                            <span className="inline-flex items-center gap-1 bg-sky-50 text-sky-700 font-semibold px-2.5 py-0.5 rounded-full text-[11px] border border-sky-200">
+                              {ld.stage}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 font-semibold px-2.5 py-0.5 rounded-full text-[11px] border border-slate-200">
+                              {ld.stage}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-slate-900 whitespace-nowrap">
+                          {ld.dealValue ? `₹${ld.dealValue.toLocaleString()}` : '-'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {leadPagination.totalPages > 1 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-slate-50 border-t border-slate-200">
+                <p className="text-xs text-slate-500">
+                  Showing <span className="font-semibold text-slate-800">{(leadPagination.page - 1) * leadPagination.limit + 1}</span> to{' '}
+                  <span className="font-semibold text-slate-800">
+                    {Math.min(leadPagination.page * leadPagination.limit, leadPagination.total)}
+                  </span>{' '}
+                  of <span className="font-semibold text-slate-800">{leadPagination.total}</span> leads
+                </p>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setLeadPage((p) => Math.max(1, p - 1))}
+                    disabled={leadPagination.page <= 1}
+                    className="px-2.5 py-1 text-xs font-semibold rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 transition cursor-pointer"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    Previous
+                  </button>
+
+                  <span className="px-2.5 py-1 text-xs font-semibold text-slate-600 bg-slate-200/60 rounded-md">
+                    Page {leadPagination.page} of {leadPagination.totalPages}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => setLeadPage((p) => Math.min(leadPagination.totalPages, p + 1))}
+                    disabled={leadPagination.page >= leadPagination.totalPages}
+                    className="px-2.5 py-1 text-xs font-semibold rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 transition cursor-pointer"
+                  >
+                    Next
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

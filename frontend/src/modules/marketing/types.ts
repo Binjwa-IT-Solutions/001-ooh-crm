@@ -71,7 +71,26 @@ export interface MarketingLeadItem {
   dealValue?: number;
   lostReason?: string;
   notes?: string;
+  claimedStatus?: 'claimed' | 'unclaimed';
+  claimedByName?: string;
+  claimedAt?: string;
+  isLiveCrmLead?: boolean;
   createdAt: string;
+}
+
+export interface MarketingLeadCounts {
+  total: number;
+  unclaimed: number;
+  claimed: number;
+  won: number;
+  lost: number;
+}
+
+export interface MarketingPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
 }
 
 export interface MarketingDashboardData {
