@@ -114,7 +114,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: '/exceptions',
         label: 'Exceptions',
         icon: AlertTriangle,
-        permission: 'exceptions.view',
+        permission: 'audit.view',
       },
     ],
   },
