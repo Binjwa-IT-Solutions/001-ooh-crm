@@ -468,7 +468,7 @@ export class WorkloadAuditService {
       Campaign.countDocuments({ assignedManager: userObjectId, deletedAt: null }),
       Campaign.countDocuments({
         assignedManager: userObjectId,
-        status: { $in: [CampaignStatus.CAMPAIGN_LIVE, CampaignStatus.IN_PROGRESS, CampaignStatus.INPROGRESS] },
+        status: { $in: [CampaignStatus.IN_PROGRESS, CampaignStatus.APPROVED] },
         deletedAt: null,
       }),
       Proof.countDocuments({ uploadedBy: userObjectId }),
@@ -545,14 +545,14 @@ export class WorkloadAuditService {
       createdAt: c.createdAt,
     }));
 
-    const pendingPaymentsOutList = pendingPOs.map((po) => ({
+    const pendingPaymentsOutList = pendingPOs.map((po: any) => ({
       _id: String(po._id),
       poNumber: po.poNumber,
       vendorName: po.vendorName || po.companyName || 'Vendor',
       totalAmountPaise: po.totalAmount || 0,
       paidAmountPaise: po.paidAmount || 0,
-      paymentStatus: po.paymentStatus || 'Pending',
-      dueDate: po.dueDate || null,
+      paymentStatus: po.paymentStatus || po.status || 'Pending',
+      dueDate: po.dueDate || po.validityTo || null,
       createdAt: po.createdAt,
     }));
 
@@ -639,18 +639,18 @@ export class WorkloadAuditService {
     // Aggregated metrics
     const totalBillingPaise = pendingPaymentsInList.reduce((sum, item) => sum + (item.contractedValuePaise || 0), 0);
     const pendingDisbursementPaise = pendingPOs
-      .filter((p) => p.paymentStatus !== 'Paid')
+      .filter((p: any) => p.paymentStatus !== 'Paid' && p.status !== 'Accepted')
       .reduce((sum, p) => sum + (p.totalAmount || 0), 0);
 
     // Completed/Reconciled campaigns count as collected/realized revenue
     const realizedRevenuePaise = activeCampaignsBilling
-      .filter((c) => c.status === CampaignStatus.COMPLETED)
+      .filter((c) => c.status === CampaignStatus.COMPLETED || c.status === CampaignStatus.COMPLETE)
       .reduce((sum, c) => sum + (c.contractedValue || 0), 0);
     const pendingReceivablePaise = Math.max(0, totalBillingPaise - realizedRevenuePaise);
 
     const financeMetrics = {
       paymentsInCount: pendingPaymentsInList.length,
-      paymentsOutCount: pendingPOs.filter((p) => p.paymentStatus !== 'Paid').length,
+      paymentsOutCount: pendingPOs.filter((p: any) => p.paymentStatus !== 'Paid' && p.status !== 'Accepted').length,
       totalBillingPaise,
       pendingDisbursementPaise,
       realizedRevenuePaise,

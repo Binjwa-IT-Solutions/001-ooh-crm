@@ -281,10 +281,9 @@ export class ExceptionsService {
           st === 'complete' ||
           st === 'cancelled' ||
           st === 'rejected' ||
-          c.status === CampaignStatus.CAMPAIGN_END ||
           c.status === CampaignStatus.COMPLETED ||
-          c.status === CampaignStatus.CANCELLED ||
-          c.status === CampaignStatus.REJECTED;
+          c.status === CampaignStatus.COMPLETE ||
+          c.status === CampaignStatus.CANCELLED;
         return end < now && !isFinishedOrClosed;
       });
 
@@ -451,9 +450,8 @@ export class ExceptionsService {
           st === 'campaign live' ||
           st === 'in progress' ||
           st === 'inprogress' ||
-          c.status === CampaignStatus.CAMPAIGN_END ||
           c.status === CampaignStatus.COMPLETED ||
-          c.status === CampaignStatus.CAMPAIGN_LIVE ||
+          c.status === CampaignStatus.COMPLETE ||
           c.status === CampaignStatus.IN_PROGRESS
         );
       });
@@ -464,8 +462,8 @@ export class ExceptionsService {
           st === 'campaign end' ||
           st === 'completed' ||
           st === 'complete' ||
-          c.status === CampaignStatus.CAMPAIGN_END ||
-          c.status === CampaignStatus.COMPLETED;
+          c.status === CampaignStatus.COMPLETED ||
+          c.status === CampaignStatus.COMPLETE;
 
         // If contracted value > 0 and campaign is completed / campaign end, surface financial sign-off pending
         if (isDone && c.contractedValue && c.contractedValue > 0) {

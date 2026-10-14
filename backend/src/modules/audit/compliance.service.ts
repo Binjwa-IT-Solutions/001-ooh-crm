@@ -170,7 +170,6 @@ export class ComplianceAuditService {
 
     const isCancelledOrRejected =
       statusNormalized === CampaignStatus.CANCELLED ||
-      statusNormalized === CampaignStatus.REJECTED ||
       statusNormalized.toLowerCase() === 'cancelled' ||
       statusNormalized.toLowerCase() === 'rejected';
 
@@ -280,10 +279,10 @@ export class ComplianceAuditService {
       };
     }
 
-    const missingProofTasks = proofTasks.filter((t) => !t.proofId);
+    const missingProofTasks = proofTasks.filter((t: any) => !t.proofId);
 
     if (missingProofTasks.length > 0) {
-      const failingItems = missingProofTasks.map((t) => ({
+      const failingItems = missingProofTasks.map((t: any) => ({
         id: String(t._id),
         name: t.title,
         reason: `Missing proof photo for ${t.type} task`,
@@ -293,7 +292,7 @@ export class ComplianceAuditService {
         checkType: 'proofs_complete',
         passed: false,
         details: {
-          summary: `${missingProofTasks.length} of ${proofTasks.length} tasks missing approved proof photos: ${missingProofTasks.map((t) => t.title).join(', ')}`,
+          summary: `${missingProofTasks.length} of ${proofTasks.length} tasks missing approved proof photos: ${missingProofTasks.map((t: any) => t.title).join(', ')}`,
           failingItems,
           metadata: { totalRequired: proofTasks.length, missingCount: missingProofTasks.length },
         },
