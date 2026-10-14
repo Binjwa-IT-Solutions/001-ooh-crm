@@ -10,6 +10,8 @@ import {
   Calendar,
   Clock,
   Mail,
+  Lock,
+  RefreshCw,
 } from 'lucide-react';
 
 import { useAuth } from '@/shared/auth/auth-context';
@@ -26,6 +28,7 @@ import {
   type User,
   type UserStatus,
 } from '@/modules/users/types';
+import { DeviceSessionsCard } from '@/modules/users/components/device-sessions-card';
 import { useManagerOptions } from '@/modules/employees/hooks/use-employees';
 
 function initials(name: string): string {
@@ -54,11 +57,12 @@ function formatDate(dateString: string | null | undefined): string {
 function UserDetailsContent() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user: currentUser } = useAuth();
   const { options: managerOptionsList, isLoading: managersLoading } = useManagerOptions();
 
   const userId = params.id;
   const canUpdate = hasPermission('users.update');
+  const canResetMfa = currentUser?.role === 'admin';
 
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -91,6 +95,16 @@ function UserDetailsContent() {
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [targetStatus, setTargetStatus] = useState<UserStatus>('Inactive');
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
+
+  const [isMfaResetOpen, setIsMfaResetOpen] = useState(false);
+  const [mfaResetPassword, setMfaResetPassword] = useState('');
+  const [mfaResetTotpCode, setMfaResetTotpCode] = useState('');
+  const [mfaResetReason, setMfaResetReason] = useState('');
+  const [secondAdminEmail, setSecondAdminEmail] = useState('');
+  const [secondAdminPassword, setSecondAdminPassword] = useState('');
+  const [secondAdminTotpCode, setSecondAdminTotpCode] = useState('');
+  const [mfaResetError, setMfaResetError] = useState<string | null>(null);
+  const [isResettingMfa, setIsResettingMfa] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -269,6 +283,53 @@ function UserDetailsContent() {
     }
   }
 
+  function openMfaResetModal() {
+    setMfaResetPassword('');
+    setMfaResetTotpCode('');
+    setMfaResetReason('');
+    setSecondAdminEmail('');
+    setSecondAdminPassword('');
+    setSecondAdminTotpCode('');
+    setMfaResetError(null);
+    setIsMfaResetOpen(true);
+  }
+
+  async function handleMfaResetSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!user) return;
+
+    setIsResettingMfa(true);
+    setMfaResetError(null);
+
+    try {
+      const result = await usersApi.resetMfa(user.id, {
+        password: mfaResetPassword,
+        totpCode: mfaResetTotpCode,
+        reason: mfaResetReason,
+        ...(user.role === 'admin'
+          ? {
+              secondAdmin: {
+                email: secondAdminEmail,
+                password: secondAdminPassword,
+                totpCode: secondAdminTotpCode,
+              },
+            }
+          : {}),
+      });
+
+      setUser(result.user);
+      setIsMfaResetOpen(false);
+      setFeedback({
+        tone: 'success',
+        message: `Authenticator reset. ${result.revokedSessions} refresh session(s) revoked. The user must verify email and enroll again at next sign-in. Existing access tokens can remain valid for up to 15 minutes.`,
+      });
+    } catch (err) {
+      setMfaResetError(toErrorMessage(err));
+    } finally {
+      setIsResettingMfa(false);
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -325,8 +386,19 @@ function UserDetailsContent() {
                   onClick={() => openStatusModal('Inactive')}
                   className="h-9 px-3 text-xs text-amber-700 hover:bg-amber-50 border-amber-200"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor" className="w-3.5 h-3.5 mr-1 text-amber-600">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M22 10.5h-6m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM4 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 10.374 21c-2.331 0-4.512-.645-6.374-1.765Z" />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.75}
+                    stroke="currentColor"
+                    className="w-3.5 h-3.5 mr-1 text-amber-600"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M22 10.5h-6m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM4 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 10.374 21c-2.331 0-4.512-.645-6.374-1.765Z"
+                    />
                   </svg>
                   <span>Deactivate</span>
                 </Button>
@@ -336,7 +408,14 @@ function UserDetailsContent() {
                   onClick={() => openStatusModal('Active')}
                   className="h-9 px-3 text-xs text-emerald-700 hover:bg-emerald-50 border-emerald-200"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor" className="w-3.5 h-3.5 mr-1 text-emerald-600">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.75}
+                    stroke="currentColor"
+                    className="w-3.5 h-3.5 mr-1 text-emerald-600"
+                  >
                     <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                   </svg>
                   <span>Activate</span>
@@ -348,8 +427,19 @@ function UserDetailsContent() {
                 onClick={openResetModal}
                 className="h-9 px-3 text-xs text-slate-700 hover:bg-slate-50"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor" className="w-3.5 h-3.5 mr-1 text-[#6E1D1D]">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 0 1 3 3m3 0a6 6 0 0 1-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1 1 21.75 8.25Z" />
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.75}
+                  stroke="currentColor"
+                  className="w-3.5 h-3.5 mr-1 text-[#6E1D1D]"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M15.75 5.25a3 3 0 0 1 3 3m3 0a6 6 0 0 1-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1 1 21.75 8.25Z"
+                  />
                 </svg>
                 <span>Reset Password</span>
               </Button>
@@ -518,6 +608,28 @@ function UserDetailsContent() {
 
             <div className="space-y-1">
               <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                Authenticator
+              </span>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-sm font-semibold text-slate-900">
+                  {user.mfaEnabled ? 'Enabled' : 'Not enrolled'}
+                </span>
+                {canResetMfa && user.mfaEnabled && user.id !== currentUser?.id && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={openMfaResetModal}
+                    className="h-8 px-2.5 text-xs text-rose-700 hover:bg-rose-50"
+                  >
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                    Reset authenticator
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
                 Last Login Timestamp
               </span>
               <div className="flex items-center gap-2 text-sm text-slate-700">
@@ -568,6 +680,142 @@ function UserDetailsContent() {
           </p>
         </div>
       </Card>
+
+      {/* Admins manage someone else's device; acting on your own would sign you out. */}
+      {currentUser?.role === 'admin' && user.id !== currentUser.id && (
+        <DeviceSessionsCard userId={user.id} userName={user.name} />
+      )}
+
+      <Modal
+        open={isMfaResetOpen}
+        onClose={() => !isResettingMfa && setIsMfaResetOpen(false)}
+        title="Reset User Authenticator"
+      >
+        <form onSubmit={handleMfaResetSubmit} className="space-y-4" noValidate>
+          <p className="text-sm leading-relaxed text-slate-600">
+            This removes the authenticator for{' '}
+            <strong className="text-slate-900">{user.name}</strong>, revokes their refresh sessions,
+            and requires email verification plus new authenticator enrollment at their next sign-in.
+            Existing access tokens may remain valid for up to 15 minutes.
+          </p>
+
+          {mfaResetError && <Alert tone="error">{mfaResetError}</Alert>}
+
+          <label className="block space-y-1.5">
+            <span className="text-sm font-medium text-slate-700">Your admin password</span>
+            <input
+              type="password"
+              value={mfaResetPassword}
+              onChange={(event) => setMfaResetPassword(event.target.value)}
+              autoComplete="current-password"
+              className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+              required
+            />
+          </label>
+
+          <label className="block space-y-1.5">
+            <span className="text-sm font-medium text-slate-700">
+              Your current authenticator code
+            </span>
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              pattern="[0-9]{6}"
+              value={mfaResetTotpCode}
+              onChange={(event) =>
+                setMfaResetTotpCode(event.target.value.replace(/\D/g, '').slice(0, 6))
+              }
+              className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+              required
+            />
+          </label>
+
+          <label className="block space-y-1.5">
+            <span className="text-sm font-medium text-slate-700">Reason for reset</span>
+            <textarea
+              value={mfaResetReason}
+              onChange={(event) => setMfaResetReason(event.target.value)}
+              minLength={10}
+              maxLength={500}
+              rows={3}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              required
+            />
+          </label>
+
+          {user.role === 'admin' && (
+            <div className="space-y-3 border-t border-slate-200 pt-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <Lock className="h-4 w-4 text-amber-700" />
+                Second-admin approval required
+              </div>
+              <p className="text-xs text-slate-600">
+                The approving admin must be enrolled and must be different from you and the target.
+              </p>
+              <label className="block space-y-1.5">
+                <span className="text-sm font-medium text-slate-700">Approver email</span>
+                <input
+                  type="email"
+                  value={secondAdminEmail}
+                  onChange={(event) => setSecondAdminEmail(event.target.value)}
+                  autoComplete="off"
+                  className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+                  required
+                />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-sm font-medium text-slate-700">Approver password</span>
+                <input
+                  type="password"
+                  value={secondAdminPassword}
+                  onChange={(event) => setSecondAdminPassword(event.target.value)}
+                  autoComplete="off"
+                  className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+                  required
+                />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-sm font-medium text-slate-700">
+                  Approver current authenticator code
+                </span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={6}
+                  pattern="[0-9]{6}"
+                  value={secondAdminTotpCode}
+                  onChange={(event) =>
+                    setSecondAdminTotpCode(event.target.value.replace(/\D/g, '').slice(0, 6))
+                  }
+                  className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+                  required
+                />
+              </label>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setIsMfaResetOpen(false)}
+              disabled={isResettingMfa}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              isLoading={isResettingMfa}
+              className="bg-rose-700 text-white hover:bg-rose-800"
+            >
+              Reset authenticator
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Modal: Reset Password */}
       <Modal
@@ -732,7 +980,8 @@ function UserDetailsContent() {
               <>
                 Are you sure you want to deactivate{' '}
                 <span className="font-semibold text-slate-900">{user.name}</span>? They will
-                immediately lose access to the CRM, and any active login sessions will be terminated.
+                immediately lose access to the CRM, and any active login sessions will be
+                terminated.
               </>
             ) : (
               <>

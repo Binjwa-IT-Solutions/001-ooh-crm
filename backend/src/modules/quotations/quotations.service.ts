@@ -604,6 +604,7 @@ export class QuotationsService {
     id: string,
     sentTo: string,
     message: string | undefined,
+    channel: 'email' | 'whatsapp' | 'link' = 'email',
     ctx: RequestContext,
   ): Promise<{ quotation: IQuotation; trackingToken: string; publicUrl: string }> {
     const quotation = await Quotation.findOne({ _id: toObjectId(id), deletedAt: null });
@@ -621,6 +622,7 @@ export class QuotationsService {
     await quotation.save();
 
     // 1. Update Lead to 'Proposal Sent' stage with audit trail
+    const channelLabel = channel === 'whatsapp' ? 'WhatsApp' : channel === 'link' ? 'Direct Link' : 'Email';
     if (quotation.leadId) {
       await Lead.updateOne(
         { _id: quotation.leadId },
@@ -629,7 +631,7 @@ export class QuotationsService {
           $push: {
             statusHistory: {
               to: 'Proposal Sent',
-              reason: `Proposal #${quotation.quoteNumber} dispatched to ${sentTo}`,
+              reason: `Proposal #${quotation.quoteNumber} shared via ${channelLabel} with ${sentTo}`,
               changedAt: new Date(),
             },
           },
@@ -637,11 +639,12 @@ export class QuotationsService {
       );
     }
 
-    // 2. Dispatch real email via system email service
+    // 2. Dispatch real email via system email service if channel is email
     const publicUrl = `/q/${quotation.trackingToken}`;
     const clientBaseUrl = config.cors.origins[0] || 'http://localhost:3000';
     const fullPublicUrl = `${clientBaseUrl}${publicUrl}`;
-    try {
+    if (channel === 'email') {
+      try {
       await sendEmail({
         to: sentTo,
         subject: `Media Proposal #${quotation.quoteNumber} - Media Octus Outdoor Advertising`,
@@ -677,6 +680,7 @@ export class QuotationsService {
     } catch (emailErr) {
       console.warn('[QuotationsService.send] Email dispatch notification caught:', emailErr);
     }
+  }
 
     return {
       quotation,

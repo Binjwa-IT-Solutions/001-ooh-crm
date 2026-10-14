@@ -19,7 +19,7 @@ import SiteFilters from "./SiteFilters";
 import SiteForm from "./SiteForm";
 import SiteTable from "./SiteTable";
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 25;
 
 export default function SitesPage() {
   const {
@@ -222,18 +222,17 @@ export default function SitesPage() {
     )
   );
 
-  const visibleSites = useMemo(() => {
-    const start =
-      (currentPage - 1) *
-      ITEMS_PER_PAGE;
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, filteredSites.length);
 
+  const visibleSites = useMemo(() => {
     return filteredSites.slice(
-      start,
-      start + ITEMS_PER_PAGE
+      startIndex,
+      startIndex + ITEMS_PER_PAGE
     );
   }, [
     filteredSites,
-    currentPage,
+    startIndex,
   ]);
 
   /* =========================
@@ -456,52 +455,90 @@ export default function SitesPage() {
 
             {/* PAGINATION */}
 
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between border-t border-[#E8E8EC] px-5 py-4">
+            {filteredSites.length > 0 && (
+              <div className="flex flex-col items-center justify-between gap-4 border-t border-[#E8E8EC] bg-white px-5 py-4 sm:flex-row">
+                <p className="text-sm text-[#667085]">
+                  Showing{" "}
+                  <span className="font-semibold text-[#1F2937]">
+                    {filteredSites.length === 0 ? 0 : startIndex + 1}
+                  </span>{" "}
+                  to{" "}
+                  <span className="font-semibold text-[#1F2937]">
+                    {endIndex}
+                  </span>{" "}
+                  of{" "}
+                  <span className="font-semibold text-[#1F2937]">
+                    {filteredSites.length}
+                  </span>{" "}
+                  ATR sites
+                </p>
 
-                <button
-                  type="button"
-                  disabled={
-                    currentPage === 1
-                  }
-                  onClick={() =>
-                    setCurrentPage(
-                      (page) =>
-                        Math.max(
-                          1,
-                          page - 1
-                        )
-                    )
-                  }
-                  className="rounded-lg border border-[#E8E8EC] px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Previous
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={currentPage <= 1}
+                    onClick={() =>
+                      setCurrentPage((page) => Math.max(1, page - 1))
+                    }
+                    className="flex items-center gap-1 rounded-lg border border-[#E8E8EC] bg-white px-3 py-1.5 text-sm font-medium text-[#1F2937] transition hover:border-[#8B2424] hover:bg-[#F9DADA] hover:text-[#8B2424] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-[#E8E8EC] disabled:hover:bg-white disabled:hover:text-[#1F2937]"
+                  >
+                    <span>‹</span>
+                    <span>Previous</span>
+                  </button>
 
-                <span className="text-sm text-[#667085]">
-                  Page {currentPage} of{" "}
-                  {totalPages}
-                </span>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.max(1, totalPages) }, (_, idx) => idx + 1)
+                      .filter((page) => {
+                        if (page === 1 || page === totalPages) return true;
+                        if (Math.abs(page - currentPage) <= 1) return true;
+                        return false;
+                      })
+                      .reduce<(number | string)[]>((acc, page, idx, arr) => {
+                        if (idx > 0 && page - (arr[idx - 1] as number) > 1) {
+                          acc.push("...");
+                        }
+                        acc.push(page);
+                        return acc;
+                      }, [])
+                      .map((item, idx) => {
+                        if (item === "...") {
+                          return (
+                            <span key={`dots-${idx}`} className="px-1 text-xs text-gray-400">
+                              …
+                            </span>
+                          );
+                        }
+                        const pageNum = item as number;
+                        const isActive = pageNum === currentPage;
+                        return (
+                          <button
+                            key={pageNum}
+                            type="button"
+                            onClick={() => setCurrentPage(pageNum)}
+                            className={`h-8 min-w-[32px] rounded-lg px-2 text-xs font-semibold transition ${
+                              isActive
+                                ? "bg-[#8B2424] text-white shadow-sm"
+                                : "border border-[#E8E8EC] bg-white text-[#1F2937] hover:border-[#8B2424] hover:bg-[#F9DADA] hover:text-[#8B2424]"
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+                  </div>
 
-                <button
-                  type="button"
-                  disabled={
-                    currentPage ===
-                    totalPages
-                  }
-                  onClick={() =>
-                    setCurrentPage(
-                      (page) =>
-                        Math.min(
-                          totalPages,
-                          page + 1
-                        )
-                    )
-                  }
-                  className="rounded-lg border border-[#E8E8EC] px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Next
-                </button>
+                  <button
+                    type="button"
+                    disabled={currentPage >= totalPages}
+                    onClick={() =>
+                      setCurrentPage((page) => Math.min(totalPages, page + 1))
+                    }
+                    className="flex items-center gap-1 rounded-lg border border-[#E8E8EC] bg-white px-3 py-1.5 text-sm font-medium text-[#1F2937] transition hover:border-[#8B2424] hover:bg-[#F9DADA] hover:text-[#8B2424] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-[#E8E8EC] disabled:hover:bg-white disabled:hover:text-[#1F2937]"
+                  >
+                    <span>Next</span>
+                    <span>›</span>
+                  </button>
+                </div>
               </div>
             )}
           </>

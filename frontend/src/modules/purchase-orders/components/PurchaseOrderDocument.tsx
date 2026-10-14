@@ -236,7 +236,14 @@ export default function PurchaseOrderDocument({
         ];
 
   const handlePrint = () => {
+    const originalTitle = document.title;
+    if (order.poNumber) {
+      document.title = order.poNumber;
+    }
     window.print();
+    setTimeout(() => {
+      document.title = originalTitle;
+    }, 1000);
   };
 
   const handleShare = () => {
@@ -248,7 +255,7 @@ export default function PurchaseOrderDocument({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 print:space-y-0 print:m-0 print:p-0">
       {/* Top Action Bar */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-gray-200 pb-5 print:hidden">
         <div className="flex items-center gap-3">
@@ -329,19 +336,19 @@ export default function PurchaseOrderDocument({
       />
 
       {/* Printable PO Document Sheet */}
-      <div className="mx-auto max-w-4xl">
+      <div className="mx-auto max-w-4xl print:max-w-none print:w-full print:m-0 print:p-0">
         <div
           ref={printRef}
-          className="rounded-2xl border border-gray-200 bg-white p-8 sm:p-12 shadow-md print:shadow-none print:border-none print:p-0 print:m-0"
+          className="rounded-2xl border border-gray-200 bg-white p-8 sm:p-12 shadow-md print:shadow-none print:border-none print:p-0 print:m-0 print:rounded-none"
         >
           {/* Header Row */}
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between border-b border-gray-800 pb-6 gap-6">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between border-b border-gray-800 pb-6 gap-6 print:flex-row print:justify-between print:pb-4 print:gap-4">
             {/* Logo */}
             <div className="flex items-center">
               <img
                 src="/logo.png"
                 alt="Logo"
-                className="h-12 w-auto max-w-[200px] object-contain"
+                className="h-12 w-auto max-w-[200px] object-contain print:h-11"
               />
             </div>
 
@@ -380,7 +387,7 @@ export default function PurchaseOrderDocument({
           </div>
 
           {/* Bill From / Ship From Box Grid */}
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 border border-gray-800 rounded-xl p-4 bg-gray-50/50">
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 border border-gray-800 rounded-xl p-4 bg-gray-50/50 print:mt-3 print:grid-cols-2 print:gap-3 print:p-3 print:rounded-lg">
             {/* Bill From */}
             <div className="text-xs space-y-1 sm:border-r sm:border-gray-300 sm:pr-4">
               <p className="font-bold uppercase tracking-wider text-gray-900">
@@ -420,7 +427,7 @@ export default function PurchaseOrderDocument({
           </div>
 
           {/* Table */}
-          <div className="mt-6 overflow-hidden rounded-xl border border-gray-800">
+          <div className="mt-6 overflow-hidden rounded-xl border border-gray-800 print:mt-3 print:rounded-lg">
             <table className="w-full text-left text-xs">
               <thead className="border-b border-gray-800 bg-gray-100 font-bold uppercase tracking-wider text-gray-900">
                 <tr>
@@ -533,18 +540,18 @@ export default function PurchaseOrderDocument({
           </div>
 
           {/* Amount in words */}
-          <div className="mt-4 rounded-lg bg-gray-50 px-4 py-2 text-xs font-semibold text-gray-800 border border-gray-200">
+          <div className="mt-4 rounded-lg bg-gray-50 px-4 py-2 text-xs font-semibold text-gray-800 border border-gray-200 print:mt-2.5 print:py-1.5 print:text-[11px]">
             <span className="font-bold text-gray-500">Amount in Words :</span>{" "}
             <span className="italic">{numberToWordsINR(totalAmount)}</span>
           </div>
 
           {/* Bank Details (if provided) */}
           {order.bankDetails && (
-            <div className="mt-4 rounded-lg bg-gray-50 p-3.5 border border-gray-200 text-xs">
-              <p className="font-bold text-gray-800 uppercase tracking-wider text-[11px] mb-2">
+            <div className="mt-4 rounded-lg bg-gray-50 p-3.5 border border-gray-200 text-xs print:mt-2.5 print:p-2.5 print:text-[11px]">
+              <p className="font-bold text-gray-800 uppercase tracking-wider text-[11px] mb-2 print:mb-1.5 print:text-[10px]">
                 Bank Details for Payment
               </p>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-gray-800">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-gray-800 print:grid-cols-5 print:gap-2">
                 <div>
                   <span className="text-[10px] text-gray-500 block uppercase">Bank Name</span>
                   <span className="font-semibold text-xs">{order.bankDetails.bankName || "—"}</span>
@@ -570,14 +577,14 @@ export default function PurchaseOrderDocument({
           )}
 
           {/* Terms & Conditions & Signatory */}
-          <div className="mt-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6 pt-4 border-t border-gray-200">
+          <div className="mt-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6 pt-4 border-t border-gray-200 print:mt-4 print:pt-3 print:flex-row print:justify-between print:gap-4 print:break-inside-avoid">
             {/* Left: Terms */}
             <div className="text-xs text-gray-600 max-w-md space-y-1">
               <p className="font-bold uppercase tracking-wider text-gray-900">
                 Terms & Conditions:
               </p>
               <ol className="list-decimal list-inside space-y-0.5 leading-relaxed text-[11px]">
-                {terms.map((t, idx) => (
+                {terms.map((t: string, idx: number) => (
                   <li key={idx}>{t}</li>
                 ))}
               </ol>

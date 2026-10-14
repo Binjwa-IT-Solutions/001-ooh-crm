@@ -306,14 +306,16 @@ function PurchaseOrdersContent() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50/50 p-4 md:p-6 pb-16">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <main className="min-h-screen bg-gray-50/50 p-4 md:p-6 pb-16 print:p-0 print:m-0 print:bg-white print:min-h-0">
+      <div className="mx-auto max-w-7xl space-y-6 print:max-w-none print:w-full print:space-y-0 print:m-0 print:p-0">
         {/* Flow Stepper (Visible across all steps for clear 1-2-3-4-5 progress) */}
-        <FlowStepper
-          currentStep={currentStep}
-          hasActiveOrder={!!activeOrder}
-          onSelectStep={(step) => setCurrentStep(step)}
-        />
+        <div className="print:hidden">
+          <FlowStepper
+            currentStep={currentStep}
+            hasActiveOrder={!!activeOrder}
+            onSelectStep={(step) => setCurrentStep(step)}
+          />
+        </div>
 
         {/* STEP 1: Rich Executive Dashboard */}
         {currentStep === 1 && (

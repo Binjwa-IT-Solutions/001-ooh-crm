@@ -9,16 +9,17 @@ import { Employee, SENSITIVE_FIELDS, type IEmployee, type Department } from './e
 import { Team, type ITeam } from './team.model.js';
 import { AuthUser } from '../../core/auth/auth-model.js';
 import { Lead } from '../leads/leads.model.js';
-import { Task } from '../tasks/task.model.js';
 import { Quotation } from '../quotations/quotations.model.js';
 import Campaign from '../campaigns/campaign.model.js';
 import Attendance from '../HR/models/attendance.model.js';
 import { LeaveRequest, LeaveType } from '../HR/models/leave.model.js';
 import { leaveTypeService } from '../HR/services/leave.service.js';
+import { notifyMany } from '../../core/notifications/index.js';
 import type {
   CreateEmployeeInput,
   ListEmployeesQuery,
   UpdateEmployeeInput,
+  UpdateMyProfileInput,
   CreateTeamInput,
   UpdateTeamInput,
 } from './employees.validator.js';
@@ -202,6 +203,49 @@ function stripSensitiveInput<T extends Record<string, unknown>>(input: T, ctx: R
   return cleaned;
 }
 
+/** The HR-owned fields that make a profile "complete". */
+function hasHrFields(employee: IEmployee): boolean {
+  return Boolean(
+    employee.department && employee.designation && employee.dateOfJoining && employee.mobile,
+  );
+}
+
+/**
+ * Tells HR (or admins, when there is no HR user) that an employee's HR-owned
+ * fields are still empty. Sent at most once per employee; never throws, because
+ * a failed reminder must not break the employee's own request.
+ */
+async function remindHrIfIncomplete(employee: IEmployee): Promise<void> {
+  if (hasHrFields(employee) || employee.hrReminderSentAt) return;
+
+  try {
+    // Claim the reminder first so two concurrent requests cannot both send it.
+    const claimed = await Employee.updateOne(
+      { _id: employee._id, hrReminderSentAt: null },
+      { $set: { hrReminderSentAt: new Date() } },
+    );
+    if (claimed.modifiedCount === 0) return;
+
+    let recipients = await AuthUser.find({ role: 'hr', status: 'Active', deletedAt: null }).select('_id');
+    if (recipients.length === 0) {
+      recipients = await AuthUser.find({ role: 'admin', status: 'Active', deletedAt: null }).select('_id');
+    }
+    if (recipients.length === 0) return;
+
+    await notifyMany(
+      recipients.map((user) => user._id),
+      {
+        type: 'employees.profile_incomplete',
+        title: 'Employee profile needs HR details',
+        body: `${employee.fullName} has signed in, but their department, designation, date of joining or other HR details are missing.`,
+        link: `/employees/${String(employee._id)}`,
+      },
+    );
+  } catch (error) {
+    console.error('[employees] failed to send HR profile reminder', error);
+  }
+}
+
 /** Empty strings from the form mean "not provided", not "set to empty". */
 function dropBlanks<T extends Record<string, unknown>>(input: T): T {
   const cleaned = { ...input };
@@ -337,7 +381,74 @@ export const employeeService = {
       throw new NotFoundError('No employee record is linked to your account yet');
     }
 
+    await remindHrIfIncomplete(employee);
+
     // You may always see your own sensitive details.
+    return toDto(employee, true);
+  },
+
+  /**
+   * Updates the authenticated user's own employee record. Only the self-service
+   * fields in `updateMyProfileSchema` can reach this; HR-owned fields are never
+   * written here.
+   */
+  async updateMine(input: UpdateMyProfileInput, ctx: RequestContext): Promise<EmployeeDto> {
+    let employee = await Employee.findOne({
+      userId: ctx.user.id,
+      deletedAt: null,
+    });
+
+    if (!employee && ctx.user.email) {
+      employee = await Employee.findOne({
+        workEmail: ctx.user.email.toLowerCase(),
+        deletedAt: null,
+      });
+
+      if (employee) {
+        employee.userId = toObjectId(ctx.user.id);
+        await employee.save();
+      }
+    }
+
+    // Auto-provision employee record if none exists for this active auth user
+    if (!employee && ctx.user.id) {
+      const user = await AuthUser.findById(ctx.user.id);
+      if (user) {
+        const provisioned = await employeeService.ensureEmployeeForUser({
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          status: user.status,
+        });
+        employee = await Employee.findById(provisioned._id);
+      }
+    }
+
+    if (!employee) {
+      throw new NotFoundError('No employee record is linked to your account yet');
+    }
+
+    // No stripSensitiveInput here: you may set your own PAN, Aadhaar and bank
+    // details. The schema already excludes CTC and every HR-owned field.
+    const payload = dropBlanks({ ...input });
+
+    Object.assign(employee, payload, {
+      updatedBy: toObjectId(ctx.user.id),
+      selfProfileSubmittedAt: new Date(),
+    });
+    employee.isProfileComplete = hasHrFields(employee);
+    await employee.save();
+    await employee.populate('reportingManagerId', 'fullName designation');
+    await remindHrIfIncomplete(employee);
+
+    if (payload.fullName) {
+      await AuthUser.updateOne(
+        { _id: toObjectId(ctx.user.id) },
+        { $set: { name: String(payload.fullName).trim() } },
+      );
+    }
+
     return toDto(employee, true);
   },
 
@@ -441,11 +552,8 @@ export const employeeService = {
 
     if (input.reportingManagerId === null || input.reportingManagerId === '') {
       employee.reportingManagerId = null;
-      delete payload.reportingManagerId;
-      await Team.updateMany(
-        { members: employee._id },
-        { $pull: { members: employee._id } },
-      );
+      
+      await Team.updateMany({ members: employee._id }, { $pull: { members: employee._id } });
     } else if (payload.reportingManagerId) {
       const rawId = String(payload.reportingManagerId).trim();
       const objId = toObjectId(rawId);
@@ -1208,7 +1316,7 @@ export const employeeService = {
     const nextMidnight = new Date(todayMidnight);
     nextMidnight.setDate(nextMidnight.getDate() + 1);
 
-    const [leads, tasks, attendances] = await Promise.all([
+    const [leads, attendances] = await Promise.all([
       allUserIds.length > 0
         ? Lead.find({
           deletedAt: null,
@@ -1220,12 +1328,6 @@ export const employeeService = {
         }).select('_id assignedTo claimedBy createdBy status')
         : [],
       allEmpIds.length > 0
-        ? Task.find({
-          deletedAt: null,
-          assignedTo: { $in: allEmpIds },
-        }).select('_id assignedTo status deadline')
-        : [],
-      allEmpIds.length > 0
         ? Attendance.find({
           employeeId: { $in: allEmpIds },
           date: { $gte: todayMidnight, $lt: nextMidnight },
@@ -1233,6 +1335,7 @@ export const employeeService = {
         }).select('employeeId status')
         : [],
     ]);
+    const tasks: any[] = [];
 
     const leadIds = leads.map((l) => l._id);
 
@@ -1492,7 +1595,8 @@ export const employeeService = {
     const nextMidnight = new Date(todayMidnight);
     nextMidnight.setDate(nextMidnight.getDate() + 1);
 
-    const [rawLeads, rawTasks, todayAtt, monthAtt, leaveBalances] = await Promise.all([
+    const rawTasks: any[] = [];
+    const [rawLeads, todayAtt, monthAtt, leaveBalances] = await Promise.all([
       userId
         ? Lead.find({
           deletedAt: null,
@@ -1501,13 +1605,6 @@ export const employeeService = {
           .sort({ createdAt: -1 })
           .lean()
         : [],
-      Task.find({
-        deletedAt: null,
-        assignedTo: empId,
-      })
-        .populate('campaignId', 'name campaignCode')
-        .sort({ deadline: 1 })
-        .lean(),
       Attendance.findOne({
         employeeId: empId,
         date: { $gte: todayMidnight, $lt: nextMidnight },

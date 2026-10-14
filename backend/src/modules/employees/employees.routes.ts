@@ -4,6 +4,7 @@ import { requireAuth } from '../../core/auth/auth-middleware.js';
 import { asyncHandler } from '../../core/http/asyncHandler.js';
 import { requirePermission } from '../../core/rbac/index.js';
 import { EmployeesController } from './employees.controller.js';
+import { PayrollController } from '../payroll/payroll.controller.js';
 
 /**
  * REFERENCE MODULE — routes.
@@ -17,6 +18,7 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/me', requirePermission('employees.self'), asyncHandler(EmployeesController.me));
+router.patch('/me', requirePermission('employees.self'), asyncHandler(EmployeesController.updateMine));
 
 router.get(
   '/manager-options',
@@ -106,6 +108,30 @@ router.patch(
   '/:id',
   requirePermission('employees.manage'),
   asyncHandler(EmployeesController.update),
+);
+
+router.get(
+  '/:id/salary',
+  requirePermission('salary.view'),
+  asyncHandler(PayrollController.getEmployeeSalary),
+);
+
+router.post(
+  '/:id/salary',
+  requirePermission('salary.create'),
+  asyncHandler(PayrollController.upsertEmployeeSalary),
+);
+
+router.patch(
+  '/:id/salary',
+  requirePermission('salary.update'),
+  asyncHandler(PayrollController.upsertEmployeeSalary),
+);
+
+router.get(
+  '/:id/salary/history',
+  requirePermission('salary.view'),
+  asyncHandler(PayrollController.getSalaryHistory),
 );
 
 router.delete(

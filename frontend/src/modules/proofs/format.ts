@@ -68,6 +68,49 @@ export function getProofImageUrl(proof?: Proof | null): string {
   return "";
 }
 
+export function getCampaignDisplayName(
+  campaign?: any,
+  campaigns?: Array<{ _id: string; name: string; campaignCode?: string }>
+): string {
+  if (!campaign) return "Not Assigned";
+  if (typeof campaign === "object" && campaign.name) {
+    return `${campaign.name}${campaign.campaignCode ? ` (${campaign.campaignCode})` : ""}`;
+  }
+  const idStr = String(campaign?._id || campaign);
+  if (campaigns && campaigns.length > 0) {
+    const found = campaigns.find((c) => String(c._id) === idStr);
+    if (found) {
+      return `${found.name}${found.campaignCode ? ` (${found.campaignCode})` : ""}`;
+    }
+  }
+  if (/^[a-f\d]{24}$/i.test(idStr)) {
+    return "Not Assigned";
+  }
+  return idStr;
+}
+
+export function getVendorDisplayName(
+  vendor?: any,
+  vendors?: Array<{ _id?: string; id?: string; name?: string; companyName?: string }>
+): string {
+  if (!vendor) return "Not Assigned";
+  if (typeof vendor === "object") {
+    const name = vendor.name || vendor.companyName;
+    if (name) return name;
+  }
+  const idStr = String(vendor?._id || vendor?.id || vendor);
+  if (vendors && vendors.length > 0) {
+    const found = vendors.find((v) => String(v._id || v.id) === idStr);
+    if (found) {
+      return found.name || found.companyName || "Vendor";
+    }
+  }
+  if (/^[a-f\d]{24}$/i.test(idStr)) {
+    return "Not Assigned";
+  }
+  return idStr;
+}
+
 const geocodeCache = new Map<string, string>();
 
 export async function getLocationName(

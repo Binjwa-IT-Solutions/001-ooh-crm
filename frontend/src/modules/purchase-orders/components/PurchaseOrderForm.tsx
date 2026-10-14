@@ -34,12 +34,13 @@ import { getVendors } from "@/modules/vendors/api";
 interface Props {
   order: PurchaseOrder | null;
   saving: boolean;
-  onBack: () => void;
+  onBack?: () => void;
+  onClose?: () => void;
   onSubmit: (
     data: PurchaseOrderFormData,
     issueImmediately?: boolean,
   ) => Promise<PurchaseOrder | boolean | null>;
-  onSuccess: (savedOrder: PurchaseOrder) => void;
+  onSuccess: (savedOrder?: any) => void;
 }
 
 interface MediaItem {
@@ -71,6 +72,7 @@ export default function PurchaseOrderForm({
   order,
   saving,
   onBack,
+  onClose,
   onSubmit,
   onSuccess,
 }: Props) {
@@ -696,7 +698,7 @@ export default function PurchaseOrderForm({
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={onBack}
+            onClick={onBack || onClose}
             className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-xs hover:bg-gray-50 transition"
           >
             <ArrowLeft className="h-4 w-4" />

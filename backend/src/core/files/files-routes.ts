@@ -57,15 +57,6 @@ router.get(
     } else if (lowerKey.endsWith('.csv')) {
       res.setHeader('Content-Type', 'text/csv');
     }
-
-    const rawFilename = (req.query.filename as string) || key.split('/').pop() || 'document';
-    const filename = rawFilename.replace(/[^a-zA-Z0-9_.-]/g, '_');
-    if (req.query.download === '1' || req.query.download === 'true') {
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    } else {
-      res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
-    }
-
     res.setHeader('Cache-Control', 'private, max-age=3600');
     res.send(buffer);
   }),

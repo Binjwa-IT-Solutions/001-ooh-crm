@@ -12,6 +12,7 @@ export interface PurchaseOrderLineItem {
   from?: string;
   to?: string;
   ratePerDay?: number;
+  negotiatedRatePerDay?: number;
   days?: number;
   amount?: number;
 

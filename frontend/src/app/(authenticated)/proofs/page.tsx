@@ -1,19 +1,31 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   RefreshCw,
   Check,
   CheckCircle2,
   XCircle,
   ChevronDown,
+  AlertCircle,
 } from "lucide-react";
 
 import ProofTable from "@/modules/proofs/components/ProofTable";
+import ManualProofModal from "@/modules/proofs/components/ManualProofModal";
+import { appConfig } from "@/shared/config";
 
-import { generateProofLink, getCampaignsByVendor } from "@/modules/proofs/api";
+import {
+  generateProofLink,
+  getCampaignsByVendor,
+  getCampaignPow,
+  getAllCampaignPows,
+  syncCampaignPow,
+  type SavedCampaignPow,
+} from "@/modules/proofs/api";
 import { useProofs } from "@/modules/proofs/hooks/useProofs";
-import { getCampaigns } from "@/modules/campaigns/api";
+import { getCampaigns, getCampaign } from "@/modules/campaigns/api";
 import { getVendors } from "@/modules/vendors/api";
 import type { Campaign } from "@/modules/campaigns/types";
 import type { Vendor } from "@/modules/vendors/types";
@@ -229,6 +241,9 @@ function SuggestionCombobox({
 }
 
 function ProofsDashboard() {
+  const searchParams = useSearchParams();
+  const urlCampaignId = searchParams.get("campaignId") || "";
+
   const {
     proofs,
     loading,
@@ -239,12 +254,28 @@ function ProofsDashboard() {
     rejectProof,
     updateFilter,
     reload,
-  } = useProofs();
+  } = useProofs(urlCampaignId ? { campaignId: urlCampaignId } : undefined);
 
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [selectedCampaign, setSelectedCampaign] = useState("");
+  const [viewMode, setViewMode] = useState<"campaign-pow" | "all-proofs">(
+    urlCampaignId ? "campaign-pow" : "all-proofs"
+  );
+  const [selectedCampaign, setSelectedCampaign] = useState(urlCampaignId);
+  const [linkCampaign, setLinkCampaign] = useState("");
   const [selectedVendor, setSelectedVendor] = useState("");
+  const [activeCampaign, setActiveCampaign] = useState<Campaign | null>(null);
+  const [savedCampaignPows, setSavedCampaignPows] = useState<SavedCampaignPow[]>([]);
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+
+  const loadAllCampaignPows = async () => {
+    try {
+      const list = await getAllCampaignPows();
+      setSavedCampaignPows(list);
+    } catch {
+      // ignore
+    }
+  };
 
   // Cascading campaigns for the generate link section
   const [generatorCampaigns, setGeneratorCampaigns] = useState<
@@ -257,12 +288,36 @@ function ProofsDashboard() {
   const [linkMessage, setLinkMessage] = useState("");
   const [linkError, setLinkError] = useState("");
 
+  const handleSelectCampaign = (id: string) => {
+    setSelectedCampaign(id);
+    if (id) {
+      const found = campaigns.find((c) => c._id === id);
+      if (found) {
+        setActiveCampaign(found);
+      } else {
+        getCampaign(id)
+          .then((res) => {
+            if (res?.data) setActiveCampaign(res.data);
+          })
+          .catch(() => {});
+      }
+    } else {
+      setActiveCampaign(null);
+    }
+  };
+
   useEffect(() => {
+    loadAllCampaignPows();
+
     getCampaigns()
       .then((res) => {
         if (res?.data) {
           setCampaigns(res.data);
           setGeneratorCampaigns(res.data);
+          if (urlCampaignId) {
+            const found = res.data.find((c: Campaign) => c._id === urlCampaignId);
+            if (found) setActiveCampaign(found);
+          }
         }
       })
       .catch(() => {});
@@ -274,7 +329,35 @@ function ProofsDashboard() {
         }
       })
       .catch(() => {});
-  }, []);
+
+    if (urlCampaignId) {
+      setSelectedCampaign(urlCampaignId);
+      setViewMode("campaign-pow");
+      updateFilter("campaignId", urlCampaignId);
+      updateFilter("status", "");
+
+      syncCampaignPow(urlCampaignId)
+        .catch(() => {})
+        .finally(() => {
+          loadAllCampaignPows();
+        });
+
+      getCampaign(urlCampaignId)
+        .then((res) => {
+          if (res?.data) {
+            setActiveCampaign(res.data);
+          }
+        })
+        .catch(() => {});
+
+      setTimeout(() => {
+        const el = document.getElementById("campaign-pow");
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 150);
+    }
+  }, [urlCampaignId]);
 
   // When selected vendor in the generate link card changes, cascade campaigns with suggestions
   useEffect(() => {
@@ -292,10 +375,10 @@ function ProofsDashboard() {
         if (vendorCamps && vendorCamps.length > 0) {
           setGeneratorCampaigns(vendorCamps);
           if (
-            selectedCampaign &&
-            !vendorCamps.some((c) => String(c._id) === String(selectedCampaign))
+            linkCampaign &&
+            !vendorCamps.some((c) => String(c._id) === String(linkCampaign))
           ) {
-            setSelectedCampaign("");
+            setLinkCampaign("");
           }
         } else {
           setGeneratorCampaigns(campaigns);
@@ -312,11 +395,11 @@ function ProofsDashboard() {
     return () => {
       active = false;
     };
-  }, [selectedVendor, campaigns, selectedCampaign]);
+  }, [selectedVendor, campaigns, linkCampaign]);
 
-  // Filter out empty token-generation records that don't have proof details yet
+  // Only real proofs with camera images (never empty camera cards)
   const actualProofs = proofs.filter(
-    (p) => p.originalImageKey || p.watermarkedImageKey || p.gps
+    (p) => Boolean(p.originalImageKey) || Boolean(p.watermarkedImageKey)
   );
 
   // Status counts
@@ -345,19 +428,20 @@ function ProofsDashboard() {
     try {
       setGenerating(true);
       const result = await generateProofLink({
-        campaignId: selectedCampaign || undefined,
+        campaignId: linkCampaign || undefined,
         vendorId: selectedVendor || undefined,
       });
 
-      const fullLink = `${window.location.origin}/proof/${result.token}`;
+      const baseUrl = appConfig.publicUrl || window.location.origin;
+      const fullLink = `${baseUrl}/proof/${result.token}`;
 
       setGeneratedLink(fullLink);
 
       try {
         await navigator.clipboard.writeText(fullLink);
-        setLinkMessage("Proof link generated and copied to clipboard successfully!");
+        setLinkMessage("Proof link generated and copied to clipboard successfully! (Valid for 24 hours)");
       } catch {
-        setLinkMessage("Proof link generated successfully.");
+        setLinkMessage("Proof link generated successfully (Valid for 24 hours).");
       }
     } catch (err: unknown) {
       const message =
@@ -437,8 +521,8 @@ function ProofsDashboard() {
           <SuggestionCombobox
             label="Assign Campaign (Optional)"
             placeholder="Type campaign name or select from suggestions..."
-            selectedId={selectedCampaign}
-            onSelect={setSelectedCampaign}
+            selectedId={linkCampaign}
+            onSelect={setLinkCampaign}
             loading={loadingVendorCampaigns}
             helperText={
               currentVendor
@@ -512,30 +596,70 @@ function ProofsDashboard() {
       )}
 
       {/* Proofs Review Section */}
-      <div className="space-y-4">
-        {/* Status Filter Buttons: All | Approved | Complete | Rejected */}
+      <div id="campaign-pow" className="space-y-4 scroll-mt-6">
+        {/* Status Filter Buttons: Campaign POW | All Proofs | Approved | Complete | Rejected */}
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#F9DADA] bg-white p-3">
           <div className="flex flex-wrap items-center gap-2">
+            {/* 1. Campaign POW Button (Positioned to the LEFT of All Proofs) */}
             <button
               type="button"
-              onClick={() => updateFilter("status", "")}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                filters.status === ""
+              onClick={() => {
+                setViewMode("campaign-pow");
+                updateFilter("status", "");
+              }}
+              className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition ${
+                viewMode === "campaign-pow"
+                  ? "bg-[#8B2424] text-white shadow-sm ring-2 ring-[#8B2424]/30"
+                  : "bg-[#FCE8E8] text-[#8B2424] hover:bg-[#F9DADA]"
+              }`}
+              title="View all saved Campaign POWs"
+            >
+              <span>📸 Campaign POW</span>
+              <span className="rounded-full bg-white/20 px-1.5 py-0.2 text-[10px]">
+                {savedCampaignPows.length}
+              </span>
+            </button>
+
+            {/* Manual Upload Button (Positioned right next to Campaign POW) */}
+            <button
+              type="button"
+              onClick={() => setIsManualModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-[#A8333B] bg-[#FFF8F8] px-3.5 py-1.5 text-xs font-semibold text-[#8B2424] transition hover:bg-[#FCE8E8] hover:shadow-sm"
+              title="Upload proof photo manually"
+            >
+              <span>📤 Manual Upload</span>
+            </button>
+
+            {/* 2. All Proofs Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode("all-proofs");
+                updateFilter("campaignId", "");
+                updateFilter("status", "");
+              }}
+              className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition ${
+                viewMode === "all-proofs" && filters.status === ""
                   ? "bg-[#A8333B] text-white shadow-sm"
                   : "bg-[#F9DADA] text-[#8B2424] hover:bg-[#FCE8E8]"
               }`}
             >
               <span>All Proofs</span>
-              <span className="rounded-full bg-white/20 px-1.5 py-0.2 text-[10px]">
-                {actualProofs.length}
-              </span>
+              {viewMode === "all-proofs" && (
+                <span className="rounded-full bg-white/20 px-1.5 py-0.2 text-[10px]">
+                  {actualProofs.length}
+                </span>
+              )}
             </button>
 
             <button
               type="button"
-              onClick={() => updateFilter("status", "Approved")}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                filters.status === "Approved"
+              onClick={() => {
+                setViewMode("all-proofs");
+                updateFilter("status", filters.status === "Approved" ? "" : "Approved");
+              }}
+              className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition ${
+                viewMode === "all-proofs" && filters.status === "Approved"
                   ? "bg-blue-600 text-white shadow-sm"
                   : "bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100"
               }`}
@@ -549,9 +673,12 @@ function ProofsDashboard() {
 
             <button
               type="button"
-              onClick={() => updateFilter("status", "Complete")}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                filters.status === "Complete"
+              onClick={() => {
+                setViewMode("all-proofs");
+                updateFilter("status", filters.status === "Complete" ? "" : "Complete");
+              }}
+              className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition ${
+                viewMode === "all-proofs" && filters.status === "Complete"
                   ? "bg-emerald-600 text-white shadow-sm"
                   : "bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100"
               }`}
@@ -565,9 +692,12 @@ function ProofsDashboard() {
 
             <button
               type="button"
-              onClick={() => updateFilter("status", "Rejected")}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                filters.status === "Rejected"
+              onClick={() => {
+                setViewMode("all-proofs");
+                updateFilter("status", filters.status === "Rejected" ? "" : "Rejected");
+              }}
+              className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition ${
+                viewMode === "all-proofs" && filters.status === "Rejected"
                   ? "bg-rose-600 text-white shadow-sm"
                   : "bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100"
               }`}
@@ -580,10 +710,13 @@ function ProofsDashboard() {
             </button>
           </div>
 
-          <div>
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={reload}
+              onClick={async () => {
+                await reload();
+                await loadAllCampaignPows();
+              }}
               disabled={loading}
               className="inline-flex items-center gap-1.5 rounded-lg border border-[#A8333B] px-3.5 py-1.5 text-xs font-semibold text-[#8B2424] hover:bg-[#F9DADA] disabled:opacity-50"
             >
@@ -596,9 +729,25 @@ function ProofsDashboard() {
         <ProofTable
           proofs={displayedProofs}
           loading={loading}
+          campaigns={campaigns}
+          vendors={vendors}
+          savedCampaignPows={savedCampaignPows}
+          activeCampaign={activeCampaign}
+          isCampaignPowActive={viewMode === "campaign-pow"}
           onApprove={approveProof}
           onComplete={completeProof}
           onReject={rejectProof}
+        />
+
+        <ManualProofModal
+          isOpen={isManualModalOpen}
+          onClose={() => setIsManualModalOpen(false)}
+          campaigns={campaigns}
+          vendors={vendors}
+          onSuccess={async () => {
+            await reload();
+            await loadAllCampaignPows();
+          }}
         />
       </div>
     </div>

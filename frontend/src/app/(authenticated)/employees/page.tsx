@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
-import { Users, Plus, ShieldCheck } from 'lucide-react';
+import { Users, Plus, ShieldCheck, CreditCard } from 'lucide-react';
 
 import { useAuth } from '@/shared/auth/auth-context';
 import { RequireAuth } from '@/shared/auth/require-auth';
@@ -36,6 +36,7 @@ function EmployeesMasterView() {
   });
 
   const canManage = hasPermission('employees.manage');
+  const canViewSalary = hasPermission('salary.view');
   const showsMoney = hasPermission('employees.sensitive');
   const hasFilters = search.trim() !== '' || department !== '' || status !== '';
 
@@ -60,11 +61,25 @@ function EmployeesMasterView() {
           </p>
         </div>
 
-        {canManage && (
-          <Link href="/employees/new">
-            <Button className="bg-[#6E1D1D] hover:bg-[#882424] text-white">Add employee</Button>
-          </Link>
-        )}
+        <div className="flex items-center gap-2.5">
+          {canViewSalary && (
+            <Link href="/hr/salary">
+              <Button
+                variant="secondary"
+                className="border-slate-300 text-slate-700 hover:text-[#6E1D1D] hover:bg-[#F8E6E6]/40 flex items-center gap-1.5"
+              >
+                <CreditCard className="h-4 w-4 text-[#6E1D1D]" />
+                Salary Management
+              </Button>
+            </Link>
+          )}
+
+          {canManage && (
+            <Link href="/employees/new">
+              <Button className="bg-[#6E1D1D] hover:bg-[#882424] text-white">Add employee</Button>
+            </Link>
+          )}
+        </div>
       </div>
 
       <Card className="border border-[#E6E8EC]">
@@ -293,6 +308,7 @@ function EmployeesTabsContent() {
 
   const { user, hasPermission } = useAuth();
   const canCreateUsers = hasPermission('users.create') || user?.role === 'admin' || user?.role === 'hr';
+  const canViewSalary = hasPermission('salary.view');
 
   const [activeTab, setActiveTab] = useState<EmployeeTab>(() => {
     if (tabParam && ['employees', 'user-creation', 'team-management'].includes(tabParam)) {

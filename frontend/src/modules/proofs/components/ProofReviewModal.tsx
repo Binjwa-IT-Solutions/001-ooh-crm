@@ -9,9 +9,13 @@ import {
   formatGps,
   getLocationName,
   getProofImageUrl,
+  getCampaignDisplayName,
+  getVendorDisplayName,
 } from "../format";
 
 import type { Proof } from "../types";
+import type { Campaign } from "@/modules/campaigns/types";
+import type { Vendor } from "@/modules/vendors/types";
 
 function ProofLocationCell({
   locationName,
@@ -49,6 +53,8 @@ function ProofLocationCell({
 
 interface Props {
   proof: Proof;
+  campaigns?: Campaign[];
+  vendors?: Vendor[];
 
   onClose: () => void;
 
@@ -63,6 +69,8 @@ interface Props {
 
 export default function ProofReviewModal({
   proof,
+  campaigns,
+  vendors,
   onClose,
   onApprove,
   onComplete,
@@ -165,15 +173,7 @@ export default function ProofReviewModal({
                   </p>
 
                   <p className="font-medium text-gray-800">
-                    {proof.campaignId
-                      ? typeof proof.campaignId === "object"
-                        ? `${proof.campaignId.name}${
-                            proof.campaignId.campaignCode
-                              ? ` (${proof.campaignId.campaignCode})`
-                              : ""
-                          }`
-                        : String(proof.campaignId)
-                      : "Not Assigned"}
+                    {getCampaignDisplayName(proof.campaignId, campaigns)}
                   </p>
                 </div>
 
@@ -183,15 +183,7 @@ export default function ProofReviewModal({
                   </p>
 
                   <p className="font-medium text-gray-800">
-                    {proof.vendorId
-                      ? typeof proof.vendorId === "object"
-                        ? `${proof.vendorId.name || proof.vendorId.companyName || "Vendor"}${
-                            proof.vendorId.contactPersonName
-                              ? ` (${proof.vendorId.contactPersonName})`
-                              : ""
-                          }`
-                        : String(proof.vendorId)
-                      : "Not Assigned"}
+                    {getVendorDisplayName(proof.vendorId, vendors)}
                   </p>
                 </div>
 
@@ -220,8 +212,8 @@ export default function ProofReviewModal({
               </div>
             </div>
 
-            {/* Reject */}
-            {proof.status === "Pending" && (
+            {/* Reject reason input (only if not Complete or Rejected) */}
+            {proof.status !== "Complete" && proof.status !== "Rejected" && (
               <div className="mt-4 rounded-xl border border-[#F9DADA] p-4">
                 <div className="mb-2 flex items-center justify-between">
                   <label className="text-sm font-semibold text-[#8B2424]">
@@ -274,24 +266,58 @@ export default function ProofReviewModal({
               </div>
             )}
 
-            {/* Actions: 3 options - Approve, Complete & Reject */}
-            {(!proof.status || proof.status === "Pending") && (
+            {/* Status Message / Action Buttons */}
+            {proof.status === "Complete" ? (
+              <div className="mt-5 flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-[#EAFBF3] py-3.5 px-4 text-sm font-bold text-emerald-800 shadow-sm">
+                <CheckCircle2 className="h-5 w-5 text-[#009A55] shrink-0" />
+                <span>Campaign Complete</span>
+              </div>
+            ) : proof.status === "Rejected" ? (
+              <div className="mt-5 flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 py-3.5 px-4 text-sm font-bold text-rose-800 shadow-sm">
+                <XCircle className="h-5 w-5 text-rose-600 shrink-0" />
+                <span>Campaign Reject</span>
+              </div>
+            ) : (
               <div className="mt-5 flex flex-wrap gap-2 sm:gap-3">
                 <button
                   type="button"
-                  disabled={saving}
-                  onClick={onApprove}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 py-3 text-xs sm:text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50"
+                  disabled={saving || proof.status === "Approved"}
+                  onClick={async () => {
+                    try {
+                      setSaving(true);
+                      setRejectError("");
+                      await onApprove();
+                    } catch (err: any) {
+                      setRejectError(err?.message || "Failed to approve proof");
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-3 text-xs sm:text-sm font-semibold shadow-sm transition active:scale-[0.98] disabled:opacity-60 ${
+                    proof.status === "Approved"
+                      ? "bg-blue-800 text-white cursor-default"
+                      : "bg-blue-600 hover:bg-blue-700 text-white"
+                  }`}
                 >
                   <Check className="h-4 w-4" />
-                  {saving ? "Saving..." : "Approve"}
+                  {saving ? "Saving..." : proof.status === "Approved" ? "Approved ✓" : "Approve"}
                 </button>
 
                 <button
                   type="button"
                   disabled={saving}
-                  onClick={onComplete}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-3 text-xs sm:text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50"
+                  onClick={async () => {
+                    try {
+                      setSaving(true);
+                      setRejectError("");
+                      await onComplete();
+                    } catch (err: any) {
+                      setRejectError(err?.message || "Failed to complete proof");
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-3 text-xs sm:text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-60"
                 >
                   <CheckCircle2 className="h-4 w-4" />
                   {saving ? "Saving..." : "Complete"}
@@ -301,7 +327,7 @@ export default function ProofReviewModal({
                   type="button"
                   disabled={saving}
                   onClick={handleReject}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-rose-600 px-3 py-3 text-xs sm:text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 active:scale-[0.98] disabled:opacity-50"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-rose-600 px-3 py-3 text-xs sm:text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 active:scale-[0.98] disabled:opacity-60"
                 >
                   <XCircle className="h-4 w-4" />
                   {saving ? "Rejecting..." : "Reject"}

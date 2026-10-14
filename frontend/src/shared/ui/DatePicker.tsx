@@ -26,7 +26,7 @@ export interface DatePickerProps {
  * - Trigger button with calendar icon 📅, focus ring-2 ring-[#F9DADA], border-[#8B2424]
  * - Portaled popup calendar that never gets clipped by table or card overflow containers
  * - Auto-detects screen bottom edge and opens upward if needed
- * - Popup calendar with Month & Year navigation (‹ ›)
+ * - Popup calendar with ‹ › month steps plus month and year dropdowns for fast jumps
  * - Weekday headers: Su, Mo, Tu, We, Th, Fr, Sa
  * - Day cells:
  *   - Hover: hover:bg-[#F9DADA] hover:text-[#8B2424]
@@ -178,7 +178,19 @@ export function DatePicker({
     setViewDate(new Date(year, month + 1, 1));
   };
 
-  const monthName = viewDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  // Year dropdown range: honour min/max when given, otherwise 100 years back and
+  // 10 forward — enough for dates of birth without endless month clicking.
+  const thisYear = new Date().getFullYear();
+  const firstYear = Math.min(min ? Number(min.slice(0, 4)) : thisYear - 100, year);
+  const lastYear = Math.max(max ? Number(max.slice(0, 4)) : thisYear + 10, year);
+  const yearOptions = Array.from({ length: lastYear - firstYear + 1 }, (_, i) => lastYear - i);
+
+  const jumpTo = (nextYear: number, nextMonth: number) => {
+    setViewDate(new Date(nextYear, nextMonth, 1));
+  };
+
+  const headerSelectClass =
+    'cursor-pointer rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-bold text-gray-900 outline-none hover:border-[#F9DADA] hover:bg-[#F9DADA]/40 focus:border-[#8B2424] dark:bg-slate-900 dark:text-white';
 
   return (
     <div className={`relative ${className}`}>
@@ -234,9 +246,32 @@ export function DatePicker({
             >
               ‹
             </button>
-            <span className="text-sm font-bold text-gray-900 dark:text-white">
-              {monthName}
-            </span>
+            <div className="flex items-center gap-1">
+              <select
+                aria-label="Month"
+                value={month}
+                onChange={(e) => jumpTo(year, Number(e.target.value))}
+                className={headerSelectClass}
+              >
+                {Array.from({ length: 12 }, (_, m) => (
+                  <option key={m} value={m}>
+                    {new Date(2000, m, 1).toLocaleString('en-US', { month: 'long' })}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Year"
+                value={year}
+                onChange={(e) => jumpTo(Number(e.target.value), month)}
+                className={headerSelectClass}
+              >
+                {yearOptions.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </div>
             <button
               type="button"
               onClick={nextMonth}

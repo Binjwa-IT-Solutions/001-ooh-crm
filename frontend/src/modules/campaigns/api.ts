@@ -70,6 +70,14 @@ export async function getCampaigns(
   );
 }
 
+export async function getCampaign(
+  id: string,
+): Promise<CampaignResponse> {
+  return api.get<CampaignResponse>(
+    `/api/campaigns/${id}`,
+  );
+}
+
 export async function createCampaign(
   payload: CreateCampaignPayload,
 ): Promise<CampaignResponse> {
@@ -92,11 +100,13 @@ export async function updateCampaign(
 export async function updateCampaignStatus(
   id: string,
   status: CampaignStatus,
+  reason?: string,
 ): Promise<CampaignResponse> {
   return api.patch<CampaignResponse>(
     `/api/campaigns/${id}/status`,
     {
       status,
+      reason,
     },
   );
 }

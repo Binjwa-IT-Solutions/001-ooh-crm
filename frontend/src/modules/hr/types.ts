@@ -4,9 +4,12 @@ export type LeaveStatus = 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
 
 export interface EmployeeRef {
   id: string;
+  _id?: string;
   name?: string;
   fullName?: string;
   department?: string;
+  employeeCode?: string;
+  workEmail?: string;
   [key: string]: unknown;
 }
 
@@ -138,6 +141,20 @@ export interface AbsenceRow {
   date: string;
   employee: EmployeeRef;
   status: string;
+}
+
+export interface OvertimeRow {
+  employee: EmployeeRef;
+  daysCount: number;
+  totalOvertimeHours: number;
+  avgMinutesPerDay: number;
+  records: Array<{
+    date: string;
+    actualHours: number;
+    overtimeHours: number;
+    checkInTime?: string;
+    checkOutTime?: string;
+  }>;
 }
 
 export type CandidateStatus = 'Scheduled' | 'Interviewed' | 'Selected' | 'Rejected' | 'On Hold';

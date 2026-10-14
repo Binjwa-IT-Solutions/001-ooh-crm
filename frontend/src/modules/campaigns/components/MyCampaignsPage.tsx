@@ -41,6 +41,70 @@ function formatRupees(amount: number): string {
   return `₹${(amount || 0).toLocaleString('en-IN')}`;
 }
 
+function getDurationCount(startDateStr?: string | null, endDateStr?: string | null): string {
+  if (!startDateStr || !endDateStr) return "—";
+  const start = new Date(startDateStr);
+  const end = new Date(endDateStr);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return "—";
+  }
+
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  const startDay = Math.floor(start.getTime() / oneDayMs);
+  const endDay = Math.floor(end.getTime() / oneDayMs);
+  if (endDay < startDay) return "0 Days";
+  const diffDays = endDay - startDay + 1;
+  return `${diffDays} ${diffDays === 1 ? "Day" : "Days"}`;
+}
+
+function renderStateCity(city?: string | null, state?: string | null) {
+  let c = city?.trim() || "";
+  let s = state?.trim() || "";
+
+  if (c.includes(",")) {
+    const parts = c.split(",").map((p) => p.trim()).filter(Boolean);
+    const uniqueParts = Array.from(new Set(parts.map((p) => p.toLowerCase())))
+      .map((lower) => parts.find((p) => p.toLowerCase() === lower)!);
+    c = uniqueParts.join(", ");
+  }
+
+  if (s.includes(",")) {
+    const parts = s.split(",").map((p) => p.trim()).filter(Boolean);
+    const uniqueParts = Array.from(new Set(parts.map((p) => p.toLowerCase())))
+      .map((lower) => parts.find((p) => p.toLowerCase() === lower)!);
+    s = uniqueParts.join(", ");
+  }
+
+  if (!c && !s) {
+    return <span className="text-slate-400">—</span>;
+  }
+
+  const isDuplicate =
+    Boolean(c && s) &&
+    (c.toLowerCase() === s.toLowerCase() ||
+      c.toLowerCase().includes(s.toLowerCase()) ||
+      s.toLowerCase().includes(c.toLowerCase()));
+
+  if (!s || !c || isDuplicate) {
+    return (
+      <div className="font-medium text-slate-900 dark:text-white">
+        {c || s}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="font-medium text-slate-900 dark:text-white">
+        {c}
+      </div>
+      <div className="text-slate-500 dark:text-slate-400">
+        {s}
+      </div>
+    </div>
+  );
+}
+
 export default function MyCampaignsPage() {
   const { user } = useAuth();
   const isManagerOrAdmin = ['admin', 'manager'].includes(user?.role?.toLowerCase() || '');
@@ -447,10 +511,12 @@ export default function MyCampaignsPage() {
             <thead className="bg-slate-50 text-slate-900 dark:bg-slate-800 dark:text-white">
               <tr>
                 <th className="px-4 py-3 font-medium">Code</th>
-                <th className="px-4 py-3 font-medium">Campaign</th>
-                <th className="px-4 py-3 font-medium">Client / Contact</th>
-                <th className="px-4 py-3 font-medium">City</th>
+                <th className="px-4 py-3 font-medium">Campaign Name</th>
+                <th className="px-4 py-3 font-medium">Client Name</th>
+                <th className="px-4 py-3 font-medium">Quotation</th>
+                <th className="px-4 py-3 font-medium">State & City</th>
                 <th className="px-4 py-3 font-medium">Duration & Renewals</th>
+                <th className="px-4 py-3 font-medium">Duration Count</th>
                 <th className="px-4 py-3 font-medium">Sites</th>
                 <th className="px-4 py-3 font-medium">Value</th>
                 <th className="px-4 py-3 font-medium">Status</th>
@@ -461,13 +527,13 @@ export default function MyCampaignsPage() {
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
               {loading ? (
                 <tr>
-                  <td colSpan={isManagerOrAdmin ? 9 : 8} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={isManagerOrAdmin ? 11 : 10} className="px-4 py-12 text-center text-slate-500">
                     Loading campaigns...
                   </td>
                 </tr>
               ) : displayedCampaigns.length === 0 ? (
                 <tr>
-                  <td colSpan={isManagerOrAdmin ? 9 : 8} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={isManagerOrAdmin ? 11 : 10} className="px-4 py-12 text-center text-slate-500">
                     No campaigns found matching current filters.
                   </td>
                 </tr>
@@ -485,28 +551,21 @@ export default function MyCampaignsPage() {
                   }
 
                   const renewal = getRenewalAlert(c);
+                  const durationCount = getDurationCount(c.startDate, c.endDate);
                   const statusClass = STATUS_STYLES[c.status] || 'border-slate-200 bg-slate-100 text-slate-700';
 
                   return (
                     <tr key={c._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                       {/* Code */}
-                      <td className="px-4 py-3 font-semibold text-slate-900 dark:text-white whitespace-nowrap">
-                        <div>{c.campaignCode}</div>
-                        {c.quotationNo && (
-                          <div className="text-[11px] font-normal text-slate-500">
-                            Q: {c.quotationNo}
-                          </div>
-                        )}
-                        {c.piNo && (
-                          <div className="text-[11px] font-normal text-slate-500">
-                            PI: {c.piNo}
-                          </div>
-                        )}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="inline-block rounded border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 px-2 py-0.5 font-mono text-[11px] font-semibold text-slate-800 dark:text-slate-200 shadow-2xs">
+                          {c.campaignCode}
+                        </span>
                       </td>
 
                       {/* Name */}
                       <td className="px-4 py-3">
-                        <div className="font-medium text-slate-900 dark:text-white max-w-50 truncate">
+                        <div className="font-medium text-slate-900 dark:text-white max-w-50 truncate" title={c.name}>
                           {c.name}
                         </div>
                       </td>
@@ -524,10 +583,34 @@ export default function MyCampaignsPage() {
                         )}
                       </td>
 
-                      {/* City */}
-                      <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">
-                        {c.city || '—'}
-                        {c.state && <span className="text-slate-400">, {c.state}</span>}
+                      {/* Quotation */}
+                      <td className="px-4 py-3 max-w-[190px]">
+                        {c.quotationName || c.quotationNo || c.piNo ? (
+                          <div className="space-y-0.5">
+                            {c.quotationName && (
+                              <div className="truncate text-sm font-medium text-slate-900 dark:text-white" title={c.quotationName}>
+                                {c.quotationName}
+                              </div>
+                            )}
+                            {c.quotationNo && (
+                              <div className="text-[11px] font-normal text-slate-500">
+                                Q: {c.quotationNo}
+                              </div>
+                            )}
+                            {c.piNo && (
+                              <div className="text-[11px] font-normal text-slate-500">
+                                PI: {c.piNo}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-slate-400">—</span>
+                        )}
+                      </td>
+
+                      {/* State & City */}
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                        {renderStateCity(c.city, c.state)}
                       </td>
 
                       {/* Duration & Renewals Alert */}
@@ -551,6 +634,13 @@ export default function MyCampaignsPage() {
                         )}
                       </td>
 
+                      {/* Duration Count */}
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                        <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                          {durationCount}
+                        </span>
+                      </td>
+
                       {/* Sites */}
                       <td className="px-4 py-3 text-xs whitespace-nowrap">
                         <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-800 dark:bg-slate-800 dark:text-slate-300">
@@ -565,20 +655,39 @@ export default function MyCampaignsPage() {
 
                       {/* Status */}
                       <td className="px-4 py-3 whitespace-nowrap">
-                        {c.status === 'InProgress' ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            Live
-                          </span>
-                        ) : c.status === 'Completed' ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                            Closed
-                          </span>
-                        ) : (
-                          <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${statusClass}`}>
-                            {c.status}
-                          </span>
-                        )}
+                        {(() => {
+                          const s = (c.status || "").trim().toLowerCase();
+                          if (s === "complete" || s === "completed" || s === "campaign end") {
+                            return (
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-purple-200 bg-purple-50 px-2.5 py-0.5 text-xs font-semibold text-purple-700 dark:border-purple-800 dark:bg-purple-950/50 dark:text-purple-300">
+                                <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                                Campaign End
+                              </span>
+                            );
+                          }
+                          if (s === "campaign live") {
+                            return (
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                Campaign Live
+                              </span>
+                            );
+                          }
+                          if (s === "rejected" || s === "cancelled" || s === "campaign rejected") {
+                            return (
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300">
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                Rejected
+                              </span>
+                            );
+                          }
+                          return (
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                              In Progress
+                            </span>
+                          );
+                        })()}
                       </td>
 
                       {/* Agent (for Admin/Manager) */}

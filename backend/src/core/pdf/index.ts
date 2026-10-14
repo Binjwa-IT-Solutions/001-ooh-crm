@@ -60,6 +60,10 @@ export interface RenderPdfOptions {
   /** Key/value pairs rendered under the title. */
   meta?: Array<[string, string]>;
   brand?: PdfBrand;
+  /** Skip default header rendering if caller renders custom header */
+  customHeader?: boolean;
+  /** Skip default footer rendering if caller renders custom footer */
+  customFooter?: boolean;
   /** Draws the body. The header is already rendered when this runs. */
   build: (doc: PDFKit.PDFDocument) => void;
 }
@@ -83,9 +87,13 @@ export function renderPdf(options: RenderPdfOptions): Promise<Buffer> {
     doc.on('error', reject);
 
     try {
-      drawHeader(doc, brand, options);
+      if (!options.customHeader) {
+        drawHeader(doc, brand, options);
+      }
       options.build(doc);
-      drawFooterOnEveryPage(doc, brand);
+      if (!options.customFooter) {
+        drawFooterOnEveryPage(doc, brand);
+      }
       doc.end();
     } catch (err) {
       reject(err instanceof Error ? err : new Error(String(err)));

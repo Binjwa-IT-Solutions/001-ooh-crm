@@ -3,34 +3,49 @@ import mongoose from 'mongoose';
 import { config } from '../../config/index.js';
 
 /**
+ * Asserts that the active Mongoose connection is targeting an isolated test database.
+ * If not, immediately throws a fatal error to prevent accidental deletion of development data.
+ */
+export function assertTestDatabase(mongooseInstance: typeof mongoose = mongoose): void {
+  const dbName = mongooseInstance.connection.name;
+  if (!dbName || !dbName.toLowerCase().includes('test')) {
+    throw new Error(
+      `[FATAL DB SAFETY GUARD]: Destructive operation blocked! The current database connection "${dbName}" is not an isolated test database (must contain "test"). Aborting test immediately without modifying any data.`,
+    );
+  }
+}
+
+/**
  * Connect to MongoDB. Run Mongo as a single-node replica set locally — multi-document
  * transactions (payments, bookings, payroll) do not work on a standalone `mongod`.
  * See the README for the one-time `rs.initiate()` setup.
  */
-export async function connectDatabase(maxRetries = 3): Promise<typeof mongoose> {
+export async function connectDatabase(options?: { isTestConnection?: boolean }): Promise<typeof mongoose> {
   mongoose.set('strictQuery', true);
 
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
-    try {
-      const connection = await mongoose.connect(config.mongoUri, {
-        serverSelectionTimeoutMS: 30_000,
-      });
+  const isTest = config.isTest || options?.isTestConnection === true;
+  const targetUri = isTest ? config.mongoTestUri : config.mongoUri;
 
-      console.log(`[db] connected to ${connection.connection.name}`);
-      return connection;
-    } catch (err) {
-      lastError = err;
-      console.warn(
-        `[db] connection attempt ${attempt}/${maxRetries} failed: ${(err as Error)?.message}`,
+  const connection = await mongoose.connect(targetUri, {
+    serverSelectionTimeoutMS: 10_000,
+    retryWrites: false,
+  });
+
+  const connectedDbName = connection.connection.name;
+
+  if (isTest) {
+    const isSafeTestDb = connectedDbName.toLowerCase().includes('test');
+    if (!isSafeTestDb) {
+      await mongoose.disconnect();
+      throw new Error(
+        `[FATAL DB SAFETY GUARD]: Test suite connected to non-test database "${connectedDbName}". ` +
+        `Tests must only run against a dedicated test database (must contain "test"). Aborting test immediately without modifying any data.`,
       );
-      if (attempt < maxRetries) {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-      }
     }
   }
 
-  throw lastError;
+  console.log(`[db] connected to ${connectedDbName}${isTest ? ' (TEST DB - ISOLATED)' : ''}`);
+  return connection;
 }
 
 export async function disconnectDatabase(): Promise<void> {

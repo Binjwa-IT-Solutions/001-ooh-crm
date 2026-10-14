@@ -31,15 +31,119 @@ function bool(name: string, fallback: boolean): boolean {
   return raw.toLowerCase() === 'true' || raw === '1';
 }
 
-const nodeEnv = process.env.NODE_ENV ?? 'development';
+export interface OfficeLocation {
+  name: string;
+  latitude: number;
+  longitude: number;
+  radiusMeters: number;
+}
+
+/**
+ * OFFICE_LOCATIONS is a JSON array, e.g.
+ *   [{"name":"Mumbai HQ","lat":19.076,"lng":72.877,"radiusMeters":500}]
+ * A typo here would silently disable the office check, so a bad value fails startup.
+ */
+function officeLocations(): OfficeLocation[] {
+  const raw = process.env.OFFICE_LOCATIONS?.trim();
+  if (!raw) return [];
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('OFFICE_LOCATIONS must be valid JSON (an array of offices).');
+  }
+  if (!Array.isArray(parsed)) throw new Error('OFFICE_LOCATIONS must be a JSON array.');
+
+  return parsed.map((entry, index) => {
+    const { name, lat, lng, radiusMeters } = (entry ?? {}) as Record<string, unknown>;
+    if (
+      typeof name !== 'string' ||
+      !name.trim() ||
+      typeof lat !== 'number' ||
+      lat < -90 ||
+      lat > 90 ||
+      typeof lng !== 'number' ||
+      lng < -180 ||
+      lng > 180 ||
+      typeof radiusMeters !== 'number' ||
+      radiusMeters < 100
+    ) {
+      throw new Error(
+        `OFFICE_LOCATIONS[${index}] needs name, lat (-90..90), lng (-180..180) and radiusMeters (>= 100).`,
+      );
+    }
+    return { name: name.trim(), latitude: lat, longitude: lng, radiusMeters };
+  });
+}
+
+export function deriveTestMongoUri(baseUri: string): string {
+  if (process.env.MONGO_URI_TEST && process.env.MONGO_URI_TEST.trim() !== '') {
+    return process.env.MONGO_URI_TEST.trim();
+  }
+
+  try {
+    const parsed = new URL(baseUri);
+    let pathname = parsed.pathname.replace(/^\//, '');
+    if (!pathname || pathname === '') {
+      pathname = 'media-octus-crm-test';
+    } else if (!pathname.endsWith('-test')) {
+      pathname = `${pathname}-test`;
+    }
+    parsed.pathname = `/${pathname}`;
+    return parsed.toString();
+  } catch {
+    const qIndex = baseUri.indexOf('?');
+    const base = qIndex !== -1 ? baseUri.slice(0, qIndex) : baseUri;
+    const query = qIndex !== -1 ? baseUri.slice(qIndex) : '';
+    const lastSlash = base.lastIndexOf('/');
+    if (lastSlash !== -1) {
+      const dbName = base.slice(lastSlash + 1);
+      const newDb = dbName.endsWith('-test') ? dbName : (dbName ? `${dbName}-test` : 'media-octus-crm-test');
+      return `${base.slice(0, lastSlash + 1)}${newDb}${query}`;
+    }
+    return `${base}/media-octus-crm-test${query}`;
+  }
+}
+
+const isTestRun =
+  process.env.NODE_ENV === 'test' ||
+  process.execArgv.some((arg) => arg.includes('test')) ||
+  process.argv.some((arg) => arg.includes('--test') || arg.includes('.test.'));
+
+const nodeEnv = process.env.NODE_ENV ?? (isTestRun ? 'test' : 'development');
 const isProduction = nodeEnv === 'production';
+const isTest = nodeEnv === 'test' || isTestRun;
+
+const baseMongoUri = required('MONGO_URI', 'mongodb://localhost:27017/media-octus-crm?retryWrites=false');
+const testMongoUri = deriveTestMongoUri(baseMongoUri);
+const activeMongoUri = isTest ? testMongoUri : baseMongoUri;
+
+const mfaEncryptionKey = required(
+  'MFA_ENCRYPTION_KEY',
+  'd3a6c88f29e2b4a1d3a6c88f29e2b4a1d3a6c88f29e2b4a1d3a6c88f29e2b4a1',
+);
+
+if (!/^[0-9a-fA-F]{64}$/.test(mfaEncryptionKey)) {
+  throw new Error('MFA_ENCRYPTION_KEY must be a 64-character hexadecimal key.');
+}
 
 export const config = {
   nodeEnv,
   isProduction,
+  isTest,
   port: num('PORT', 5000),
+  security: {
+    locationChangeRadiusMeters: Math.max(100, num('LOCATION_CHANGE_RADIUS_METERS', 1000)),
+    maxLocationAccuracyMeters: Math.max(100, num('LOCATION_MAX_ACCURACY_METERS', 1000)),
+    officeLocations: officeLocations(),
+    /** true: a login without an accurate browser location waits for approval instead of only alerting admins. */
+    requireAccurateLocation: bool('LOCATION_REQUIRED', false),
+  },
 
-  mongoUri: required('MONGO_URI', 'mongodb://localhost:27017/media-octus-crm?retryWrites=false'),
+  mongoUri: activeMongoUri,
+  mongoBaseUri: baseMongoUri,
+  mongoTestUri: testMongoUri,
 
   cors: {
     // Comma-separated list. "*" allows everything (fine for local dev only).
@@ -54,6 +158,11 @@ export const config = {
     // Short-lived access token; the refresh token carries the long session.
     accessTokenTtl: process.env.JWT_ACCESS_TTL ?? '15m',
     refreshTokenTtlDays: num('JWT_REFRESH_TTL_DAYS', 7),
+  },
+
+  mfa: {
+    encryptionKey: mfaEncryptionKey,
+    issuer: 'Media Octus CRM',
   },
 
   otp: {

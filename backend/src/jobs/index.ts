@@ -6,8 +6,11 @@ import { escalationJob } from './escalation.job.js';
 import { leadSlaReleaseJob } from './lead-sla.job.js';
 import { attendanceAutoCloseJob } from './attendance-autoclose.job.js';
 
+import { profitCalculationJob } from './profitCalculation.job.js';
+
 export { withJobLock } from './job-runner.js';
 export { attendanceAutoCloseJob } from './attendance-autoclose.job.js';
+export { profitCalculationJob } from './profitCalculation.job.js';
 
 /**
  * SCHEDULED JOBS.
@@ -18,7 +21,7 @@ export { attendanceAutoCloseJob } from './attendance-autoclose.job.js';
  * Jobs the spec calls for, and who owns them:
  *   escalation.job.ts           every 15 minutes   D4
  *   attendance-autoclose.job.ts nightly (23:55)    G2
- *   finance-rollup.job.ts       nightly            F3
+ *   profitCalculation.job.ts    nightly (23:59)    F3
  *   audit-checks.job.ts         nightly + manual   H1
  *
  * Wrap the body in `withJobLock` — see job-runner.ts for why that is not
@@ -57,6 +60,14 @@ const JOBS: JobDefinition[] = [
     lockTtlSeconds: 10 * 60,
     description: 'G2 — end-of-day auto-close forgotten check-outs',
     run: attendanceAutoCloseJob,
+  },
+  {
+    name: 'profit-calculation',
+    // 23:59 daily. Calculates nightly profit rollups and daily trend snapshots.
+    schedule: '59 23 * * *',
+    lockTtlSeconds: 15 * 60,
+    description: 'F3 — nightly profit & margin rollup calculation',
+    run: profitCalculationJob,
   },
   {
     name: 'heartbeat',
