@@ -135,6 +135,7 @@ export interface ILead extends BaseDocument {
   claimedBy?: Types.ObjectId | null;
   claimedAt?: Date | null;
   rejectedBy?: Types.ObjectId | null;
+  rejectedAt?: Date | null;
   notifiedAt?: Date | null;
   qualifiedAt?: Date | null;
   slaTimerEnd?: Date | null;
@@ -248,6 +249,7 @@ const leadSchema = new Schema<ILead>({
   claimedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
   claimedAt: { type: Date, default: null },
   rejectedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+  rejectedAt: { type: Date, default: null },
   notifiedAt: { type: Date, default: null },
   qualifiedAt: { type: Date, default: null },
   slaTimerEnd: { type: Date, default: null },

@@ -159,6 +159,8 @@ export interface Lead {
   notifiedAt?: string | null;
   claimedBy?: any;
   claimedAt?: string | null;
+  rejectedBy?: any;
+  rejectedAt?: string | null;
   firstResponseAt?: string | null;
   firstCallAt?: string | null;
   qualifiedAt?: string | null;
