@@ -75,6 +75,12 @@ export interface MarketingLeadItem {
   claimedByName?: string;
   claimedAt?: string;
   isLiveCrmLead?: boolean;
+  invoiceNumber?: string;
+  invoiceAmount?: number;
+  taxableAmount?: number;
+  amountReceived?: number;
+  invoiceStatus?: 'Draft' | 'Sent' | 'Partially Paid' | 'Paid' | 'Overdue' | 'Cancelled';
+  invoiceId?: string;
   createdAt: string;
 }
 
@@ -109,6 +115,9 @@ export interface MarketingDashboardData {
     netRoiPct: number;
     roas: number;
     cpl: number;
+    verifiedInvoicedRevenue?: number;
+    verifiedCollectedCash?: number;
+    linkedInvoicesCount?: number;
   };
   tasksSummary: {
     total: number;

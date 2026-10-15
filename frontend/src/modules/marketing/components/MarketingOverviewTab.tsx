@@ -207,11 +207,25 @@ export default function MarketingOverviewTab() {
               {formatINR(metrics?.totalRevenue || 0)}
             </div>
             <div className="text-xs text-slate-400">
-              From closed marketing deals
+              {metrics?.verifiedInvoicedRevenue ? (
+                <span>
+                  Invoiced: <strong className="text-slate-700 dark:text-slate-200">{formatINR(metrics.verifiedInvoicedRevenue)}</strong>
+                  {metrics.verifiedCollectedCash ? (
+                    <> &bull; Collected: <strong className="text-emerald-600">{formatINR(metrics.verifiedCollectedCash)}</strong></>
+                  ) : null}
+                </span>
+              ) : (
+                'From closed marketing deals'
+              )}
             </div>
           </div>
-          <div className="mt-3 text-[11px] font-bold text-slate-600 dark:text-slate-400">
-            {metrics?.wonDealsCount || 0} clients converted
+          <div className="mt-3 text-[11px] font-bold text-slate-600 dark:text-slate-400 flex items-center justify-between">
+            <span>{metrics?.wonDealsCount || 0} clients converted</span>
+            {metrics?.linkedInvoicesCount ? (
+              <span className="text-[10px] bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 font-semibold px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                📄 {metrics.linkedInvoicesCount} Verified Invoices
+              </span>
+            ) : null}
           </div>
         </div>
 

@@ -30,6 +30,7 @@ export default function DailyLogsTab() {
   const [showLogModal, setShowLogModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [category, setCategory] = useState('Planned task');
+  const [customCategory, setCustomCategory] = useState('');
   const [taskTitle, setTaskTitle] = useState('');
   const [hoursSpent, setHoursSpent] = useState<number>(2);
   const [description, setDescription] = useState('');
@@ -64,9 +65,10 @@ export default function DailyLogsTab() {
 
     try {
       setSubmitting(true);
+      const finalCategory = category === 'Other' && customCategory.trim() ? customCategory.trim() : category;
       await marketingApi.submitDailyLog({
         date: selectedDate,
-        category,
+        category: finalCategory,
         taskTitle,
         hoursSpent: Number(hoursSpent),
         description,
@@ -78,6 +80,8 @@ export default function DailyLogsTab() {
       setTaskTitle('');
       setDescription('');
       setOutputLink('');
+      setCategory('Planned task');
+      setCustomCategory('');
       setHoursSpent(2);
       setShowLogModal(false);
       loadLogs();
@@ -275,7 +279,26 @@ export default function DailyLogsTab() {
                   <option value="Shoot / Production">Shoot / Production</option>
                   <option value="Learning / Research">Learning / Research</option>
                   <option value="Event Planning">Event Planning</option>
+                  <option value="Other">Other</option>
                 </select>
+
+                {category === 'Other' && (
+                  <div className="mt-2.5 space-y-1">
+                    <label className="block text-[11px] font-bold text-slate-400 uppercase">
+                      Specify Category (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={customCategory}
+                      onChange={(e) => setCustomCategory(e.target.value)}
+                      placeholder="e.g. Client Onboarding, Brand Strategy, PR (Optional)"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-[#8B2424] dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                    />
+                    <p className="text-[10px] text-slate-400">
+                      Agar blank chhodenge toh &apos;Other&apos; category save hogi.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div>

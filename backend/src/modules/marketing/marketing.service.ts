@@ -15,6 +15,7 @@ import {
   type IMarketingLead,
 } from './marketing.model.js';
 import { Lead, type LeadSource } from '../leads/leads.model.js';
+import { Invoice } from '../finance/models/invoice.model.js';
 
 export class MarketingService {
   // ─── 1. DAILY LOGS ────────────────────────────────────────────────────────
@@ -343,14 +344,36 @@ export class MarketingService {
   }> {
     const MARKETING_SOURCES: LeadSource[] = ['Instagram', 'Facebook', 'JustDial', 'Website', 'WhatsApp', 'Email', 'Referral'];
 
-    // 1. Fetch live CRM leads generated through webhooks / marketing sources
-    const crmLeads = await (Lead as any).find({
-      deletedAt: null,
-      source: { $in: MARKETING_SOURCES },
-    })
-      .populate('claimedBy', 'name email role')
-      .sort({ createdAt: -1 })
-      .lean();
+    // 1. Fetch live CRM leads, manual leads, and finance invoices concurrently
+    const [crmLeads, manualDocs, financeInvoices] = await Promise.all([
+      (Lead as any).find({
+        deletedAt: null,
+        source: { $in: MARKETING_SOURCES },
+      })
+        .populate('claimedBy', 'name email role')
+        .sort({ createdAt: -1 })
+        .lean(),
+      MarketingLead.find({ deletedAt: null }).sort({ createdAt: -1 }).lean(),
+      (Invoice as any).find({ isDeleted: false }).sort({ createdAt: -1 }).lean(),
+    ]);
+
+    const cleanPhone = (phone?: string) => (phone || '').replace(/\D/g, '').slice(-10);
+
+    const matchInvoiceForLead = (mobile?: string, company?: string) => {
+      const pDigits = cleanPhone(mobile);
+      const cLower = (company || '').trim().toLowerCase();
+      if (!pDigits && !cLower) return undefined;
+
+      return financeInvoices.find((inv: any) => {
+        const invPhone = cleanPhone(inv.contactMobile);
+        if (pDigits && invPhone && pDigits === invPhone) return true;
+        const invParty = (inv.partyName || '').trim().toLowerCase();
+        if (cLower && invParty && (cLower === invParty || cLower.includes(invParty) || invParty.includes(cLower))) {
+          return true;
+        }
+        return false;
+      });
+    };
 
     const mappedCrmLeads = crmLeads.map((l: any) => {
       const isClaimed = Boolean(l.claimedBy);
@@ -366,6 +389,14 @@ export class MarketingService {
       else stage = 'New';
 
       const dealValueRupees = l.qualification?.budget ? Math.round(Number(l.qualification.budget) / 100) : 0;
+
+      const matchedInvoice = matchInvoiceForLead(l.mobile, l.companyName);
+      const invoiceNumber = matchedInvoice ? matchedInvoice.invoiceNumber : undefined;
+      const invoiceAmount = matchedInvoice ? Math.round(Number(matchedInvoice.totalAmount || 0) / 100) : undefined;
+      const taxableAmount = matchedInvoice ? Math.round(Number(matchedInvoice.taxableAmount || matchedInvoice.subtotal || 0) / 100) : undefined;
+      const amountReceived = matchedInvoice ? Math.round(Number(matchedInvoice.amountReceived || 0) / 100) : undefined;
+      const invoiceStatus = matchedInvoice ? matchedInvoice.status : undefined;
+      const invoiceId = matchedInvoice ? String(matchedInvoice._id) : undefined;
 
       return {
         _id: String(l._id),
@@ -384,27 +415,48 @@ export class MarketingService {
         claimedAt: l.claimedAt,
         createdAt: l.createdAt,
         isLiveCrmLead: true,
+        invoiceNumber,
+        invoiceAmount,
+        taxableAmount,
+        amountReceived,
+        invoiceStatus,
+        invoiceId,
       };
     });
 
     // 2. Fetch manual marketing leads
-    const manualDocs = await MarketingLead.find({ deletedAt: null }).sort({ createdAt: -1 }).lean();
-    const mappedManualLeads = manualDocs.map((m: any) => ({
-      _id: String(m._id),
-      companyName: m.companyName,
-      contactPerson: m.contactPerson,
-      designation: m.designation,
-      phone: m.phone,
-      email: m.email,
-      city: m.city,
-      sourcePlatform: m.sourcePlatform,
-      serviceInterested: m.serviceInterested,
-      stage: m.stage,
-      dealValue: m.dealValue || 0,
-      claimedStatus: 'unclaimed' as const,
-      createdAt: m.createdAt,
-      isLiveCrmLead: false,
-    }));
+    const mappedManualLeads = manualDocs.map((m: any) => {
+      const matchedInvoice = matchInvoiceForLead(m.phone, m.companyName);
+      const invoiceNumber = matchedInvoice ? matchedInvoice.invoiceNumber : undefined;
+      const invoiceAmount = matchedInvoice ? Math.round(Number(matchedInvoice.totalAmount || 0) / 100) : undefined;
+      const taxableAmount = matchedInvoice ? Math.round(Number(matchedInvoice.taxableAmount || matchedInvoice.subtotal || 0) / 100) : undefined;
+      const amountReceived = matchedInvoice ? Math.round(Number(matchedInvoice.amountReceived || 0) / 100) : undefined;
+      const invoiceStatus = matchedInvoice ? matchedInvoice.status : undefined;
+      const invoiceId = matchedInvoice ? String(matchedInvoice._id) : undefined;
+
+      return {
+        _id: String(m._id),
+        companyName: m.companyName,
+        contactPerson: m.contactPerson,
+        designation: m.designation,
+        phone: m.phone,
+        email: m.email,
+        city: m.city,
+        sourcePlatform: m.sourcePlatform,
+        serviceInterested: m.serviceInterested,
+        stage: m.stage,
+        dealValue: m.dealValue || 0,
+        claimedStatus: 'unclaimed' as const,
+        createdAt: m.createdAt,
+        isLiveCrmLead: false,
+        invoiceNumber,
+        invoiceAmount,
+        taxableAmount,
+        amountReceived,
+        invoiceStatus,
+        invoiceId,
+      };
+    });
 
     // 3. Combine both streams
     const allCombined = [...mappedCrmLeads, ...mappedManualLeads].sort(
@@ -525,7 +577,7 @@ export class MarketingService {
 
     const MARKETING_SOURCES: LeadSource[] = ['Instagram', 'Facebook', 'JustDial', 'Website', 'WhatsApp', 'Email', 'Referral'];
 
-    const [budgetDoc, spends, manualLeads, crmLeads, tasks] = await Promise.all([
+    const [budgetDoc, spends, manualLeads, crmLeads, tasks, financeInvoices] = await Promise.all([
       MarketingBudget.findOne({ month: targetMonth, deletedAt: null }).lean(),
       MarketingSpend.find({ date: { $gte: startOfMonth, $lte: endOfMonth }, deletedAt: null }).lean(),
       MarketingLead.find({ createdAt: { $gte: startOfMonth, $lte: endOfMonth }, deletedAt: null }).lean(),
@@ -535,7 +587,33 @@ export class MarketingService {
         source: { $in: MARKETING_SOURCES },
       }).lean(),
       MarketingTask.find({ deletedAt: null }).lean(),
+      (Invoice as any).find({ isDeleted: false }).lean(),
     ]);
+
+    const cleanPhone = (phone?: string) => (phone || '').replace(/\D/g, '').slice(-10);
+
+    let verifiedInvoicedRevenue = 0;
+    let verifiedCollectedCash = 0;
+    let linkedInvoicesCount = 0;
+
+    for (const l of [...manualLeads, ...crmLeads]) {
+      const pDigits = cleanPhone(l.mobile || (l as any).phone);
+      const cLower = (l.companyName || '').trim().toLowerCase();
+      const matched = financeInvoices.find((inv: any) => {
+        const invPhone = cleanPhone(inv.contactMobile);
+        if (pDigits && invPhone && pDigits === invPhone) return true;
+        const invParty = (inv.partyName || '').trim().toLowerCase();
+        if (cLower && invParty && (cLower === invParty || cLower.includes(invParty) || invParty.includes(cLower))) {
+          return true;
+        }
+        return false;
+      });
+      if (matched) {
+        linkedInvoicesCount++;
+        verifiedInvoicedRevenue += Math.round(Number(matched.totalAmount || 0) / 100);
+        verifiedCollectedCash += Math.round(Number(matched.amountReceived || 0) / 100);
+      }
+    }
 
     const mappedCrmLeads = crmLeads.map((l: any) => ({
       sourcePlatform: l.source,
@@ -657,6 +735,9 @@ export class MarketingService {
         netRoiPct: netRoi,
         roas,
         cpl,
+        verifiedInvoicedRevenue,
+        verifiedCollectedCash,
+        linkedInvoicesCount,
       },
       tasksSummary: {
         total: tasks.length,
