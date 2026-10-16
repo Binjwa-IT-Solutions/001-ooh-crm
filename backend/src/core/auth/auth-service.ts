@@ -92,6 +92,7 @@ export interface AuthSession {
 
 interface SessionMeta {
   userAgent?: string;
+  ip?: string;
 }
 
 interface LoginRequestMeta extends SessionMeta {
@@ -505,6 +506,11 @@ export class AuthService {
         action: 'login_failed',
         entity: 'Auth',
         actorEmail: email,
+        method: 'POST',
+        path: '/api/auth/login',
+        statusCode: 401,
+        ip: meta?.ip,
+        userAgent: meta?.userAgent,
       });
       void LoginSecurityEvent.create({
         userId: user?._id ?? null,
@@ -1160,7 +1166,14 @@ export class AuthService {
     void auditService.record({
       action: 'login',
       entity: 'Auth',
+      actorId: String(user._id),
       actorEmail: user.email,
+      actorRole: user.role,
+      method: 'POST',
+      path: '/api/auth/verify-otp',
+      statusCode: 200,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
     });
 
     return AuthService.createSession(user, meta);

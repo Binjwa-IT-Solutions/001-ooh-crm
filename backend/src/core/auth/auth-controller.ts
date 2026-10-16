@@ -96,6 +96,7 @@ export class AuthController {
   static async login(req: Request, res: Response) {
     const input = loginSchema.parse(req.body);
     const result = await AuthService.startLogin(input.email, input.password, {
+      ip: req.ip,
       userAgent: req.headers['user-agent'],
       deviceId: input.deviceId,
       location: input.location,
@@ -144,6 +145,7 @@ export class AuthController {
 
     const result = await AuthService.verifyOtp(input.challengeId, input.code, {
       userAgent: req.headers['user-agent'],
+      ip: req.ip,
     });
 
     if ('requiresMfaEnrollment' in result) {
@@ -185,6 +187,9 @@ export class AuthController {
         action: 'logout',
         entity: 'Auth',
         ctx: req.ctx,
+        method: 'POST',
+        path: '/api/auth/logout',
+        statusCode: 200,
         ip: req.ip,
         userAgent: req.headers['user-agent'],
       });

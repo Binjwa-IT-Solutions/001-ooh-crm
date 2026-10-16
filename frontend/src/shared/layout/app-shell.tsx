@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useState, useEffect } from 'react';
+import { exceptionsApi } from '@/modules/exceptions/api';
 import {
   LayoutDashboard,
   Users,
@@ -113,7 +114,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: '/exceptions',
         label: 'Exceptions',
         icon: AlertTriangle,
-        permission: 'exceptions.view',
+        permission: 'audit.view',
       },
     ],
   },
@@ -135,6 +136,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { user, hasPermission, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [exceptionCount, setExceptionCount] = useState<number>(0);
+
+  useEffect(() => {
+    exceptionsApi
+      .getCount()
+      .then((res) => {
+        if (res.data?.totalUnresolved !== undefined) {
+          setExceptionCount(res.data.totalUnresolved);
+        }
+      })
+      .catch(() => {});
+  }, [pathname]);
 
   return (
     <div className="min-h-screen bg-white font-sans">
@@ -215,7 +228,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                                 isActive ? 'text-[#6E1D1D]' : 'text-slate-500',
                               )}
                             />
-                            {item.label}
+                            <span className="flex-1">{item.label}</span>
+                            {item.href === '/exceptions' && exceptionCount > 0 && (
+                              <span className="ml-auto rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-bold text-white shadow-xs">
+                                {exceptionCount}
+                              </span>
+                            )}
                           </Link>
                         </li>
                       );
