@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/shared/auth/auth-context';
 import { useLeads } from '@/modules/leads/hooks/use-leads';
 import { leadsApi } from '@/modules/leads/api';
@@ -281,20 +282,57 @@ function SearchableCitySelect({
   );
 }
 
-export default function LeadsPage() {
+function LeadsContent() {
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const isManagerOrAdmin = ['admin', 'manager'].includes(user?.role?.toLowerCase() || '');
-  const [activeTab, setActiveTab] = useState<'my-leads' | 'unclaimed' | 'all' | 'rejected'>('my-leads');
+
+  const urlStatus = searchParams?.get('status') as LeadStatus | null;
+  const urlTab = searchParams?.get('tab') as 'my-leads' | 'unclaimed' | 'all' | 'rejected' | null;
+  const urlSearch = searchParams?.get('search');
+  const urlOverdue = searchParams?.get('overdue') === 'true';
+
+  const [activeTab, setActiveTab] = useState<'my-leads' | 'unclaimed' | 'all' | 'rejected'>(() => {
+    if (urlTab && ['my-leads', 'unclaimed', 'all', 'rejected'].includes(urlTab)) {
+      return urlTab;
+    }
+    return 'my-leads';
+  });
 
   // Filters
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<LeadStatus | ''>('');
+  const [search, setSearch] = useState(() => urlSearch || '');
+  const [status, setStatus] = useState<LeadStatus | ''>(() => urlStatus || '');
   const [city, setCity] = useState('');
   const [source, setSource] = useState<LeadSource | ''>('');
-  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [overdueOnly, setOverdueOnly] = useState(() => urlOverdue);
   const [sortBy, setSortBy] = useState<'nextActionDate' | 'createdAt' | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
+
+  // Sync state when URL params change
+  useEffect(() => {
+    const s = searchParams?.get('status') as LeadStatus | null;
+    const t = searchParams?.get('tab') as 'my-leads' | 'unclaimed' | 'all' | 'rejected' | null;
+    const q = searchParams?.get('search');
+    const o = searchParams?.get('overdue');
+
+    if (s !== null) {
+      setStatus(s || '');
+      setPage(1);
+    }
+    if (t && ['my-leads', 'unclaimed', 'all', 'rejected'].includes(t)) {
+      setActiveTab(t);
+      setPage(1);
+    }
+    if (q !== null) {
+      setSearch(q || '');
+      setPage(1);
+    }
+    if (o !== null) {
+      setOverdueOnly(o === 'true');
+      setPage(1);
+    }
+  }, [searchParams]);
 
   const [claimedIds, setClaimedIds] = useState<string[]>([]);
   const [toastList, setToastList] = useState<Array<{ id: number; message: string; type?: 'success' | 'error' }>>([]);
@@ -1240,5 +1278,19 @@ export default function LeadsPage() {
         ))}
       </div>
     </div>
+  );
+}
+
+export default function LeadsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-48 items-center justify-center">
+          <Spinner label="Loading Leads..." />
+        </div>
+      }
+    >
+      <LeadsContent />
+    </Suspense>
   );
 }
