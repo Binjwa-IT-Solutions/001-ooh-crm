@@ -12,7 +12,6 @@ import { Lead } from "../leads/leads.model.js";
 import { Site } from "../sites/site.model.js";
 import { AuthUser } from "../../core/auth/auth-model.js";
 import { checkSitesExist } from "../sites/site.service.js";
-import { generateForCampaign } from "../tasks/task.service.js";
 import { employeeService } from "../employees/employees.service.js";
 
 /* -------------------------------------------------------------------------- */
@@ -53,28 +52,30 @@ type CampaignFilters = {
 /* Status Transitions                                                         */
 /* -------------------------------------------------------------------------- */
 
-const STATUS_TRANSITIONS: Record<
-  CampaignStatus,
-  CampaignStatus[]
-> = {
-  [CampaignStatus.DRAFT]: [
-    CampaignStatus.APPROVED,
-    CampaignStatus.CANCELLED,
-  ],
+const ALL_TARGET_STATUSES = [
+  "Campaign Live",
+  "In Progress",
+  "InProgress",
+  "Campaign End",
+  "Complete",
+  "Completed",
+  "Rejected",
+  "Draft",
+  "Approved",
+  "Cancelled",
+];
 
-  [CampaignStatus.APPROVED]: [
-    CampaignStatus.IN_PROGRESS,
-    CampaignStatus.CANCELLED,
-  ],
-
-  [CampaignStatus.IN_PROGRESS]: [
-    CampaignStatus.COMPLETED,
-    CampaignStatus.CANCELLED,
-  ],
-
-  [CampaignStatus.COMPLETED]: [],
-
-  [CampaignStatus.CANCELLED]: [],
+const STATUS_TRANSITIONS: Record<string, string[]> = {
+  "In Progress": ALL_TARGET_STATUSES,
+  "InProgress": ALL_TARGET_STATUSES,
+  "Campaign Live": ALL_TARGET_STATUSES,
+  "Campaign End": ALL_TARGET_STATUSES,
+  "Complete": ALL_TARGET_STATUSES,
+  "Completed": ALL_TARGET_STATUSES,
+  "Rejected": ALL_TARGET_STATUSES,
+  "Draft": ALL_TARGET_STATUSES,
+  "Approved": ALL_TARGET_STATUSES,
+  "Cancelled": ALL_TARGET_STATUSES,
 };
 
 /* -------------------------------------------------------------------------- */
@@ -922,6 +923,19 @@ export async function updateCampaign(
     throw new Error("Campaign not found");
   }
 
+  const lockedStatuses = [
+    "Campaign End",
+    "Completed",
+    "Complete",
+    "Rejected",
+    "Cancelled",
+  ];
+  if (lockedStatuses.includes(campaign.status)) {
+    throw new Error(
+      `Cannot edit campaign in ${campaign.status} status.`,
+    );
+  }
+
   if (input.name !== undefined) campaign.name = input.name;
   if (input.leadId !== undefined) {
     if (!Types.ObjectId.isValid(input.leadId)) {
@@ -981,6 +995,7 @@ export async function updateCampaignStatus(
   id: string,
   nextStatus: CampaignStatus,
   ctx: RequestContext,
+  reason?: string,
 ) {
   if (
     !Types.ObjectId.isValid(id)
@@ -1053,35 +1068,13 @@ export async function updateCampaignStatus(
       campaign.status =
         nextStatus;
 
+      if (reason && reason.trim()) {
+        campaign.rejectionReason = reason.trim();
+      }
+
       await campaign.save({
         session,
       });
-
-      /* -------------------------------------------------------------------- */
-      /* Auto Generate Tasks After Approval                                   */
-      /* -------------------------------------------------------------------- */
-
-      if (
-        nextStatus ===
-        CampaignStatus.APPROVED
-      ) {
-        try {
-          await generateForCampaign(
-            campaign,
-            {
-              userId: String(
-                ctx.userId,
-              ),
-              role: ctx.role,
-            },
-          );
-        } catch (taskErr) {
-          console.error(
-            `[D1] Failed to auto-generate tasks for campaign ${campaign._id}:`,
-            taskErr,
-          );
-        }
-      }
 
       return campaign;
     },

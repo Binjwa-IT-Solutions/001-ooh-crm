@@ -114,10 +114,16 @@ export default function QuotationTracking({ quotation, onBack, onRefresh }: Prop
     try {
       setConverting(true);
       const res: any = await api.post("/api/campaigns/from-quotation", { quotationId: quoteId });
-      const createdCampaignId = res?.data?._id || res?._id;
+      const createdCampaign = res?.data || res;
+      const createdCampaignId = createdCampaign?._id || createdCampaign?.id;
+      const campaignCode = createdCampaign?.campaignCode;
       if (createdCampaignId) {
         alert("Campaign created successfully from quotation!");
-        router.push(`/campaigns/${createdCampaignId}`);
+        if (campaignCode) {
+          router.push(`/campaigns?search=${encodeURIComponent(campaignCode)}&id=${createdCampaignId}`);
+        } else {
+          router.push(`/campaigns?id=${createdCampaignId}`);
+        }
       } else {
         router.push("/campaigns");
       }

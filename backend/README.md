@@ -107,28 +107,85 @@ error never reaches the client.
 POST /api/auth/login          email + password
      ├─ bcrypt.compare against the stored hash
      ├─ account must be Active and not soft-deleted
-     ├─ generate a 6-digit OTP, store only its SHA-256 hash, TTL 10 minutes
-     ├─ hand the code to core/notifications (console transport in dev)
-     └─ → { challengeId, expiresAt, devOtp? }
+  ├─ if not enrolled: send bootstrap email code
+  ├─ if enrolled: create a TOTP challenge
+  └─ → { challengeId, method, expiresAt }
 
 POST /api/auth/verify-otp     challengeId + code
-     ├─ not consumed, not expired, under the attempt limit
-     ├─ timing-safe hash comparison; a wrong code burns an attempt (5 max)
-     ├─ mark the challenge consumed — single use
-     └─ → { user, accessToken (15m), refreshToken (7d) }
+  ├─ verify email code for first-time enrollment, or the authenticator code
+  ├─ first login → return a QR enrollment challenge; no session yet
+  └─ enrolled login → issue the session after TOTP verification
+
+POST /api/auth/complete-mfa-enrollment  enrollmentToken + TOTP code
+  └─ confirm authenticator, then issue the first session
+
+POST /api/auth/email-fallback  challengeId
+  └─ explicitly replace a TOTP challenge with an emailed code
 
 POST /api/auth/refresh        refreshToken
      └─ look up by hash, issue a new pair, revoke the old one (rotation)
 ```
 
-Security properties worth preserving if you touch this: the OTP and the refresh
-token are only ever stored hashed; wrong-password and unknown-email return the
-same message; OTP challenges and refresh tokens expire themselves via TTL
-indexes, so there is no cleanup job to forget about.
+Security properties worth preserving if you touch this: email OTPs and refresh
+tokens are stored hashed; TOTP secrets are AES-GCM encrypted; authenticator time
+steps cannot be reused; wrong-password and unknown-email return the same
+message; challenges and refresh tokens expire via TTL indexes.
 
-`OTP_EXPOSE_IN_RESPONSE` is what puts `devOtp` in the response. It is
-force-disabled when `NODE_ENV=production` in `config/index.ts`, and that guard is
-deliberately not overridable by an env var.
+`OTP_EXPOSE_IN_RESPONSE` adds a development-only manual code hint and is
+force-disabled when `NODE_ENV=production`. Production must set
+`MFA_ENCRYPTION_KEY` to 32 random bytes encoded as 64 hexadecimal characters.
+For real email delivery, set `OTP_DELIVERY=email`, `EMAIL_PROVIDER=resend`,
+`EMAIL_API_KEY`, and a verified `EMAIL_FROM` sender.
+
+### Login risk approvals and location privacy
+
+The login page requests browser location once when the user submits credentials;
+it does not track continuously. The backend rounds reported coordinates to
+three decimal places (roughly 100 m) and stores them with accuracy in a login
+event (retained for 180 days). A device becomes trusted after its first login
+that completes MFA (after admin approval); its baseline location is saved only
+from a fix within `LOCATION_MAX_ACCURACY_METERS`. No IP/CIDR, office-network,
+VPN, or remote-work exception configuration is used by the risk decision.
+
+The device id is a random UUID kept in the browser's localStorage; the server
+stores only its SHA-256 hash. Admin screens show the first 8 hex characters as a
+device tag. Clearing browser data or switching browser makes it a new device.
+Each user has **one** trusted device: when a new device completes approval and
+MFA it replaces the previous one, which is revoked (kept for history) and needs
+approval again if it is used later. The replacement is audit-logged.
+
+Admins see a user's approved device and active sessions on the user profile
+(`GET /api/auth/users/:id/security`). **Sign out everywhere**
+(`POST …/revoke-sessions`) revokes refresh tokens and sets `sessionsRevokedAt`;
+`requireAuth` loads the account on every request and rejects access tokens
+issued before that instant, and any token for an inactive account, so the user
+is cut off immediately rather than when the 15-minute access token expires.
+**Remove device** (`POST …/remove-device`) also revokes the trusted device, so the
+next sign-in needs approval.
+
+Approval is required for:
+
+- a **new device** — always, wherever it claims to be;
+- an approved device reporting an accurate location **outside every office** in
+  `OFFICE_LOCATIONS` (or, with no offices configured, more than
+  `LOCATION_CHANGE_RADIUS_METERS` from its baseline, accounting for both
+  accuracy estimates);
+- a missing or inaccurate location, **only** when `LOCATION_REQUIRED=true`.
+  Otherwise it is logged and admins are alerted, because many laptops cannot
+  report an accurate fix.
+
+`OFFICE_LOCATIONS` is a JSON array of `{name, lat, lng, radiusMeters}`
+(`radiusMeters` ≥ 100); a malformed value stops the server at startup. A pending
+request expires after five minutes. Admin approval applies to one attempt only;
+the user must still complete MFA.
+
+If no other active admin has an authenticator enrolled, nobody could decide an
+approval, so a high-risk login skips it, goes straight to MFA, and is recorded in
+the audit log. Approval resumes automatically once a second admin enrols.
+
+Browser GPS can be denied or spoofed and is not proof of identity, so location
+never upgrades a new device; it only restricts approved ones. The login screen
+explains the one-time location request.
 
 ---
 

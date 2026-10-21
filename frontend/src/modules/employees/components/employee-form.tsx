@@ -226,6 +226,8 @@ export function EmployeeForm({
           value={values.dateOfBirth}
           error={fieldErrors.dateOfBirth}
           onChange={(val) => set('dateOfBirth', val)}
+          // Local YYYY-MM-DD; a date of birth can't be in the future.
+          max={new Date().toLocaleDateString('en-CA')}
         />
         <Field
           label="Work location"

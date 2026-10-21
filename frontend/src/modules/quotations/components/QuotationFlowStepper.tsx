@@ -25,7 +25,7 @@ export default function QuotationFlowStepper({
   onSelectStep,
 }: Props) {
   return (
-    <div className="mb-6 overflow-x-auto rounded-2xl border border-gray-200 bg-white p-3 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+    <div className="mb-6 overflow-x-auto rounded-2xl border border-gray-200 bg-white p-3 shadow-xs print:hidden dark:border-slate-800 dark:bg-slate-900">
       <div className="flex min-w-[700px] items-center justify-between">
         {STEPS.map((s, index) => {
           const isActive = currentStep === s.step;

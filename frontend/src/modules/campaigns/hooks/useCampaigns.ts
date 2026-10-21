@@ -150,6 +150,7 @@ export function useCampaigns(
       async (
         id: string,
         status: CampaignStatus,
+        reason?: string,
       ) => {
         try {
           setUpdatingStatus(
@@ -162,6 +163,7 @@ export function useCampaigns(
             await updateCampaignStatus(
               id,
               status,
+              reason,
             );
 
           setCampaigns(

@@ -20,6 +20,8 @@ export interface AuthUser {
   designation?: string;
   gender?: 'Male' | 'Female' | null;
   isProfileComplete?: boolean;
+  /** Show the skippable "complete your profile" prompt. */
+  needsSelfProfile?: boolean;
   employeeId?: string | null;
 }
 
@@ -28,7 +30,9 @@ export interface LoginChallenge {
   challengeId: string;
   email: string;
   expiresAt: string;
-  delivery: 'console' | 'email';
+  method: 'email' | 'totp';
+  emailFallbackRequiresEnrollment?: boolean;
+  delivery?: 'console' | 'email';
   resendAvailableInSeconds: number;
   /** Development only. The backend omits this when NODE_ENV=production. */
   devOtp?: string;
@@ -39,6 +43,39 @@ export interface LoginChallengeResponse {
   devMode: boolean;
   challenge: LoginChallenge;
 }
+
+export interface LoginLocation {
+  latitude: number;
+  longitude: number;
+  accuracyMeters: number;
+}
+
+export interface AdminApprovalRequiredResponse {
+  message: string;
+  requiresAdminApproval: true;
+  approvalRequestId: string;
+  pollToken: string;
+  expiresAt: string;
+}
+
+export type LoginStartResponse = LoginChallengeResponse | AdminApprovalRequiredResponse;
+
+export interface LoginApprovalStatusResponse {
+  status: 'pending' | 'approved' | 'denied' | 'expired';
+  expiresAt?: string;
+  challenge?: LoginChallenge;
+}
+
+export interface MfaEnrollmentRequiredResponse {
+  message: string;
+  requiresMfaEnrollment: true;
+  enrollmentToken: string;
+  email: string;
+  secret: string;
+  otpauthUrl: string;
+}
+
+export type LoginVerificationResponse = AuthSessionResponse | MfaEnrollmentRequiredResponse;
 
 export interface AuthSessionResponse {
   message: string;

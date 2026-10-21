@@ -45,6 +45,7 @@ export const updateCampaignStatusSchema = z.object({
     "Completed",
     "Cancelled",
   ]),
+  reason: z.string().optional(),
 });
 
 export const campaignListQuerySchema = z.object({

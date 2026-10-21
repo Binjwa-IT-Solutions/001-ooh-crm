@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useLead } from '@/modules/leads/hooks/use-leads';
@@ -16,7 +17,7 @@ import {
   type LeadDocument,
   type LeadDocumentType,
 } from '@/modules/leads/types';
-import { Card, Badge, Spinner, Button, Field, Alert, Modal, TextAreaField, DatePicker, Dropdown } from '@/shared/ui';
+import { Card, Badge, Spinner, Button, Field, Alert, Modal, TextAreaField, DatePicker, Dropdown, SelectField } from '@/shared/ui';
 import { LeadsSelect } from '@/modules/leads/components/leads-select';
 import LogCallModal from '@/modules/leads/component/log-call-modal';
 import EditLeadModal from '@/modules/leads/component/edit-lead-modal';
@@ -52,6 +53,7 @@ import {
   ExternalLink,
   Calendar,
   Filter,
+  XCircle,
 } from 'lucide-react';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -63,6 +65,7 @@ const STATUS_STYLES: Record<string, string> = {
   Negotiation: 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950/50 dark:text-orange-300',
   Won: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300',
   Lost: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300',
+  Rejected: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300',
   Duplicate: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-300',
   duplicate: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-300',
 };
@@ -76,6 +79,7 @@ const STATUS_DOT_COLORS: Record<string, string> = {
   Negotiation: 'bg-orange-500',
   Won: 'bg-emerald-500',
   Lost: 'bg-rose-500',
+  Rejected: 'bg-rose-500',
   Duplicate: 'bg-red-500',
   duplicate: 'bg-red-500',
 };
@@ -89,6 +93,7 @@ const STATUS_TEXT_COLORS: Record<string, string> = {
   Negotiation: 'text-orange-600 dark:text-orange-400',
   Won: 'text-emerald-600 dark:text-emerald-400',
   Lost: 'text-rose-600 dark:text-rose-400',
+  Rejected: 'text-rose-600 dark:text-rose-400',
   Duplicate: 'text-red-600 dark:text-red-400',
   duplicate: 'text-red-600 dark:text-red-400',
 };
@@ -186,6 +191,18 @@ export default function LeadDetailPage() {
   const [statusError, setStatusError] = useState('');
   const [lostModalOpen, setLostModalOpen] = useState(false);
   const [lostReasonInput, setLostReasonInput] = useState('');
+
+  // Reject modal state
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState('Client Not Genuine / Fake Inquiry');
+  const [rejectCustomNote, setRejectCustomNote] = useState('');
+  const [isRejecting, setIsRejecting] = useState(false);
+
+  // Release modal state
+  const [releaseModalOpen, setReleaseModalOpen] = useState(false);
+  const [releaseReason, setReleaseReason] = useState('Client Inactive / Unreachable after multiple attempts');
+  const [releaseCustomNote, setReleaseCustomNote] = useState('');
+  const [isReleasing, setIsReleasing] = useState(false);
 
   // Log Follow-up (ATR) Modal state
   const [logModalOpen, setLogModalOpen] = useState(false);
@@ -337,10 +354,30 @@ export default function LeadDetailPage() {
   };
 
   useEffect(() => {
-    if (activeTab === 'activity' && id) {
+    if (id) {
       refreshActivities();
     }
   }, [activeTab, id, lead?.status]);
+
+  // 3-Dots More Options Menu State
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [menuAnchorRect, setMenuAnchorRect] = useState<{ top: number; bottom: number; right: number } | null>(null);
+
+  useEffect(() => {
+    if (!moreMenuOpen) return;
+    const handleClose = () => setMoreMenuOpen(false);
+    document.addEventListener('click', handleClose);
+    window.addEventListener('scroll', handleClose, true);
+    window.addEventListener('resize', handleClose);
+    return () => {
+      document.removeEventListener('click', handleClose);
+      window.removeEventListener('scroll', handleClose, true);
+      window.removeEventListener('resize', handleClose);
+    };
+  }, [moreMenuOpen]);
 
   if (isLoading) return <div className="py-12 flex justify-center"><Spinner label="Loading lead details..." /></div>;
   if (error || !lead) return <Alert tone="error" title="Error">Failed to load lead</Alert>;
@@ -354,6 +391,7 @@ export default function LeadDetailPage() {
     'Negotiation',
     'Won',
     'Lost',
+    'Rejected',
   ];
 
   const availableNextStatuses: LeadStatus[] = isManagerOrAdmin
@@ -430,9 +468,69 @@ export default function LeadDetailPage() {
     }
   };
 
+  const openRejectModal = () => {
+    setRejectReason('Client Not Genuine / Fake Inquiry');
+    setRejectCustomNote('');
+    setRejectModalOpen(true);
+  };
+
+  const handleConfirmReject = async () => {
+    if (!lead) return;
+    setIsRejecting(true);
+    try {
+      const finalReason =
+        rejectReason === 'Other' && rejectCustomNote.trim()
+          ? `Other: ${rejectCustomNote.trim()}`
+          : rejectReason;
+      await leadsApi.changeStatus(lead._id || lead.id, {
+        status: 'Rejected',
+        lostReason: finalReason,
+      });
+      setRejectModalOpen(false);
+      await mutate();
+      await refreshActivities();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to reject lead');
+    } finally {
+      setIsRejecting(false);
+    }
+  };
+
+  const openReleaseModal = () => {
+    setReleaseReason('Client Inactive / Unreachable after multiple attempts');
+    setReleaseCustomNote('');
+    setReleaseModalOpen(true);
+  };
+
+  const handleConfirmRelease = async () => {
+    if (!lead) return;
+    setIsReleasing(true);
+    try {
+      const finalRemarks =
+        releaseReason === 'Other' && releaseCustomNote.trim()
+          ? `Other: ${releaseCustomNote.trim()}`
+          : releaseReason;
+      await leadsApi.updateLead(lead._id || lead.id, {
+        assignedTo: null,
+        remarks: `Moved to Unclaimed Pool: ${finalRemarks}`,
+      });
+      setReleaseModalOpen(false);
+      await mutate();
+      await refreshActivities();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to release lead back to pool');
+    } finally {
+      setIsReleasing(false);
+    }
+  };
+
   const handleStatusSelect = (newStatus: LeadStatus) => {
     if (newStatus === 'Lost') {
       setLostModalOpen(true);
+      return;
+    }
+    if (newStatus === 'Rejected') {
+      openRejectModal();
       return;
     }
     executeStatusChange(newStatus);
@@ -553,8 +651,18 @@ export default function LeadDetailPage() {
             </Button>
           )}
 
-          {/* Re-open Lead Button (When Closed / Won / Lost) vs Normal Stage Dropdown */}
-          {['Won', 'Lost'].includes(lead.status) ? (
+          {/* Re-open Lead Button (When Closed / Won / Lost / Rejected) vs Normal Stage Dropdown */}
+          {lead.status === 'Rejected' ? (
+            <Button
+              variant="secondary"
+              isLoading={isUpdatingStatus}
+              onClick={() => executeStatusChange('New', 'Restored to Unclaimed pool from Rejected')}
+              className="!h-9 !px-3 inline-flex items-center gap-1.5 border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 !text-xs font-semibold shadow-2xs"
+            >
+              <RotateCw className="w-3.5 h-3.5 shrink-0" />
+              <span>Restore to Pool</span>
+            </Button>
+          ) : ['Won', 'Lost'].includes(lead.status) ? (
             <Button
               variant="secondary"
               isLoading={isUpdatingStatus}
@@ -587,15 +695,6 @@ export default function LeadDetailPage() {
           )}
 
           <Button
-            variant="secondary"
-            onClick={() => setIsEditModalOpen(true)}
-            className="!h-9 !px-3 inline-flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 !text-xs font-semibold shadow-2xs"
-          >
-            <Pencil className="w-3.5 h-3.5 shrink-0 text-slate-500" />
-            <span>Edit Lead</span>
-          </Button>
-
-          <Button
             variant="ghost"
             onClick={() => setLogModalOpen(true)}
             className="!h-9 !px-3 inline-flex items-center gap-1.5 bg-[#F9DADA] text-[#8B2424] hover:bg-[#F2CACA] !text-xs font-semibold border border-[#F2CACA]/80 shadow-2xs dark:bg-red-950/40 dark:text-red-300 dark:border-red-900"
@@ -613,6 +712,37 @@ export default function LeadDetailPage() {
               <span>Create Quotation</span>
             </Button>
           </Link>
+
+          {/* 3-Dots More Options Menu Button */}
+          <button
+            type="button"
+            className={`inline-flex items-center justify-center h-9 w-9 rounded-lg border text-slate-600 transition-colors shadow-2xs shrink-0 ${
+              moreMenuOpen
+                ? 'bg-slate-100 border-slate-300 text-slate-900 dark:bg-slate-800 dark:border-slate-600 dark:text-white'
+                : 'border-slate-300 bg-white hover:text-slate-900 hover:bg-slate-100 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
+            }`}
+            title="More Options"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (moreMenuOpen) {
+                setMoreMenuOpen(false);
+              } else {
+                const rect = e.currentTarget.getBoundingClientRect();
+                setMenuAnchorRect({
+                  top: rect.top,
+                  bottom: rect.bottom,
+                  right: window.innerWidth - rect.right,
+                });
+                setMoreMenuOpen(true);
+              }
+            }}
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="19" cy="12" r="2" />
+              <circle cx="5" cy="12" r="2" />
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -620,6 +750,43 @@ export default function LeadDetailPage() {
         <Alert tone="error" title="Status Update Error">
           {statusError}
         </Alert>
+      )}
+
+      {lead.status === 'Rejected' && (
+        <div className="rounded-xl border border-rose-300 bg-rose-50/90 p-4 dark:border-rose-900 dark:bg-rose-950/40 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <XCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300">
+                  Lead Rejected
+                </span>
+                {lead.rejectedAt && (
+                  <span className="text-[11px] text-rose-600 dark:text-rose-400">
+                    • {formatDate(lead.rejectedAt)}
+                  </span>
+                )}
+                {lead.rejectedBy?.name && (
+                  <span className="text-[11px] text-rose-600 dark:text-rose-400">
+                    • Rejected by {lead.rejectedBy.name}
+                  </span>
+                )}
+              </div>
+              <p className="text-sm font-semibold text-rose-900 dark:text-rose-100 mt-0.5">
+                Reason: {lead.qualification?.lostReason || 'Client Not Genuine / Junk Inquiry'}
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="secondary"
+            isLoading={isUpdatingStatus}
+            onClick={() => executeStatusChange('New', 'Restored to Unclaimed pool from Rejected')}
+            className="!h-8 !px-3 inline-flex items-center gap-1.5 border border-rose-300 bg-white text-rose-700 hover:bg-rose-50 dark:border-rose-800 dark:bg-slate-900 dark:text-rose-300 !text-xs font-semibold shadow-2xs self-start sm:self-auto"
+          >
+            <RotateCw className="w-3.5 h-3.5 shrink-0" />
+            <span>Restore Lead to Pool</span>
+          </Button>
+        </div>
       )}
 
       {/* Tabs */}
@@ -846,6 +1013,15 @@ export default function LeadDetailPage() {
             {lead.status === 'Lost' && lead.qualification?.lostReason && (
               <div className="sm:col-span-2">
                 <h3 className="text-xs font-semibold text-rose-500 uppercase tracking-wider mb-1">Lost Reason</h3>
+                <p className="text-base text-rose-700 dark:text-rose-300 font-medium">
+                  {lead.qualification.lostReason}
+                </p>
+              </div>
+            )}
+
+            {lead.status === 'Rejected' && lead.qualification?.lostReason && (
+              <div className="sm:col-span-2">
+                <h3 className="text-xs font-semibold text-rose-500 uppercase tracking-wider mb-1">Rejection Reason</h3>
                 <p className="text-base text-rose-700 dark:text-rose-300 font-medium">
                   {lead.qualification.lostReason}
                 </p>
@@ -1431,21 +1607,39 @@ export default function LeadDetailPage() {
                           <div className="rounded-lg border border-slate-200/90 bg-white dark:bg-slate-900/60 dark:border-slate-800 p-3 shadow-2xs hover:border-slate-300 transition-colors">
                             <div className="flex items-center justify-between gap-2 flex-wrap">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs font-semibold text-slate-500">Stage Update:</span>
-                                {item.from && item.from !== item.to ? (
+                                {item.reason?.toLowerCase().includes('unclaimed pool') ? (
                                   <div className="inline-flex items-center gap-1.5 text-xs font-semibold">
-                                    <span className={`px-2 py-0.5 rounded ${STATUS_STYLES[item.from as LeadStatus] || 'bg-slate-100 text-slate-700'}`}>
-                                      {item.from}
+                                    <span className="text-xs font-semibold text-slate-500">Action:</span>
+                                    <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800">
+                                      Moved to Unclaimed Pool
                                     </span>
-                                    <ArrowRight className="w-3 h-3 text-slate-400" />
-                                    <span className={`px-2 py-0.5 rounded ${STATUS_STYLES[item.to as LeadStatus] || 'bg-slate-100 text-slate-700'}`}>
-                                      {item.to}
+                                  </div>
+                                ) : item.to === 'Rejected' ? (
+                                  <div className="inline-flex items-center gap-1.5 text-xs font-semibold">
+                                    <span className="text-xs font-semibold text-slate-500">Action:</span>
+                                    <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-800 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800">
+                                      Lead Rejected
                                     </span>
                                   </div>
                                 ) : (
-                                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${STATUS_STYLES[item.to as LeadStatus] || 'bg-slate-100 text-slate-700'}`}>
-                                    {item.to || 'Stage Recorded'}
-                                  </span>
+                                  <>
+                                    <span className="text-xs font-semibold text-slate-500">Stage Update:</span>
+                                    {item.from && item.from !== item.to ? (
+                                      <div className="inline-flex items-center gap-1.5 text-xs font-semibold">
+                                        <span className={`px-2 py-0.5 rounded ${STATUS_STYLES[item.from as LeadStatus] || 'bg-slate-100 text-slate-700'}`}>
+                                          {item.from}
+                                        </span>
+                                        <ArrowRight className="w-3 h-3 text-slate-400" />
+                                        <span className={`px-2 py-0.5 rounded ${STATUS_STYLES[item.to as LeadStatus] || 'bg-slate-100 text-slate-700'}`}>
+                                          {item.to}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${STATUS_STYLES[item.to as LeadStatus] || 'bg-slate-100 text-slate-700'}`}>
+                                        {item.to || 'Stage Recorded'}
+                                      </span>
+                                    )}
+                                  </>
                                 )}
                               </div>
                               <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
@@ -1456,7 +1650,7 @@ export default function LeadDetailPage() {
 
                             {item.reason && (
                               <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 bg-slate-50 dark:bg-slate-800/50 rounded-md px-2.5 py-1.5 italic">
-                                Reason: "{item.reason}"
+                                Reason: "{item.reason.replace(/^Moved to Unclaimed Pool:\s*/i, '')}"
                               </p>
                             )}
 
@@ -1791,6 +1985,108 @@ export default function LeadDetailPage() {
         </div>
       </Modal>
 
+      {/* Reject Lead Modal */}
+      <Modal
+        open={rejectModalOpen}
+        onClose={() => setRejectModalOpen(false)}
+        title="Reject Lead Inquiry"
+      >
+        <div className="space-y-4 pt-2">
+          <p className="text-xs text-slate-600 dark:text-slate-300">
+            This inquiry will be moved to <strong>Rejected Leads</strong> with the reason logged for sales tracking and audit.
+          </p>
+
+          <SelectField
+            label="Rejection Reason *"
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            options={[
+              { value: 'Client Not Genuine / Fake Inquiry', label: 'Client Not Genuine / Fake Inquiry' },
+              { value: 'Spam / Bot / Fake Number', label: 'Spam / Bot / Fake Number' },
+              { value: 'Wrong Contact Details / Person Not Available', label: 'Wrong Contact Details / Person Not Available' },
+              { value: 'Competitor / Rate Checking', label: 'Competitor / Rate Checking' },
+              { value: 'Job / Career Inquiry', label: 'Job / Career Inquiry (Looking for job/resumé)' },
+              { value: 'Irrelevant Service (Not OOH / Billboard)', label: 'Irrelevant Service (e.g. Visiting card/pamphlet printing)' },
+              { value: 'Budget Too Low / Student Inquiry', label: 'Budget Too Low / Student Inquiry' },
+              { value: 'Duplicate / Accidental Submission', label: 'Duplicate / Accidental Submission' },
+              { value: 'Other', label: 'Other (Specify reason below)' },
+            ]}
+          />
+
+          {rejectReason === 'Other' && (
+            <TextAreaField
+              label="Specify Reason"
+              placeholder="Describe why this lead is being rejected..."
+              value={rejectCustomNote}
+              onChange={(e) => setRejectCustomNote(e.target.value)}
+              rows={2}
+            />
+          )}
+
+          <div className="flex justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+            <Button variant="secondary" onClick={() => setRejectModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              isLoading={isRejecting}
+              className="bg-[#8B2424] hover:bg-[#6E1D1D] text-white shadow-xs"
+              onClick={handleConfirmReject}
+            >
+              Confirm Reject
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Release Lead Back to Unclaimed Pool Modal */}
+      <Modal
+        open={releaseModalOpen}
+        onClose={() => setReleaseModalOpen(false)}
+        title="Release Lead Back to Unclaimed Pool"
+      >
+        <div className="space-y-4 pt-2">
+          <p className="text-xs text-slate-600 dark:text-slate-300">
+            This will remove ownership from your account and return this lead to the live <strong>Unclaimed</strong> pool so another agent or manager can claim it.
+          </p>
+
+          <SelectField
+            label="Reason for Releasing *"
+            value={releaseReason}
+            onChange={(e) => setReleaseReason(e.target.value)}
+            options={[
+              { value: 'Client Inactive / Unreachable after multiple attempts', label: 'Client Inactive / Unreachable after multiple attempts' },
+              { value: 'Client requested different location / language / city', label: 'Client requested different location / language / city' },
+              { value: 'Requires Senior Agent / Specialized Pitch', label: 'Requires Senior Agent / Specialized Pitch' },
+              { value: 'Releasing due to current workload / bandwidth', label: 'Releasing due to current workload / bandwidth' },
+              { value: 'Other', label: 'Other (Specify reason below)' },
+            ]}
+          />
+
+          {releaseReason === 'Other' && (
+            <TextAreaField
+              label="Specify Reason"
+              placeholder="Explain why you are releasing this lead back to the pool..."
+              value={releaseCustomNote}
+              onChange={(e) => setReleaseCustomNote(e.target.value)}
+              rows={2}
+            />
+          )}
+
+          <div className="flex justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+            <Button variant="secondary" onClick={() => setReleaseModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              isLoading={isReleasing}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleConfirmRelease}
+            >
+              Confirm Release to Pool
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Log Follow-up / Action Modal (ATR) */}
       <LogCallModal
         open={logModalOpen}
@@ -1986,6 +2282,76 @@ export default function LeadDetailPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Floating 3-Dots Portal Menu */}
+      {mounted && moreMenuOpen && menuAnchorRect && typeof document !== 'undefined' && createPortal(
+        (() => {
+          const spaceBelow = window.innerHeight - menuAnchorRect.bottom;
+          const openUpward = spaceBelow < 170;
+
+          return (
+            <div
+              style={{
+                position: 'fixed',
+                ...(openUpward
+                  ? { bottom: `${window.innerHeight - menuAnchorRect.top + 6}px` }
+                  : { top: `${menuAnchorRect.bottom + 6}px` }),
+                right: `${Math.max(12, menuAnchorRect.right)}px`,
+                zIndex: 9999,
+              }}
+              className="w-48 rounded-xl border border-slate-200 bg-white py-1.5 shadow-xl dark:border-slate-800 dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800 animate-in fade-in-0 zoom-in-95 duration-100"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="py-1">
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left font-medium"
+                  onClick={() => {
+                    setMoreMenuOpen(false);
+                    setIsEditModalOpen(true);
+                  }}
+                >
+                  <Pencil className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Edit Lead Details</span>
+                </button>
+              </div>
+
+              {!['Won', 'Lost', 'Rejected'].includes(lead.status) && (lead.claimedBy || lead.assignedTo) && (
+                <div className="py-1">
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors text-left font-medium"
+                    onClick={() => {
+                      setMoreMenuOpen(false);
+                      openReleaseModal();
+                    }}
+                  >
+                    <RotateCw className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Release to Pool</span>
+                  </button>
+                </div>
+              )}
+
+              {!['Won', 'Lost', 'Rejected'].includes(lead.status) && (
+                <div className="py-1">
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors text-left font-medium"
+                    onClick={() => {
+                      setMoreMenuOpen(false);
+                      openRejectModal();
+                    }}
+                  >
+                    <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Reject (Junk/Fake)</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })(),
+        document.body
+      )}
     </div>
   );
 }

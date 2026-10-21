@@ -164,6 +164,7 @@ export async function updateCampaignStatusController(
         req.params.id as string,
         input.status as CampaignStatus,
         getContext(req),
+        input.reason,
       );
 
     return res.status(200).json({

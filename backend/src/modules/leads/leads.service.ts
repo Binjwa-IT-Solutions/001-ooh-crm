@@ -1127,12 +1127,15 @@ export class LeadsService {
       lead.qualification.lostReason = reason.trim();
     }
 
+    const now = new Date();
+
     // 4b. Rejected Gate: moving to Rejected records reason and tracks who rejected
     if (toStatus === 'Rejected') {
       const reason = payload.lostReason || lead.qualification?.lostReason || 'Junk / Irrelevant inquiry';
       lead.qualification = lead.qualification || {};
       lead.qualification.lostReason = reason.trim();
       lead.rejectedBy = toObjectId(ctx.user.id);
+      lead.rejectedAt = now;
     }
 
     // 5. Cycle Increment on Re-activation from Won / Lost to an active stage
@@ -1147,11 +1150,13 @@ export class LeadsService {
       if (fromStatus === 'Rejected' && toStatus === 'New') {
         lead.assignedTo = undefined;
         lead.claimedBy = undefined;
+        lead.claimedAt = null as any;
+        lead.slaTimerEnd = null as any;
         lead.rejectedBy = null;
+        lead.rejectedAt = null;
       }
     }
 
-    const now = new Date();
     lead.status = toStatus;
     if (toStatus === 'Contacted' && !lead.firstResponseAt) {
       lead.firstResponseAt = now;
@@ -1215,10 +1220,25 @@ export class LeadsService {
         lead.claimedBy = targetId;
       } else {
         // Move to Unclaimed Pool
+        const prevStatus = lead.status;
         lead.assignedTo = null;
         lead.claimedBy = null;
         lead.claimedAt = null;
+        lead.slaTimerEnd = null;
         lead.status = 'New';
+        const releaseReasonText = data.remarks || data.reason || 'Released by Agent';
+        const formattedReason = releaseReasonText.startsWith('Moved to Unclaimed Pool')
+          ? releaseReasonText
+          : `Moved to Unclaimed Pool: ${releaseReasonText}`;
+
+        lead.statusHistory = lead.statusHistory || [];
+        lead.statusHistory.push({
+          from: prevStatus,
+          to: 'New',
+          changedBy: toObjectId(ctx.user.id),
+          reason: formattedReason,
+          changedAt: new Date(),
+        });
       }
       delete data.assignedTo;
     }

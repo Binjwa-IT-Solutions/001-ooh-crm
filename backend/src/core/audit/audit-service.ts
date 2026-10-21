@@ -31,7 +31,9 @@ export interface RecordAuditInput {
   /** Absent for unauthenticated events such as a failed login. */
   ctx?: RequestContext | null;
   /** Used when there is no ctx — e.g. recording who just failed to sign in. */
+  actorId?: string | null;
   actorEmail?: string | null;
+  actorRole?: string | null;
 }
 
 /**
@@ -79,10 +81,13 @@ export const auditService = {
    */
   async record(input: RecordAuditInput): Promise<void> {
     try {
+      const resolvedActorId = input.ctx?.user?.id ?? input.actorId ?? null;
       await AuditLog.create({
-        actorId: input.ctx ? new Types.ObjectId(input.ctx.user.id) : null,
+        actorId: resolvedActorId && Types.ObjectId.isValid(resolvedActorId)
+          ? new Types.ObjectId(resolvedActorId)
+          : null,
         actorEmail: input.ctx?.user.email ?? input.actorEmail ?? null,
-        actorRole: input.ctx?.user.role ?? null,
+        actorRole: input.ctx?.user.role ?? input.actorRole ?? null,
 
         action: input.action,
         entity: input.entity,
