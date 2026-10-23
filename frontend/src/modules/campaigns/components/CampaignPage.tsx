@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { useAuth } from "@/shared/auth/auth-context";
 
 import CampaignFilters from "./CampaignFilters";
 import CampaignForm from "./CampaignForm";
@@ -19,6 +20,12 @@ import type {
 } from "../types";
 
 export default function CampaignPage() {
+  const { hasPermission, user } = useAuth();
+  const canManageCampaigns =
+    hasPermission("campaigns.manage") ||
+    ["admin", "superadmin", "manager", "ops"].includes(
+      user?.role?.toLowerCase() || ""
+    );
   const searchParams = useSearchParams();
   const urlLeadId = searchParams.get("leadId") || "";
 const shouldCreate = searchParams.get("create") === "true";
@@ -289,13 +296,15 @@ useEffect(() => {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handleAddCampaign}
-            className="rounded-lg bg-[#8B2424] px-5 py-2.5 text-sm font-semibold text-[#F9DADA] shadow-sm transition hover:bg-[#A8383B] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#A8383B] focus:ring-offset-2"
-          >
-            + Create Campaign
-          </button>
+          {canManageCampaigns && (
+            <button
+              type="button"
+              onClick={handleAddCampaign}
+              className="rounded-lg bg-[#8B2424] px-5 py-2.5 text-sm font-semibold text-[#F9DADA] shadow-sm transition hover:bg-[#A8383B] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#A8383B] focus:ring-offset-2"
+            >
+              + Create Campaign
+            </button>
+          )}
         </div>
 
         {/* FILTERS */}
@@ -397,6 +406,7 @@ useEffect(() => {
             {/* TABLE */}
             <CampaignTable
               campaigns={filteredCampaigns}
+              canManageCampaigns={canManageCampaigns}
               selectedCampaignId={activeCampaign?._id}
               onSelectCampaign={(campaign) =>
                 setActiveCampaignId(campaign._id)

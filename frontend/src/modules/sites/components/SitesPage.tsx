@@ -7,6 +7,7 @@ import {
 } from "react";
 
 import { useSites } from "@/modules/sites/hooks/useSites";
+import { useAuth } from "@/shared/auth/auth-context";
 
 import type {
   Site,
@@ -22,6 +23,13 @@ import SiteTable from "./SiteTable";
 const ITEMS_PER_PAGE = 25;
 
 export default function SitesPage() {
+  const { hasPermission, user } = useAuth();
+  const canManageSites =
+    hasPermission("sites.manage") ||
+    ["admin", "superadmin", "manager", "ops"].includes(
+      user?.role?.toLowerCase() || ""
+    );
+
   const {
     sites,
     loading,
@@ -351,16 +359,18 @@ export default function SitesPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedSite(null);
-              setShowForm(true);
-            }}
-            className="rounded-lg bg-[#8B2424] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#741D1D]"
-          >
-            + Add ATR
-          </button>
+          {canManageSites && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedSite(null);
+                setShowForm(true);
+              }}
+              className="rounded-lg bg-[#8B2424] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#741D1D]"
+            >
+              + Add ATR
+            </button>
+          )}
         </div>
       </div>
 
@@ -447,6 +457,7 @@ export default function SitesPage() {
           <>
             <SiteTable
               sites={visibleSites}
+              canEditSite={canManageSites}
               onEdit={(site) => {
                 setSelectedSite(site);
                 setShowForm(true);
