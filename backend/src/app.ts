@@ -136,6 +136,9 @@ app.use('/api/holidays', holidayRoutes);
 import candidateRoutes from './modules/candidates/candidates.routes.js';
 app.use('/api/candidates', candidateRoutes);
 
+import marketingRoutes from './modules/marketing/marketing.routes.js';
+app.use('/api/marketing', marketingRoutes);
+
 import auditRoutes from './modules/audit/audit.routes.js';
 app.use('/api/audit', auditRoutes);
 

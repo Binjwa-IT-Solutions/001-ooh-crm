@@ -5,6 +5,7 @@ import type { Site } from "../types";
 interface Props {
   sites: Site[];
   onEdit: (site: Site) => void;
+  canEditSite?: boolean;
 }
 
 function formatDate(value: string | Date) {
@@ -97,6 +98,7 @@ function canEdit(site: Site) {
 export default function SiteTable({
   sites,
   onEdit,
+  canEditSite = true,
 }: Props) {
   if (!sites.length) {
     return (
@@ -189,7 +191,7 @@ export default function SiteTable({
           {/* BODY */}
           <tbody>
             {sites.map((site) => {
-              const editable = canEdit(site);
+              const editable = canEditSite && canEdit(site);
 
               return (
                 <tr

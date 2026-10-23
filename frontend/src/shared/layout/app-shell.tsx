@@ -70,6 +70,17 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: 'MARKETING',
+    items: [
+      {
+        href: '/marketing',
+        label: 'Marketing Hub',
+        icon: Megaphone,
+        roles: ['admin', 'superadmin', 'managing_director', 'manager'],
+      },
+    ],
+  },
+  {
     label: 'OPERATIONS',
     items: [
       { href: '/vendors', label: 'Vendors', icon: Building2, permission: 'vendors.view' },
@@ -80,19 +91,54 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: ShoppingCart,
         permission: 'purchase_orders.view',
       },
-      { href: '/campaigns', label: 'Campaigns', icon: Megaphone, permission: 'campaigns.view' },
-      { href: '/escalations', label: 'Escalations', icon: ArrowUpRight, permission: 'tasks.view' },
+      {
+        href: '/campaigns',
+        label: 'Campaigns',
+        icon: Megaphone,
+        permission: 'campaigns.view',
+      },
+      {
+        href: '/escalations',
+        label: 'Escalations',
+        icon: ArrowUpRight,
+        permission: 'tasks.view',
+        roles: ['admin', 'superadmin', 'manager', 'ops'],
+      },
       { href: '/proofs', label: 'Proofs', icon: Camera, permission: 'proofs.view' },
     ],
   },
   {
     label: 'FINANCE & ANALYTICS',
     items: [
-      { href: '/finance/sales-dashboard', label: 'Sales Revenue', icon: BarChart3, permission: 'finance.view_reports' },
+      {
+        href: '/finance/sales-dashboard',
+        label: 'Sales Revenue',
+        icon: BarChart3,
+        permission: 'finance.view_reports',
+        roles: ['admin', 'superadmin', 'manager', 'finance'],
+      },
       { href: '/finance/profit-dashboard', label: 'Profit Dashboard', icon: TrendingUp, permission: 'finance.view_leadership_reports' },
-      { href: '/finance/invoices', label: 'Invoices', icon: FileText, permission: 'finance.view_payments' },
-      { href: '/finance/payments-in', label: 'Client Payments', icon: ArrowDownToLine, permission: 'finance.view_payments' },
-      { href: '/finance/payments-out', label: 'Vendor Payments', icon: ArrowUpFromLine, permission: 'finance.view_payments' },
+      {
+        href: '/finance/invoices',
+        label: 'Invoices',
+        icon: FileText,
+        permission: 'finance.view_payments',
+        roles: ['admin', 'superadmin', 'manager', 'finance'],
+      },
+      {
+        href: '/finance/payments-in',
+        label: 'Client Payments',
+        icon: ArrowDownToLine,
+        permission: 'finance.view_payments',
+        roles: ['admin', 'superadmin', 'manager', 'finance'],
+      },
+      {
+        href: '/finance/payments-out',
+        label: 'Vendor Payments',
+        icon: ArrowUpFromLine,
+        permission: 'finance.view_payments',
+        roles: ['admin', 'superadmin', 'manager', 'finance'],
+      },
       { href: '/finance/payroll', label: 'Payroll / Salary Payments', icon: CreditCard, permission: 'payroll.view' },
     ],
   },
@@ -186,11 +232,33 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex flex-1 flex-col overflow-y-auto pt-4 pb-12 no-scrollbar">
           <nav className="flex-1 space-y-6">
             {NAV_GROUPS.map((group) => {
-              const visibleItems = group.items.filter(
-                (item) =>
-                  (!item.permission || hasPermission(item.permission)) &&
-                  (!item.roles || item.roles.includes(user?.role ?? '')),
-              );
+              const visibleItems = group.items.filter((item) => {
+                if (item.href === '/marketing') {
+                  const roleStr = (user?.role || '').toLowerCase();
+                  // Admin, superadmin, manager always see Marketing Hub
+                  if (['admin', 'superadmin', 'managing_director', 'manager'].includes(roleStr)) {
+                    return true;
+                  }
+                  // Marketing employees see it (by email or designation)
+                  if (roleStr === 'employee') {
+                    const email = (user?.email || '').toLowerCase();
+                    const desig = (user?.designation || '').toLowerCase();
+                    return (
+                      email.includes('marketing') ||
+                      /marketing|designer|editor|content|creative|reel|video|social|media/.test(desig)
+                    );
+                  }
+                  return false;
+                }
+
+                if (item.roles) {
+                  const userRole = (user?.role || '').toLowerCase();
+                  if (!item.roles.map((r) => r.toLowerCase()).includes(userRole)) {
+                    return false;
+                  }
+                }
+                return !item.permission || hasPermission(item.permission);
+              });
 
               if (visibleItems.length === 0) return null;
 
