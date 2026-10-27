@@ -139,6 +139,12 @@ app.use('/api/holidays', holidayRoutes);
 import candidateRoutes from './modules/candidates/candidates.routes.js';
 app.use('/api/candidates', candidateRoutes);
 
+import auditRoutes from './modules/audit/audit.routes.js';
+app.use('/api/audit', auditRoutes);
+
+import exceptionsRoutes from './modules/exceptions/exceptions.routes.js';
+app.use('/api/exceptions', exceptionsRoutes);
+
 import payrollRoutes from './modules/payroll/payroll.routes.js';
 app.use('/api/payroll', payrollRoutes);
 

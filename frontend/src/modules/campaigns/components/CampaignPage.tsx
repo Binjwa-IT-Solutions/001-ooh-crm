@@ -66,8 +66,16 @@ useEffect(() => {
   const [selectedCampaign, setSelectedCampaign] =
     useState<Campaign | null>(null);
 
+  const urlCampaignId = searchParams.get("id") || searchParams.get("campaignId") || "";
+
   const [activeCampaignId, setActiveCampaignId] =
-    useState<string | null>(null);
+    useState<string | null>(() => urlCampaignId || null);
+
+  useEffect(() => {
+    if (urlCampaignId) {
+      setActiveCampaignId(urlCampaignId);
+    }
+  }, [urlCampaignId]);
 
   const stateOptions = useMemo(() => {
     const map = new Map<string, string>();
