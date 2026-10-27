@@ -37,8 +37,10 @@ function formatRupees(paise: number): string {
 
 function QuotationsContent() {
   const searchParams = useSearchParams();
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const isManagerOrAdmin = ["admin", "manager"].includes(user?.role?.toLowerCase() || "");
+  const canCreate = hasPermission("quotations.create");
+  const canEdit = hasPermission("quotations.update");
 
   // Stepper state: 1 = Dashboard, 2 = Create, 3 = Details, 4 = Document PDF, 5 = Tracking
   const [currentStep, setCurrentStep] = useState<QuotationFlowStep>(1);
@@ -101,7 +103,11 @@ function QuotationsContent() {
     if (queryStep) {
       const stepNum = Number(queryStep);
       if (stepNum >= 1 && stepNum <= 5) {
-        setCurrentStep(stepNum as QuotationFlowStep);
+        if (stepNum === 2 && !canCreate && !canEdit) {
+          setCurrentStep(1);
+        } else {
+          setCurrentStep(stepNum as QuotationFlowStep);
+        }
       }
     }
 
@@ -208,6 +214,7 @@ function QuotationsContent() {
 
   // Navigation Handlers
   const handleOpenCreate = () => {
+    if (!canCreate) return;
     setActiveQuote(null);
     setCurrentStep(2);
   };
@@ -228,6 +235,10 @@ function QuotationsContent() {
   };
 
   const handleEdit = (q: Quotation) => {
+    if (!canEdit) {
+      handleView(q);
+      return;
+    }
     setActiveQuote(q);
     setCurrentStep(2);
   };
@@ -238,7 +249,11 @@ function QuotationsContent() {
       <QuotationFlowStepper
         currentStep={currentStep}
         hasActiveQuote={Boolean(activeQuote)}
-        onSelectStep={(step) => setCurrentStep(step)}
+        canCreate={canCreate}
+        onSelectStep={(step) => {
+          if (step === 2 && !canCreate && !canEdit) return;
+          setCurrentStep(step);
+        }}
       />
 
       {/* STEP 1: Dashboard / Quotations Management */}
@@ -255,14 +270,21 @@ function QuotationsContent() {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={handleOpenCreate}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-[#8B2424] px-4 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-[#721c1c] transition cursor-pointer"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              <span>Create Proposal</span>
-            </button>
+            {canCreate ? (
+              <button
+                type="button"
+                onClick={handleOpenCreate}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#8B2424] px-4 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-[#721c1c] transition cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Create Proposal</span>
+              </button>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+                <span className="w-2 h-2 rounded-full bg-amber-500" />
+                Read-Only Access
+              </span>
+            )}
           </div>
 
           {/* Top 4 KPI Cards (Mirroring PO Executive Scorecard) */}
@@ -482,6 +504,7 @@ function QuotationsContent() {
               onDocument={handleDocument}
               onTrack={handleTrack}
               onEdit={handleEdit}
+              canEdit={canEdit}
             />
           )}
         </div>
@@ -489,22 +512,37 @@ function QuotationsContent() {
 
       {/* STEP 2: Create / Edit Proposal */}
       {currentStep === 2 && (
-        <QuotationForm
-          initialQuote={activeQuote}
-          initialLeadId={searchParams.get("leadId") || undefined}
-          onBack={() => {
-            if (activeQuote) {
-              setCurrentStep(3);
-            } else {
-              setCurrentStep(1);
-            }
-          }}
-          onSuccess={(savedQuote) => {
-            setActiveQuote(savedQuote);
-            loadQuotations();
-            setCurrentStep(3); // Moves straight to Step 3 Details
-          }}
-        />
+        canCreate || canEdit ? (
+          <QuotationForm
+            initialQuote={activeQuote}
+            initialLeadId={searchParams.get("leadId") || undefined}
+            onBack={() => {
+              if (activeQuote) {
+                setCurrentStep(3);
+              } else {
+                setCurrentStep(1);
+              }
+            }}
+            onSuccess={(savedQuote) => {
+              setActiveQuote(savedQuote);
+              loadQuotations();
+              setCurrentStep(3); // Moves straight to Step 3 Details
+            }}
+          />
+        ) : (
+          <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center">
+            <p className="text-sm font-semibold text-gray-700">
+              Read-Only Access: You do not have permission to create or edit proposals.
+            </p>
+            <button
+              type="button"
+              onClick={() => setCurrentStep(1)}
+              className="mt-3 px-4 py-2 text-xs font-bold text-[#8B2424] hover:underline"
+            >
+              Return to Quotations List
+            </button>
+          </div>
+        )
       )}
 
       {/* STEP 3: Quotation Details & Review */}
@@ -512,7 +550,8 @@ function QuotationsContent() {
         <QuotationDetails
           quotation={activeQuote}
           onBack={() => setCurrentStep(1)}
-          onEdit={() => setCurrentStep(2)}
+          onEdit={canEdit ? () => setCurrentStep(2) : undefined}
+          canManage={canEdit}
           onDocument={() => setCurrentStep(4)}
           onTrack={() => setCurrentStep(5)}
           onRefresh={(updated) => {
@@ -541,6 +580,7 @@ function QuotationsContent() {
           quotation={activeQuote}
           onBack={() => setCurrentStep(3)}
           onRefresh={loadQuotations}
+          canManage={hasPermission('campaigns.manage')}
         />
       )}
 

@@ -24,6 +24,7 @@ interface Props {
   onEdit: (order: PurchaseOrder) => void;
   onIssue: (order: PurchaseOrder) => void;
   onCancel: (order: PurchaseOrder) => void;
+  canManage?: boolean;
 
   // Pagination props
   currentPage?: number;
@@ -42,6 +43,7 @@ export default function PurchaseOrderTable({
   onEdit,
   onIssue,
   onCancel,
+  canManage = true,
   currentPage,
   pageSize = 25,
   totalItems,
@@ -280,7 +282,7 @@ export default function PurchaseOrderTable({
                         View
                       </button>
 
-                      {order.status === "Draft" && (
+                      {canManage && order.status === "Draft" && (
                         <>
                           <button
                             type="button"
@@ -302,7 +304,7 @@ export default function PurchaseOrderTable({
                         </>
                       )}
 
-                      {order.status === "Issued" && (
+                      {canManage && order.status === "Issued" && (
                         <button
                           type="button"
                           onClick={() => onCancel(order)}

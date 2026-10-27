@@ -49,6 +49,7 @@ interface Props {
   quotation: Quotation;
   onBack: () => void;
   onRefresh?: () => void;
+  canManage?: boolean;
 }
 
 function formatDate(dateStr?: string | null) {
@@ -72,7 +73,12 @@ function formatRupees(paise: number): string {
   })}`;
 }
 
-export default function QuotationTracking({ quotation, onBack, onRefresh }: Props) {
+export default function QuotationTracking({
+  quotation,
+  onBack,
+  onRefresh,
+  canManage = true,
+}: Props) {
   const router = useRouter();
   const [copied, setCopied] = useState(false);
   const [converting, setConverting] = useState(false);
@@ -305,15 +311,22 @@ export default function QuotationTracking({ quotation, onBack, onRefresh }: Prop
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  disabled={converting}
-                  onClick={handleConvertToCampaign}
-                  className="shrink-0 inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-800 disabled:opacity-50 transition cursor-pointer"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  <span>{converting ? "Converting to Campaign..." : "Convert to Campaign"}</span>
-                </button>
+                {canManage ? (
+                  <button
+                    type="button"
+                    disabled={converting}
+                    onClick={handleConvertToCampaign}
+                    className="shrink-0 inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-800 disabled:opacity-50 transition cursor-pointer"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    <span>{converting ? "Converting to Campaign..." : "Convert to Campaign"}</span>
+                  </button>
+                ) : (
+                  <span className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-800 text-xs font-bold">
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Accepted (Read-Only)</span>
+                  </span>
+                )}
               </div>
             </div>
           ) : (

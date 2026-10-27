@@ -9,6 +9,7 @@ import VendorDetails from "@/modules/vendors/components/VendorDetails";
 import VendorSitesModal from "@/modules/vendors/components/VendorSitesModal";
 
 import { useVendors } from "@/modules/vendors/hooks/useVendors";
+import { useAuth } from "@/shared/auth/auth-context";
 
 import type {
   Vendor,
@@ -27,6 +28,8 @@ export default function VendorsPage() {
     deactivate,
     getSites,
   } = useVendors();
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission("vendors.manage");
 
   /* =========================
      FILTER STATE
@@ -455,13 +458,20 @@ export default function VendorsPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={openAdd}
-            className="rounded-xl bg-[#8B2424] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#A8383B] focus:outline-none focus:ring-2 focus:ring-[#F9DADA] focus:ring-offset-2"
-          >
-            + Add Vendor
-          </button>
+          {canManage ? (
+            <button
+              type="button"
+              onClick={openAdd}
+              className="rounded-xl bg-[#8B2424] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#A8383B] focus:outline-none focus:ring-2 focus:ring-[#F9DADA] focus:ring-offset-2"
+            >
+              + Add Vendor
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              Read-Only Access
+            </span>
+          )}
         </div>
 
         {/* =====================
@@ -607,6 +617,7 @@ export default function VendorsPage() {
                 filteredVendors
               }
               loading={loading}
+              canManage={canManage}
               onView={
                 setDetailsVendor
               }
@@ -672,17 +683,21 @@ export default function VendorsPage() {
               null
             )
           }
-          onEdit={() => {
-            setEditingVendor(
-              detailsVendor
-            );
+          onEdit={
+            canManage
+              ? () => {
+                  setEditingVendor(
+                    detailsVendor
+                  );
 
-            setDetailsVendor(
-              null
-            );
+                  setDetailsVendor(
+                    null
+                  );
 
-            setFormOpen(true);
-          }}
+                  setFormOpen(true);
+                }
+              : undefined
+          }
         />
       )}
 

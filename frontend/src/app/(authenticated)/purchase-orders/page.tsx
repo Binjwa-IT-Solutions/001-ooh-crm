@@ -23,6 +23,7 @@ import PurchaseOrderDetails from "@/modules/purchase-orders/components/PurchaseO
 import PurchaseOrderDocument from "@/modules/purchase-orders/components/PurchaseOrderDocument";
 import PurchaseOrderTracking from "@/modules/purchase-orders/components/PurchaseOrderTracking";
 import FlowStepper, { type FlowStep } from "@/modules/purchase-orders/components/FlowStepper";
+import { useAuth } from "@/shared/auth/auth-context";
 import { formatAmount } from "@/modules/purchase-orders/format";
 
 import type {
@@ -32,6 +33,8 @@ import type {
 
 function PurchaseOrdersContent() {
   const searchParams = useSearchParams();
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission("purchase_orders.manage");
 
   // Search & Filter state
   const [search, setSearch] = useState("");
@@ -225,6 +228,7 @@ function PurchaseOrdersContent() {
 
   // Actions
   function openCreate() {
+    if (!canManage) return;
     setActiveOrder(null);
     setCurrentStep(2);
   }
@@ -245,6 +249,10 @@ function PurchaseOrdersContent() {
   }
 
   function handleEdit(order: PurchaseOrder) {
+    if (!canManage) {
+      handleView(order);
+      return;
+    }
     setActiveOrder(order);
     setCurrentStep(2);
   }
@@ -340,16 +348,18 @@ function PurchaseOrdersContent() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2.5">
-                <button
-                  type="button"
-                  onClick={openCreate}
-                  className="flex items-center gap-2 rounded-xl bg-[#A8333B] px-5 py-3 text-xs sm:text-sm font-bold text-white shadow-sm transition hover:bg-[#8B2424] hover:shadow-md cursor-pointer active:scale-98"
-                >
-                  <Plus className="h-4 w-4" />
-                  + Create Purchase Order
-                </button>
-              </div>
+              {canManage && (
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={openCreate}
+                    className="flex items-center gap-2 rounded-xl bg-[#A8333B] px-5 py-3 text-xs sm:text-sm font-bold text-white shadow-sm transition hover:bg-[#8B2424] hover:shadow-md cursor-pointer active:scale-98"
+                  >
+                    <Plus className="h-4 w-4" />
+                    + Create Purchase Order
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* 2. Top 4 Financial & Operational KPI Cards (Compact) */}
@@ -554,6 +564,7 @@ function PurchaseOrdersContent() {
                   onEdit={handleEdit}
                   onIssue={handleIssue}
                   onCancel={handleCancel}
+                  canManage={canManage}
                 />
               )}
             </div>
@@ -562,16 +573,31 @@ function PurchaseOrdersContent() {
 
         {/* STEP 2: Create / Edit Purchase Order */}
         {currentStep === 2 && (
-          <PurchaseOrderForm
-            order={activeOrder}
-            saving={saving}
-            onBack={() => setCurrentStep(1)}
-            onSubmit={handleFormSubmit}
-            onSuccess={(savedOrder) => {
-              setActiveOrder(savedOrder);
-              setCurrentStep(3); // Moves straight to Step 3
-            }}
-          />
+          canManage ? (
+            <PurchaseOrderForm
+              order={activeOrder}
+              saving={saving}
+              onBack={() => setCurrentStep(1)}
+              onSubmit={handleFormSubmit}
+              onSuccess={(savedOrder) => {
+                setActiveOrder(savedOrder);
+                setCurrentStep(3); // Moves straight to Step 3
+              }}
+            />
+          ) : (
+            <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center">
+              <p className="text-sm font-semibold text-gray-700">
+                Read-Only Access: You do not have permission to create or edit purchase orders.
+              </p>
+              <button
+                type="button"
+                onClick={() => setCurrentStep(1)}
+                className="mt-3 px-4 py-2 text-xs font-bold text-[#A8333B] hover:underline"
+              >
+                Return to Purchase Orders Dashboard
+              </button>
+            </div>
+          )
         )}
 
         {/* STEP 3: Purchase Order Details */}

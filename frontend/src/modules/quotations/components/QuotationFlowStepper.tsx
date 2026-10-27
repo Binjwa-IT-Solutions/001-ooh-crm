@@ -8,6 +8,7 @@ export type QuotationFlowStep = 1 | 2 | 3 | 4 | 5;
 interface Props {
   currentStep: QuotationFlowStep;
   hasActiveQuote: boolean;
+  canCreate?: boolean;
   onSelectStep: (step: QuotationFlowStep) => void;
 }
 
@@ -22,6 +23,7 @@ const STEPS = [
 export default function QuotationFlowStepper({
   currentStep,
   hasActiveQuote,
+  canCreate = true,
   onSelectStep,
 }: Props) {
   return (
@@ -32,7 +34,7 @@ export default function QuotationFlowStepper({
           const isPassed = currentStep > s.step;
           const canClick =
             s.step === 1 ||
-            (s.step === 2 && currentStep >= 2) ||
+            (s.step === 2 && canCreate && currentStep >= 2) ||
             (s.step >= 3 && hasActiveQuote);
 
           return (

@@ -106,7 +106,8 @@ function renderStateCity(city?: string | null, state?: string | null) {
 }
 
 export default function MyCampaignsPage() {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
+  const canManage = hasPermission('campaigns.manage');
   const isManagerOrAdmin = ['admin', 'manager'].includes(user?.role?.toLowerCase() || '');
   const isSalesAgent = user?.role?.toLowerCase() === 'sales_agent';
 
@@ -257,14 +258,21 @@ export default function MyCampaignsPage() {
             <span>Refresh</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[#8B2424] px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-[#6E1D1D] transition"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>+ Create Campaign</span>
-          </button>
+          {canManage ? (
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#8B2424] px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-[#6E1D1D] transition"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Create Campaign</span>
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              Read-Only Access
+            </span>
+          )}
         </div>
       </div>
 
@@ -780,7 +788,7 @@ export default function MyCampaignsPage() {
         </div>
       </div>
 
-      {showCreateModal && (
+      {canManage && showCreateModal && (
         <CampaignForm
           onClose={() => setShowCreateModal(false)}
           onSuccess={async (data) => {

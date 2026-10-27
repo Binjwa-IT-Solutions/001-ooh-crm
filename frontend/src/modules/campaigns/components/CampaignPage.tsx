@@ -11,6 +11,7 @@ import CampaignTable, { isCampaignLocked } from "./CampaignTable";
 import {
   useCampaigns,
 } from "../hooks/useCampaigns";
+import { useAuth } from "@/shared/auth/auth-context";
 
 import type {
   Campaign,
@@ -19,6 +20,8 @@ import type {
 } from "../types";
 
 export default function CampaignPage() {
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission("campaigns.manage");
   const searchParams = useSearchParams();
   const urlLeadId = searchParams.get("leadId") || "";
 const shouldCreate = searchParams.get("create") === "true";
@@ -281,13 +284,20 @@ useEffect(() => {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handleAddCampaign}
-            className="rounded-lg bg-[#8B2424] px-5 py-2.5 text-sm font-semibold text-[#F9DADA] shadow-sm transition hover:bg-[#A8383B] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#A8383B] focus:ring-offset-2"
-          >
-            + Create Campaign
-          </button>
+          {canManage ? (
+            <button
+              type="button"
+              onClick={handleAddCampaign}
+              className="rounded-lg bg-[#8B2424] px-5 py-2.5 text-sm font-semibold text-[#F9DADA] shadow-sm transition hover:bg-[#A8383B] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#A8383B] focus:ring-offset-2"
+            >
+              + Create Campaign
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              Read-Only Access
+            </span>
+          )}
         </div>
 
         {/* FILTERS */}
@@ -390,6 +400,7 @@ useEffect(() => {
             <CampaignTable
               campaigns={filteredCampaigns}
               selectedCampaignId={activeCampaign?._id}
+              canManage={canManage}
               onSelectCampaign={(campaign) =>
                 setActiveCampaignId(campaign._id)
               }

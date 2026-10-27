@@ -198,9 +198,13 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   finance: [
     ...BASE,
     'quotations.view',
+    'quotations.create',
+    'quotations.update',
     'purchase_orders.view',
+    'purchase_orders.manage',
     'campaigns.view',
     'vendors.view',
+    'sites.view',
     'finance.view',
     'finance.manage',
     // Bank account / IFSC are Finance + Admin only (developer spec, C3).

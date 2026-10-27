@@ -5,6 +5,7 @@ import type { Site } from "../types";
 interface Props {
   sites: Site[];
   onEdit: (site: Site) => void;
+  canManage?: boolean;
 }
 
 function formatDate(value: string | Date) {
@@ -97,6 +98,7 @@ function canEdit(site: Site) {
 export default function SiteTable({
   sites,
   onEdit,
+  canManage = true,
 }: Props) {
   if (!sites.length) {
     return (
@@ -292,7 +294,7 @@ export default function SiteTable({
 
                   {/* ACTION */}
                   <td className="px-4 py-4">
-                    {editable ? (
+                    {canManage && editable ? (
                       <button
                         type="button"
                         onClick={() => onEdit(site)}
@@ -302,7 +304,7 @@ export default function SiteTable({
                       </button>
                     ) : (
                       <span className="text-xs text-gray-400">
-                        Locked
+                        {canManage ? "Locked" : "Read-Only"}
                       </span>
                     )}
                   </td>

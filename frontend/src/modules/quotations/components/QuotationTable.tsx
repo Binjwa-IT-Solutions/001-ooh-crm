@@ -60,6 +60,7 @@ interface Props {
   onDocument: (quotation: Quotation) => void;
   onTrack: (quotation: Quotation) => void;
   onEdit: (quotation: Quotation) => void;
+  canEdit?: boolean;
 }
 
 export default function QuotationTable({
@@ -74,6 +75,7 @@ export default function QuotationTable({
   onDocument,
   onTrack,
   onEdit,
+  canEdit = true,
 }: Props) {
   if (quotations.length === 0) {
     return (
@@ -202,7 +204,7 @@ export default function QuotationTable({
                       </button>
 
                       {/* Edit Draft Proposal */}
-                      {q.status === "Draft" && (
+                      {canEdit && q.status === "Draft" && (
                         <button
                           type="button"
                           onClick={() => onEdit(q)}

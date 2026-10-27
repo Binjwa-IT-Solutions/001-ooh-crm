@@ -33,7 +33,7 @@ interface LineItemState {
   unit: string;
   discountRupees?: number;
   rateRupees: number;
-  taxPercent: number;
+  taxPercent: number | string;
 }
 
 interface InvoiceFormProps {
@@ -117,6 +117,33 @@ export function InvoiceForm({ initialInvoice, defaultType = 'sales_invoice', isE
 
   // Active item index for recent prices widget
   const [activeItemIndex, setActiveItemIndex] = useState<number | null>(0);
+
+  // Custom tax rows state: tracks which line items are using manual percentage input
+  const [customTaxRows, setCustomTaxRows] = useState<Record<number, boolean>>(() => {
+    const customTaxes: Record<number, boolean> = {};
+    if (initialInvoice?.items?.length) {
+      initialInvoice.items.forEach((item, idx) => {
+        const taxVal = item.taxPercent !== undefined && item.taxPercent !== null ? item.taxPercent : 18;
+        if (![0, 5, 12, 18, 28].includes(taxVal)) {
+          customTaxes[idx] = true;
+        }
+      });
+    }
+    return customTaxes;
+  });
+
+  useEffect(() => {
+    if (initialInvoice?.items?.length) {
+      const customTaxes: Record<number, boolean> = {};
+      initialInvoice.items.forEach((item, idx) => {
+        const taxVal = item.taxPercent !== undefined && item.taxPercent !== null ? item.taxPercent : 18;
+        if (![0, 5, 12, 18, 28].includes(taxVal)) {
+          customTaxes[idx] = true;
+        }
+      });
+      setCustomTaxRows(customTaxes);
+    }
+  }, [initialInvoice]);
 
   // Financial adjustments (in Rupees)
   const [discountRupees, setDiscountRupees] = useState<number>((initialInvoice?.discount || 0) / 100);
@@ -246,6 +273,10 @@ export function InvoiceForm({ initialInvoice, defaultType = 'sales_invoice', isE
       };
       return copy;
     });
+    setCustomTaxRows((prev) => ({
+      ...prev,
+      [index]: ![0, 5, 12, 18, 28].includes(preset.tax),
+    }));
   };
 
   const handleAddItem = () => {
@@ -268,6 +299,18 @@ export function InvoiceForm({ initialInvoice, defaultType = 'sales_invoice', isE
   const handleRemoveItem = (index: number) => {
     if (items.length <= 1) return;
     setItems((prev) => prev.filter((_, i) => i !== index));
+    setCustomTaxRows((prev) => {
+      const next: Record<number, boolean> = {};
+      Object.entries(prev).forEach(([key, val]) => {
+        const k = Number(key);
+        if (k < index) {
+          next[k] = val;
+        } else if (k > index) {
+          next[k - 1] = val;
+        }
+      });
+      return next;
+    });
     if (activeItemIndex === index) {
       setActiveItemIndex(Math.max(0, index - 1));
     }
@@ -283,7 +326,7 @@ export function InvoiceForm({ initialInvoice, defaultType = 'sales_invoice', isE
       const qty = Number(item.quantity) || 0;
       const rate = Number(item.rateRupees) || 0;
       const disc = Math.max(0, Number(item.discountRupees) || 0);
-      const taxPct = Math.max(0, Number(item.taxPercent) || 0);
+      const taxPct = item.taxPercent === '' ? 0 : Math.max(0, Math.min(100, Number(item.taxPercent) || 0));
 
       const base = qty * rate;
       const taxable = Math.max(0, base - disc);
@@ -360,7 +403,7 @@ export function InvoiceForm({ initialInvoice, defaultType = 'sales_invoice', isE
           unit: i.unit.trim() || 'Nos',
           discount: Math.round((Number(i.discountRupees) || 0) * 100), // convert to paise
           rate: Math.round((Number(i.rateRupees) || 0) * 100), // convert to paise
-          taxPercent: Number(i.taxPercent) || 0,
+          taxPercent: i.taxPercent === '' ? 0 : Math.max(0, Math.min(100, Number(i.taxPercent) || 0)),
         })),
         discount: Math.round((Number(discountRupees) || 0) * 100),
         additionalCharges: Math.round((Number(additionalChargesRupees) || 0) * 100),
@@ -791,7 +834,7 @@ export function InvoiceForm({ initialInvoice, defaultType = 'sales_invoice', isE
                         type="number"
                         min="0"
                         step="any"
-                        value={item.discountRupees !== undefined && item.discountRupees > 0 ? item.discountRupees : ''}
+                        value={item.discountRupees !== undefined && Number(item.discountRupees) > 0 ? item.discountRupees : ''}
                         onChange={(e) => {
                           const val = parseFloat(e.target.value);
                           handleItemChange(idx, 'discountRupees', isNaN(val) ? 0 : Math.max(0, val));
@@ -812,40 +855,73 @@ export function InvoiceForm({ initialInvoice, defaultType = 'sales_invoice', isE
                         className="w-full rounded border border-slate-200 px-2 py-1.5 text-xs text-slate-900 text-right font-medium focus:border-[#6E1D1D] outline-none"
                       />
                     </td>
+                    {/* TAX with Manual option */}
                     <td className="py-3 px-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="any"
-                          value={item.taxPercent !== undefined ? item.taxPercent : 18}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value);
-                            handleItemChange(idx, 'taxPercent', isNaN(val) ? 0 : Math.max(0, Math.min(100, val)));
-                          }}
-                          placeholder="18"
-                          className="w-14 rounded border border-slate-200 px-1.5 py-1.5 text-xs text-slate-900 text-right font-semibold focus:border-[#6E1D1D] outline-none"
-                        />
-                        <select
-                          value={[0, 5, 12, 18, 28].includes(Number(item.taxPercent)) ? Number(item.taxPercent) : 'custom'}
-                          onChange={(e) => {
-                            if (e.target.value !== 'custom') {
-                              handleItemChange(idx, 'taxPercent', parseFloat(e.target.value) || 0);
+                      <div className="flex items-center justify-end">
+                        {customTaxRows[idx] ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="any"
+                              value={item.taxPercent}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === '') {
+                                  handleItemChange(idx, 'taxPercent', '');
+                                } else {
+                                  const num = parseFloat(val);
+                                  handleItemChange(
+                                    idx,
+                                    'taxPercent',
+                                    isNaN(num) ? 0 : Math.max(0, Math.min(100, num))
+                                  );
+                                }
+                              }}
+                              onFocus={(e) => e.target.select()}
+                              placeholder="%"
+                              className="w-16 rounded-lg border border-[#6E1D1D] px-1.5 py-1 text-xs font-bold text-slate-900 text-right outline-none"
+                            />
+                            <span className="text-xs font-bold text-slate-500">%</span>
+                            <button
+                              type="button"
+                              title="Switch back to presets"
+                              onClick={() => {
+                                setCustomTaxRows((prev) => ({ ...prev, [idx]: false }));
+                                if (![0, 5, 12, 18, 28].includes(Number(item.taxPercent))) {
+                                  handleItemChange(idx, 'taxPercent', 18);
+                                }
+                              }}
+                              className="text-[11px] text-slate-400 hover:text-slate-700 px-1"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <select
+                            value={
+                              [0, 5, 12, 18, 28].includes(Number(item.taxPercent))
+                                ? Number(item.taxPercent)
+                                : 'manual'
                             }
-                          }}
-                          className="rounded border border-slate-200 bg-white px-1 py-1.5 text-xs text-slate-700 font-medium focus:border-[#6E1D1D] outline-none"
-                          title="Tax rate preset"
-                        >
-                          <option value="0">0%</option>
-                          <option value="5">5%</option>
-                          <option value="12">12%</option>
-                          <option value="18">18%</option>
-                          <option value="28">28%</option>
-                          {![0, 5, 12, 18, 28].includes(Number(item.taxPercent)) && (
-                            <option value="custom">Custom</option>
-                          )}
-                        </select>
+                            onChange={(e) => {
+                              if (e.target.value === 'manual') {
+                                setCustomTaxRows((prev) => ({ ...prev, [idx]: true }));
+                              } else {
+                                handleItemChange(idx, 'taxPercent', Number(e.target.value));
+                              }
+                            }}
+                            className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-[#6E1D1D]"
+                          >
+                            <option value="18">18%</option>
+                            <option value="12">12%</option>
+                            <option value="5">5%</option>
+                            <option value="28">28%</option>
+                            <option value="0">0%</option>
+                            <option value="manual">Manual %</option>
+                          </select>
+                        )}
                       </div>
                     </td>
                     <td className="py-3 px-3 text-right text-slate-600 font-medium">

@@ -18,10 +18,13 @@ import type {
 import SiteFilters from "./SiteFilters";
 import SiteForm from "./SiteForm";
 import SiteTable from "./SiteTable";
+import { useAuth } from "@/shared/auth/auth-context";
 
 const ITEMS_PER_PAGE = 25;
 
 export default function SitesPage() {
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission("sites.manage");
   const {
     sites,
     loading,
@@ -351,16 +354,23 @@ export default function SitesPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedSite(null);
-              setShowForm(true);
-            }}
-            className="rounded-lg bg-[#8B2424] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#741D1D]"
-          >
-            + Add ATR
-          </button>
+          {canManage ? (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedSite(null);
+                setShowForm(true);
+              }}
+              className="rounded-lg bg-[#8B2424] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#741D1D]"
+            >
+              + Add ATR
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              Read-Only Access
+            </span>
+          )}
         </div>
       </div>
 
@@ -447,6 +457,7 @@ export default function SitesPage() {
           <>
             <SiteTable
               sites={visibleSites}
+              canManage={canManage}
               onEdit={(site) => {
                 setSelectedSite(site);
                 setShowForm(true);

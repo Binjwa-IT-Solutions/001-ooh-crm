@@ -67,6 +67,7 @@ interface Props {
   onTrack: () => void;
   onRefresh: (updatedQuote: Quotation) => void;
   onEdit?: () => void;
+  canManage?: boolean;
 }
 
 export default function QuotationDetails({
@@ -76,6 +77,7 @@ export default function QuotationDetails({
   onTrack,
   onRefresh,
   onEdit,
+  canManage = true,
 }: Props) {
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [uploadingPdf, setUploadingPdf] = useState(false);
@@ -133,8 +135,15 @@ export default function QuotationDetails({
         </button>
 
         <div className="flex flex-wrap items-center gap-2">
+          {!canManage && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              Read-Only Access
+            </span>
+          )}
+
           {/* Edit Proposal Button (Draft only) */}
-          {quotation.status === "Draft" && onEdit && (
+          {canManage && quotation.status === "Draft" && onEdit && (
             <button
               type="button"
               onClick={onEdit}
@@ -147,27 +156,31 @@ export default function QuotationDetails({
           )}
 
           {/* Upload Signed PDF Button */}
-          <button
-            type="button"
-            disabled={uploadingPdf}
-            onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-slate-800 dark:bg-slate-900 dark:text-gray-300 dark:hover:bg-slate-800 transition cursor-pointer disabled:opacity-50"
-            title="Upload client-signed or stamped PDF proposal"
-          >
-            <Upload className="h-3.5 w-3.5 text-gray-500" />
-            <span>{uploadingPdf ? "Uploading PDF..." : "Upload Signed PDF"}</span>
-          </button>
+          {canManage && (
+            <button
+              type="button"
+              disabled={uploadingPdf}
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-slate-800 dark:bg-slate-900 dark:text-gray-300 dark:hover:bg-slate-800 transition cursor-pointer disabled:opacity-50"
+              title="Upload client-signed or stamped PDF proposal"
+            >
+              <Upload className="h-3.5 w-3.5 text-gray-500" />
+              <span>{uploadingPdf ? "Uploading PDF..." : "Upload Signed PDF"}</span>
+            </button>
+          )}
 
           {/* Send & Share Proposal Button */}
-          <button
-            type="button"
-            onClick={() => setShareModalOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300 transition cursor-pointer"
-            title="Dispatch via Email, WhatsApp, or Direct Link"
-          >
-            <SendIcon className="h-3.5 w-3.5" />
-            <span>Send &amp; Share Proposal</span>
-          </button>
+          {canManage && (
+            <button
+              type="button"
+              onClick={() => setShareModalOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300 transition cursor-pointer"
+              title="Dispatch via Email, WhatsApp, or Direct Link"
+            >
+              <SendIcon className="h-3.5 w-3.5" />
+              <span>Send &amp; Share Proposal</span>
+            </button>
+          )}
 
           {/* Document PDF Preview (Step 4) */}
           <button

@@ -21,6 +21,7 @@ interface Props {
     vendor: Vendor,
     rating: number
   ) => void | Promise<void>;
+  canManage?: boolean;
 }
 
 export default function VendorTable({
@@ -31,6 +32,7 @@ export default function VendorTable({
   onSites,
   onDeactivate,
   onRatingChange,
+  canManage = true,
 }: Props) {
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -174,8 +176,10 @@ export default function VendorTable({
                   <td className="px-4 py-4">
                     <RatingStars
                       rating={vendor.vendorRating}
-                      onChange={(rating) =>
-                        onRatingChange?.(vendor, rating)
+                      onChange={
+                        canManage
+                          ? (rating) => onRatingChange?.(vendor, rating)
+                          : undefined
                       }
                     />
                   </td>
@@ -204,14 +208,16 @@ export default function VendorTable({
                         }
                       />
 
-                      <ActionButton
-                        text="Edit"
-                        onClick={() =>
-                          onEdit(vendor)
-                        }
-                      />
+                      {canManage && (
+                        <ActionButton
+                          text="Edit"
+                          onClick={() =>
+                            onEdit(vendor)
+                          }
+                        />
+                      )}
 
-                      {vendor.status === "Active" && (
+                      {canManage && vendor.status === "Active" && (
                         <ActionButton
                           text="Deactivate"
                           danger

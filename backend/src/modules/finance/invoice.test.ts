@@ -498,4 +498,85 @@ describe('Track F: Invoice & Billing Module Integration Tests', () => {
     assert.ok(Buffer.isBuffer(pdf));
     assert.ok(pdf.length > 500);
   });
+
+  it('12. Supports all tax rates (0%, 5%, 12%, 18%, 28%, and custom) with accurate recalculation and PDF generation', async () => {
+    // Test creation with multiple line items carrying different tax rates
+    const invoice = await invoiceService.createInvoice(
+      {
+        type: 'sales_invoice',
+        partyName: 'Tax Variety Client',
+        invoiceDate: new Date().toISOString(),
+        dueDate: new Date().toISOString(),
+        items: [
+          { name: 'Exempt Service (0%)', quantity: 1, rate: 100000, taxPercent: 0 }, // ₹1,000, 0% -> tax ₹0
+          { name: 'Printing Surcharge (5%)', quantity: 2, rate: 50000, taxPercent: 5 }, // ₹1,000, 5% -> tax ₹50
+          { name: 'Fabrication (12%)', quantity: 1, rate: 200000, taxPercent: 12 }, // ₹2,000, 12% -> tax ₹240
+          { name: 'Display Rights (18%)', quantity: 1, rate: 500000, taxPercent: 18 }, // ₹5,000, 18% -> tax ₹900
+          { name: 'Luxury LED Display (28%)', quantity: 1, rate: 1000000, taxPercent: 28 }, // ₹10,000, 28% -> tax ₹2,800
+          { name: 'Custom Rate Item (7%)', quantity: 1, rate: 100000, taxPercent: 7 }, // ₹1,000, 7% -> tax ₹70
+        ],
+      },
+      adminCtx
+    );
+
+    // Verify individual items
+    assert.equal(invoice.items[0].taxPercent, 0);
+    assert.equal(invoice.items[0].taxAmount, 0);
+    assert.equal(invoice.items[0].amount, 100000);
+
+    assert.equal(invoice.items[1].taxPercent, 5);
+    assert.equal(invoice.items[1].taxAmount, 5000); // ₹50.00
+    assert.equal(invoice.items[1].amount, 105000);
+
+    assert.equal(invoice.items[2].taxPercent, 12);
+    assert.equal(invoice.items[2].taxAmount, 24000); // ₹240.00
+    assert.equal(invoice.items[2].amount, 224000);
+
+    assert.equal(invoice.items[3].taxPercent, 18);
+    assert.equal(invoice.items[3].taxAmount, 90000); // ₹900.00
+    assert.equal(invoice.items[3].amount, 590000);
+
+    assert.equal(invoice.items[4].taxPercent, 28);
+    assert.equal(invoice.items[4].taxAmount, 280000); // ₹2,800.00
+    assert.equal(invoice.items[4].amount, 1280000);
+
+    assert.equal(invoice.items[5].taxPercent, 7);
+    assert.equal(invoice.items[5].taxAmount, 7000); // ₹70.00
+    assert.equal(invoice.items[5].amount, 107000);
+
+    // Total subtotal = 1,000 + 1,000 + 2,000 + 5,000 + 10,000 + 1,000 = ₹20,000 = 2000000 paise
+    assert.equal(invoice.subtotal, 2000000);
+    // Total tax = 0 + 50 + 240 + 900 + 2800 + 70 = ₹4,060 = 406000 paise
+    assert.equal(invoice.taxAmount, 406000);
+    // Grand total = 2000000 + 406000 = 2406000 paise
+    assert.equal(invoice.totalAmount, 2406000);
+
+    // Test updating an item's tax rate manually (e.g. from 18% to 28% and 0% to 5%)
+    const updated = await invoiceService.updateInvoice(
+      invoice.id,
+      {
+        items: [
+          { name: 'Exempt Service now 5%', quantity: 1, rate: 100000, taxPercent: 5 },
+          { name: 'Display Rights now 28%', quantity: 1, rate: 500000, taxPercent: 28 },
+        ],
+      },
+      adminCtx
+    );
+
+    assert.equal(updated.items[0].taxPercent, 5);
+    assert.equal(updated.items[0].taxAmount, 5000);
+    assert.equal(updated.items[1].taxPercent, 28);
+    assert.equal(updated.items[1].taxAmount, 140000);
+    // Subtotal = 100000 + 500000 = 600000 paise (₹6,000)
+    assert.equal(updated.subtotal, 600000);
+    // Total tax = 5000 + 140000 = 145000 paise (₹1,450)
+    assert.equal(updated.taxAmount, 145000);
+    // Grand total = 600000 + 145000 = 745000 paise
+    assert.equal(updated.totalAmount, 745000);
+
+    // Test PDF generation with these updated tax values
+    const pdf = await invoiceService.generateInvoicePdf(updated.id);
+    assert.ok(Buffer.isBuffer(pdf));
+    assert.ok(pdf.length > 500);
+  });
 });

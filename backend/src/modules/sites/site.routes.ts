@@ -1,5 +1,6 @@
-
 import { Router } from "express";
+import { requireAuth } from "../../core/auth/auth-middleware.js";
+import { requirePermission } from "../../core/rbac/index.js";
 
 import {
   createSite,
@@ -13,41 +14,55 @@ import {
 
 const router = Router();
 
+router.use(requireAuth);
+
 /* CREATE ATR */
-router.post("/", createSite);
+router.post(
+  "/",
+  requirePermission("sites.manage"),
+  createSite,
+);
 
 /* GET ALL ATR */
-router.get("/", getSitesController);
+router.get(
+  "/",
+  requirePermission("sites.view"),
+  getSitesController,
+);
 
 /* STATE OPTIONS */
 router.get(
   "/options/states",
-  getStates
+  requirePermission("sites.view"),
+  getStates,
 );
 
 /* CITY OPTIONS */
 router.get(
   "/options/cities",
-  getCities
+  requirePermission("sites.view"),
+  getCities,
 );
 
 /* CSV IMPORT */
 router.post(
   "/import",
-  importSites
+  requirePermission("sites.manage"),
+  importSites,
 );
 
 /* GET ONE ATR */
 router.get(
   "/:id",
-  getSite
+  requirePermission("sites.view"),
+  getSite,
 );
 
 /* UPDATE ATR */
 router.patch(
   "/:id",
-  updateSiteController
+  requirePermission("sites.manage"),
+  updateSiteController,
 );
 
 export default router;
-

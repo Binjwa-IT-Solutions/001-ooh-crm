@@ -116,6 +116,9 @@ app.use('/api/quotations', quotationsRoutes);
 import financeRoutes from './modules/finance/routes/finance.routes.js';
 app.use('/api/finance', financeRoutes);
 
+import dashboardRoutes from './modules/dashboard/dashboard.routes.js';
+app.use('/api/dashboard', dashboardRoutes);
+
 //attendance & shift configs
 app.use('/api/attendance', attendanceRoutes);
 

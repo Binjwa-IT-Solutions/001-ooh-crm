@@ -24,6 +24,7 @@ export function isCampaignLocked(status?: string | null): boolean {
 interface Props {
   campaigns: Campaign[];
   selectedCampaignId?: string | null;
+  canManage?: boolean;
   onSelectCampaign?: (campaign: Campaign) => void;
   onEdit: (campaign: Campaign) => void;
   onStatusChange: (
@@ -36,6 +37,7 @@ interface Props {
 export default function CampaignTable({
   campaigns,
   selectedCampaignId,
+  canManage = true,
   onSelectCampaign,
   onEdit,
   onStatusChange,
@@ -366,7 +368,7 @@ export default function CampaignTable({
                         if (isPowDone) {
                           return (
                             <div className="flex items-center justify-end gap-1.5">
-                              {!isCampaignLocked(campaign.status) && (
+                              {canManage && !isCampaignLocked(campaign.status) && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -392,6 +394,21 @@ export default function CampaignTable({
                                 title="View Proof of Work in Proofs"
                               >
                                 View
+                              </Link>
+                            </div>
+                          );
+                        }
+
+                        if (!canManage) {
+                          return (
+                            <div className="flex items-center justify-end gap-2">
+                              <span className="text-xs font-medium text-gray-400">Read-Only</span>
+                              <Link
+                                href={`/proofs?campaignId=${campaign._id}#campaign-pow`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-[11px] font-medium text-gray-500 hover:text-[#8B2424] underline"
+                              >
+                                View POW
                               </Link>
                             </div>
                           );

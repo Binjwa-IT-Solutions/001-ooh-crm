@@ -6,7 +6,7 @@ import { formatGST, formatPAN, formatValue } from "../format";
 interface Props {
   vendor: Vendor;
   onClose: () => void;
-  onEdit: () => void;
+  onEdit?: () => void;
 }
 
 export default function VendorDetails({
@@ -118,15 +118,17 @@ export default function VendorDetails({
           </div>
         </div>
 
-        <div className="border-t border-[#EEEEF3] bg-[#FAFAFB] p-5">
-          <button
-            type="button"
-            onClick={onEdit}
-            className="w-full rounded-xl bg-[#8B2424] px-5 py-3 text-sm font-bold text-white hover:bg-[#A8383B]"
-          >
-            Edit Vendor
-          </button>
-        </div>
+        {onEdit && (
+          <div className="border-t border-[#EEEEF3] bg-[#FAFAFB] p-5">
+            <button
+              type="button"
+              onClick={onEdit}
+              className="w-full rounded-xl bg-[#8B2424] px-5 py-3 text-sm font-bold text-white hover:bg-[#A8383B]"
+            >
+              Edit Vendor
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

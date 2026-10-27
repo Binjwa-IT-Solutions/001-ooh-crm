@@ -617,7 +617,9 @@ export class QuotationsService {
     quotation.status = 'Sent';
     quotation.sentAt = new Date();
     quotation.sentTo = sentTo;
-    quotation.updatedBy = toObjectId(ctx.user.id);
+    if (ctx?.user?.id) {
+      quotation.updatedBy = toObjectId(ctx.user.id);
+    }
 
     await quotation.save();
 
