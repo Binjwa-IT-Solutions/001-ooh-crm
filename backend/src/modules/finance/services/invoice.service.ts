@@ -9,7 +9,9 @@ import { Employee } from '../../employees/employees.model.js';
 import { NotFoundError, ValidationError, ForbiddenError } from '../../../core/errors/index.js';
 import { toObjectId } from '../../../core/db/basePlugin.js';
 import type { RequestContext } from '../../../core/context.js';
-import { renderPdf, formatPaise, lineItemsTable, horizontalRule, type TableColumn } from '../../../core/pdf/index.js';
+import { renderPdf, formatPaise, lineItemsTable, horizontalRule, imageBuffer, type TableColumn } from '../../../core/pdf/index.js';
+import { getDocumentSignature } from '../../settings/document-signature.js';
+import { getCompanyBrand } from '../../settings/company-profile.js';
 import { COMPANY } from '../../../config/company.js';
 import type {
   CreateInvoiceInput,
@@ -894,7 +896,9 @@ export const invoiceService = {
     }
     meta.push(['Status', doc.status]);
 
+    const [companySignature, brand] = await Promise.all([getDocumentSignature(), getCompanyBrand()]);
     return renderPdf({
+      brand,
       title,
       reference: doc.invoiceNumber,
       meta,
@@ -952,12 +956,35 @@ export const invoiceService = {
           .fillColor('#0f172a')
           .text('For MEDIA OCTUS PVT LTD', pdfDoc.page.width - 248, sigY, { width: 200, align: 'right' });
 
-        pdfDoc.moveDown(2.2);
+        // Company signature & stamp (Settings → Document signature), right-aligned
+        const right = pdfDoc.page.width - 48;
+        const imgTop = sigY + 14;
+        const stampBuf = imageBuffer(companySignature.stampImage);
+        const signBuf = imageBuffer(companySignature.signatureImage);
+        try {
+          if (stampBuf) pdfDoc.image(stampBuf, right - 200, imgTop - 2, { fit: [44, 44] });
+          if (signBuf) pdfDoc.image(signBuf, right - 120, imgTop, { fit: [120, 34], align: 'right' });
+        } catch {
+          // a broken image must not stop the invoice from rendering
+        }
+
+        const lineY = imgTop + 40;
+        pdfDoc.moveTo(right - 150, lineY).lineTo(right, lineY).lineWidth(0.5).strokeColor('#cbd5e1').stroke();
+        if (companySignature.signatoryName) {
+          pdfDoc
+            .fontSize(8.5)
+            .font('Helvetica-Bold')
+            .fillColor('#0f172a')
+            .text(companySignature.signatoryName, right - 200, lineY + 4, { width: 200, align: 'right' });
+        }
         pdfDoc
           .fontSize(8)
           .font('Helvetica')
           .fillColor('#64748b')
-          .text('Authorized Signatory', pdfDoc.page.width - 248, pdfDoc.y, { width: 200, align: 'right' });
+          .text(companySignature.signatoryDesignation || 'Authorized Signatory', right - 200, pdfDoc.y + (companySignature.signatoryName ? 1 : lineY + 4 - pdfDoc.y), {
+            width: 200,
+            align: 'right',
+          });
       },
     });
   },

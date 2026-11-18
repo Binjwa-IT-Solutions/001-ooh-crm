@@ -107,17 +107,28 @@ export class LeadsService {
     }
 
     const query: Record<string, any> = {};
+    const andConditions: Record<string, any>[] = [];
 
     if (filters.search) {
       const cleanSearch = escapeRegex(filters.search.trim());
       const searchRegex = { $regex: cleanSearch, $options: 'i' };
-      query.$or = [
-        { companyName: searchRegex },
-        { contactPerson: searchRegex },
-        { mobile: searchRegex },
-        { email: searchRegex },
-        { city: searchRegex },
-      ];
+      // In $and (not query.$or) so the team-scoping $or below can't silently replace it.
+      andConditions.push({
+        $or: [
+          { companyName: searchRegex },
+          { contactPerson: searchRegex },
+          { mobile: searchRegex },
+          { email: searchRegex },
+          { city: searchRegex },
+        ],
+      });
+    }
+
+    // Contacted = a follow-up was logged (firstResponseAt) or the lead already moved past New.
+    if (filters.contacted === 'yes') {
+      andConditions.push({ $or: [{ firstResponseAt: { $ne: null } }, { status: { $ne: 'New' } }] });
+    } else if (filters.contacted === 'no') {
+      andConditions.push({ status: 'New', firstResponseAt: null });
     }
 
     if (filters.status) query.status = filters.status;
@@ -153,9 +164,17 @@ export class LeadsService {
     } else if (filters.sortBy === 'receivedAt' || filters.sortBy === 'createdAt') {
       const dir = filters.sortDir === 'asc' ? 1 : -1;
       sortObj = { createdAt: dir };
+    } else if (filters.sortBy === 'claimedAt') {
+      const dir = filters.sortDir === 'asc' ? 1 : -1;
+      sortObj = { claimedAt: dir, createdAt: -1 };
     } else if (filters.overdueOnly) {
       sortObj = { nextActionDate: 1, createdAt: -1 };
+    } else if (filters.assignedToMe) {
+      // My Leads: the lead you claimed most recently comes first (assigned-but-unclaimed after, newest first)
+      sortObj = { claimedAt: -1, createdAt: -1 };
     }
+
+    if (andConditions.length) query.$and = andConditions;
 
     const page = Math.max(1, Number(filters.page) || 1);
     const limit = Math.max(1, Math.min(100, Number(filters.limit || filters.pageSize) || 20));

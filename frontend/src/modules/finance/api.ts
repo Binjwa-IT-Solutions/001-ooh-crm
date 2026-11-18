@@ -233,8 +233,16 @@ export const invoicesApi = {
     return api.post<{ success: boolean; message: string; invoice: import('./types').Invoice }>(`/api/finance/invoices/${id}/convert`, {});
   },
 
-  async getPublicInvoice(token: string): Promise<{ success: boolean; invoice: import('./types').Invoice; data: import('./types').Invoice }> {
-    return api.get<{ success: boolean; invoice: import('./types').Invoice; data: import('./types').Invoice }>(`/api/finance/invoices/public/${token}`);
+  async getPublicInvoice(token: string): Promise<{
+    success: boolean;
+    invoice: import('./types').Invoice;
+    data: import('./types').Invoice;
+    /** Sent with the invoice because the shared page has no login. */
+    companySignature?: import('@/shared/document-signature').CompanySignature;
+    /** Default office address (Settings → Company settings). */
+    companyAddressLines?: string[];
+  }> {
+    return api.get(`/api/finance/invoices/public/${token}`);
   },
 
   getPdfDownloadUrl(id: string): string {

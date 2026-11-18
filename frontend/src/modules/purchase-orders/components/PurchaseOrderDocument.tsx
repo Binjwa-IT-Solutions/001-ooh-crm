@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
   Download,
   Check,
-  Upload,
 } from "lucide-react";
 
 function PrinterIcon({ className = "h-4 w-4" }: { className?: string }) {
@@ -32,7 +31,8 @@ function ShareIcon({ className = "h-4 w-4" }: { className?: string }) {
 }
 
 import type { PurchaseOrder } from "../types";
-import { COMPANY } from '@/shared/company';
+import { useCompanySignature } from "@/shared/document-signature";
+import { useCompanyAddressLines } from '@/shared/company-profile';
 import {
   formatDate,
   getCampaignName,
@@ -120,59 +120,11 @@ export default function PurchaseOrderDocument({
   onNext,
 }: Props) {
   const [copied, setCopied] = useState(false);
-  const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
+  // Company signature from Settings → Document signature (Admin only)
+  const companySignature = useCompanySignature();
+  const companyAddressLines = useCompanyAddressLines();
   const printRef = useRef<HTMLDivElement>(null);
-  const sigInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    try {
-      const orderSig = order?._id ? localStorage.getItem(`mo_po_signature_${order._id}`) : null;
-      const defaultSig = localStorage.getItem("mo_po_default_signature");
-      if (orderSig) {
-        setSignatureUrl(orderSig);
-      } else if (defaultSig) {
-        setSignatureUrl(defaultSig);
-      }
-    } catch (err) {
-      console.error("Failed to load signature from local storage", err);
-    }
-  }, [order?._id]);
-
-  const handleSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      if (dataUrl) {
-        setSignatureUrl(dataUrl);
-        try {
-          localStorage.setItem("mo_po_default_signature", dataUrl);
-          if (order?._id) {
-            localStorage.setItem(`mo_po_signature_${order._id}`, dataUrl);
-          }
-        } catch (err) {
-          console.error("Failed to save signature", err);
-        }
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleRemoveSignature = () => {
-    setSignatureUrl(null);
-    try {
-      if (order?._id) {
-        localStorage.removeItem(`mo_po_signature_${order._id}`);
-      }
-      localStorage.removeItem("mo_po_default_signature");
-    } catch (err) {
-      console.error("Failed to remove signature", err);
-    }
-    if (sigInputRef.current) {
-      sigInputRef.current.value = "";
-    }
-  };
 
   const items =
     order.lineItems && order.lineItems.length > 0
@@ -327,14 +279,6 @@ export default function PurchaseOrderDocument({
         </div>
       </div>
 
-      {/* Hidden Signature File Input */}
-      <input
-        type="file"
-        ref={sigInputRef}
-        accept="image/*"
-        onChange={handleSignatureUpload}
-        className="hidden"
-      />
 
       {/* Printable PO Document Sheet */}
       <div className="mx-auto max-w-4xl print:max-w-none print:w-full print:m-0 print:p-0">
@@ -398,7 +342,7 @@ export default function PurchaseOrderDocument({
                 {order.companyName || "MEDIA OCTUS"}
               </p>
               <p className="text-gray-600 leading-relaxed whitespace-pre-line">
-                {order.companyAddress || COMPANY.addressLines.join('\n')}
+                {order.companyAddress || companyAddressLines.join('\n')}
               </p>
               <p className="pt-1 text-gray-700">
                 <span className="font-semibold">GSTIN :</span>{" "}
@@ -596,62 +540,23 @@ export default function PurchaseOrderDocument({
                 {order.companyName || "MEDIA OCTUS"}
               </p>
 
-              {/* Signature display or upload button */}
-              <div className="min-h-[56px] flex flex-col items-center sm:items-end justify-center">
-                {signatureUrl ? (
-                  <div className="flex flex-col items-center sm:items-end">
-                    <img
-                      src={signatureUrl}
-                      alt="Authorised Signature"
-                      className="h-12 max-w-[180px] object-contain"
-                    />
-                    <div className="print:hidden mt-1 flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => sigInputRef.current?.click()}
-                        className="text-[10px] font-semibold text-gray-500 hover:text-[#A8333B] underline cursor-pointer"
-                      >
-                        Change
-                      </button>
-                      <span className="text-[10px] text-gray-300">·</span>
-                      <button
-                        type="button"
-                        onClick={handleRemoveSignature}
-                        className="text-[10px] font-semibold text-gray-400 hover:text-red-600 underline cursor-pointer"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center sm:items-end">
-                    <div className="h-10 flex items-center justify-center sm:justify-end">
-                      <svg
-                        className="h-8 text-gray-400 opacity-50"
-                        viewBox="0 0 200 60"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                      >
-                        <path d="M 20 45 C 50 10, 70 50, 90 20 C 110 -5, 130 50, 160 30 C 170 25, 180 35, 190 40" />
-                      </svg>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => sigInputRef.current?.click()}
-                      className="print:hidden mt-1 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-[#A8333B] bg-red-50/50 px-2.5 py-1 text-[11px] font-semibold text-[#A8333B] hover:bg-red-100/60 transition cursor-pointer"
-                    >
-                      <Upload className="h-3 w-3" />
-                      Upload Signature
-                    </button>
-                  </div>
+              <div className="min-h-[56px] flex items-end justify-center sm:justify-end gap-2">
+                {companySignature?.stampImage && (
+                  <img src={companySignature.stampImage} alt="Company stamp" className="h-14 w-14 object-contain opacity-90" />
+                )}
+                {companySignature?.signatureImage && (
+                  <img src={companySignature.signatureImage} alt="Authorised Signature" className="h-12 max-w-[180px] object-contain" />
                 )}
               </div>
 
-              <p className="text-[11px] font-semibold text-gray-600 border-t border-gray-300 pt-1">
-                Authorised Signatory
-              </p>
+              <div className="border-t border-gray-300 pt-1">
+                {companySignature?.signatoryName && (
+                  <p className="text-[11px] font-bold text-gray-800">{companySignature.signatoryName}</p>
+                )}
+                <p className="text-[11px] font-semibold text-gray-600">
+                  {companySignature?.signatoryDesignation || "Authorised Signatory"}
+                </p>
+              </div>
             </div>
           </div>
         </div>

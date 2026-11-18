@@ -1,0 +1,548 @@
+{
+  "ok": true,
+  "strict": false,
+  "browserSkipped": false,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 5,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "composition_file_too_large",
+        "severity": "warning",
+        "message": "This HTML composition file has 351 lines. Smaller sub-compositions are easier to read, iterate on, and diff.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "C:\\Users\\Tarun\\Documents\\binjwa\\001\\code\\brag-output\\composition\\index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Split coherent scenes or layers into separate .html files under compositions/, then mount them from the parent with data-composition-src so each file stays small enough to inspect, revise, and validate independently."
+      },
+      {
+        "code": "nested_structure_needs_subcomposition",
+        "severity": "warning",
+        "message": "<section id=\"scene-1\"> is a timeline element that contains nested <div id=\"hook-box\">. The timeline shows one row per top-level element, and the root composition is built only from sub-compositions.",
+        "selector": "#scene-1",
+        "dataAttributes": {},
+        "sourceFile": "C:\\Users\\Tarun\\Documents\\binjwa\\001\\code\\brag-output\\composition\\index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Move <section id=\"scene-1\"> and its contents into a sub-composition file and mount it with data-composition-src."
+      },
+      {
+        "code": "nested_structure_needs_subcomposition",
+        "severity": "warning",
+        "message": "<section id=\"scene-2\"> is a timeline element that contains nested <div id=\"scene-2-header\">. The timeline shows one row per top-level element, and the root composition is built only from sub-compositions.",
+        "selector": "#scene-2",
+        "dataAttributes": {},
+        "sourceFile": "C:\\Users\\Tarun\\Documents\\binjwa\\001\\code\\brag-output\\composition\\index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Move <section id=\"scene-2\"> and its contents into a sub-composition file and mount it with data-composition-src."
+      },
+      {
+        "code": "nested_structure_needs_subcomposition",
+        "severity": "warning",
+        "message": "<section id=\"scene-3\"> is a timeline element that contains nested <div id=\"scene-3-header\">. The timeline shows one row per top-level element, and the root composition is built only from sub-compositions.",
+        "selector": "#scene-3",
+        "dataAttributes": {},
+        "sourceFile": "C:\\Users\\Tarun\\Documents\\binjwa\\001\\code\\brag-output\\composition\\index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Move <section id=\"scene-3\"> and its contents into a sub-composition file and mount it with data-composition-src."
+      },
+      {
+        "code": "nested_structure_needs_subcomposition",
+        "severity": "warning",
+        "message": "<section id=\"scene-4\"> is a timeline element that contains nested <div>. The timeline shows one row per top-level element, and the root composition is built only from sub-compositions.",
+        "selector": "#scene-4",
+        "dataAttributes": {},
+        "sourceFile": "C:\\Users\\Tarun\\Documents\\binjwa\\001\\code\\brag-output\\composition\\index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Move <section id=\"scene-4\"> and its contents into a sub-composition file and mount it with data-composition-src."
+      }
+    ],
+    "filesScanned": 1
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 1,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "clip_media_fit",
+        "severity": "warning",
+        "message": "Audio \"vo\" is 18.47s but its slot (data-duration) is 20.00s — the slot is shortened to the media length when rendered. Set data-duration to ~18.47s if that isn't intended.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {
+          "data-composition-id": "main",
+          "data-width": "1920",
+          "data-height": "1080",
+          "data-duration": "20.0",
+          "data-start": "0"
+        },
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080
+        },
+        "time": 0
+      }
+    ]
+  },
+  "layout": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 2,
+    "infoCount": 2,
+    "findings": [
+      {
+        "code": "panel_out_of_canvas",
+        "severity": "warning",
+        "time": 1.111,
+        "selector": "div.glow-orb.orb-1",
+        "message": "Painted panel extends outside the composition canvas.",
+        "rect": {
+          "left": 153.59,
+          "top": -200,
+          "right": 903.59,
+          "bottom": 550,
+          "width": 750,
+          "height": 750
+        },
+        "containerSelector": "#root",
+        "text": "",
+        "fixHint": "Move the panel inward, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "top": 200
+        },
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 153.59,
+          "y": -200,
+          "width": 750,
+          "height": 750
+        },
+        "firstSeen": 1.111,
+        "lastSeen": 18.889,
+        "occurrences": 9,
+        "heldMs": 0,
+        "times": [
+          1.111,
+          3.333,
+          5.556,
+          7.778,
+          10,
+          12.222,
+          14.444,
+          16.667,
+          18.889
+        ]
+      },
+      {
+        "code": "panel_out_of_canvas",
+        "severity": "warning",
+        "time": 1.111,
+        "selector": "div.glow-orb.orb-2",
+        "message": "Painted panel extends outside the composition canvas.",
+        "rect": {
+          "left": 939.61,
+          "top": 530,
+          "right": 1689.61,
+          "bottom": 1280,
+          "width": 750,
+          "height": 750
+        },
+        "containerSelector": "#root",
+        "text": "",
+        "fixHint": "Move the panel inward, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "bottom": 200
+        },
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 939.61,
+          "y": 530,
+          "width": 750,
+          "height": 750
+        },
+        "firstSeen": 1.111,
+        "lastSeen": 18.889,
+        "occurrences": 9,
+        "heldMs": 0,
+        "times": [
+          1.111,
+          3.333,
+          5.556,
+          7.778,
+          10,
+          12.222,
+          14.444,
+          16.667,
+          18.889
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 7.778,
+        "selector": "#sites-img",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 130.36,
+          "top": 283,
+          "right": 1789.63,
+          "bottom": 1028.5,
+          "width": 1659.27,
+          "height": 745.5
+        },
+        "containerSelector": "#browser-scene-2 > div:nth-of-type(2)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 181,
+          "top": 310.3,
+          "right": 1739,
+          "bottom": 1010.3,
+          "width": 1558,
+          "height": 700
+        },
+        "overflow": {
+          "left": 50.64,
+          "right": 50.63,
+          "top": 27.3,
+          "bottom": 18.2
+        },
+        "dataAttributes": {
+          "data-hf-render-id": "sites-img",
+          "data-hf-authored-opacity": ""
+        },
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 130.36,
+          "y": 283,
+          "width": 1659.27,
+          "height": 745.5
+        },
+        "firstSeen": 7.778,
+        "lastSeen": 7.778,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          7.778
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 12.222,
+        "selector": "#proofs-img",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 144.46,
+          "top": 287.32,
+          "right": 1775.54,
+          "bottom": 1020.15,
+          "width": 1631.07,
+          "height": 732.83
+        },
+        "containerSelector": "#browser-scene-3 > div:nth-of-type(2)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 181,
+          "top": 310.3,
+          "right": 1739,
+          "bottom": 1010.3,
+          "width": 1558,
+          "height": 700
+        },
+        "overflow": {
+          "left": 36.54,
+          "right": 36.54,
+          "top": 22.98,
+          "bottom": 9.85
+        },
+        "dataAttributes": {
+          "data-hf-render-id": "proofs-img",
+          "data-hf-authored-opacity": ""
+        },
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 144.46,
+          "y": 287.32,
+          "width": 1631.07,
+          "height": 732.83
+        },
+        "firstSeen": 12.222,
+        "lastSeen": 14.444,
+        "occurrences": 2,
+        "heldMs": 0,
+        "times": [
+          12.222,
+          14.444
+        ]
+      }
+    ],
+    "duration": 20,
+    "samples": [
+      1.111,
+      3.333,
+      5.556,
+      7.778,
+      10,
+      12.222,
+      14.444,
+      16.667,
+      18.889
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 4,
+    "truncated": false
+  },
+  "motion": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": false,
+    "samples": 0
+  },
+  "contrast": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "samples": [
+      1.111,
+      5.556,
+      10,
+      14.444,
+      18.889
+    ],
+    "checked": 33,
+    "passed": 33
+  },
+  "craft": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 1,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "text_below_floor",
+        "severity": "warning",
+        "message": "Type floor is 28 px (2.6% of the 1080 px short side, what a phone can read) and 15 text elements stay under it for 0.5 s or more, the smallest \"crm.mediaoctus.com/dashboard\" at 13 px: set reading text to at least 28 px, or put data-layout-ignore on text that is texture rather than reading; see references/look.md.",
+        "text": "crm.mediaoctus.com/dashboard",
+        "selector": "#browser-scene-1 > div:nth-of-type(1) > div:nth-of-type(2) > span:nth-of-type(2)",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 899.28,
+          "y": 312.37,
+          "width": 212.91,
+          "height": 14.62
+        },
+        "time": 2.125,
+        "times": [
+          0,
+          0,
+          0,
+          0,
+          0.375,
+          2,
+          2,
+          2,
+          2.125,
+          5.25,
+          5.5,
+          10.25,
+          10.5,
+          15.5,
+          15.5
+        ],
+        "fontPx": 12.67,
+        "floorPx": 28,
+        "seconds": 2.875,
+        "elements": [
+          {
+            "selector": "#browser-scene-1 > div:nth-of-type(1) > div:nth-of-type(2) > span:nth-of-type(2)",
+            "text": "crm.mediaoctus.com/dashboard",
+            "fontPx": 12.67,
+            "time": 2.125,
+            "seconds": 2.875
+          },
+          {
+            "selector": "#browser-scene-2 > div:nth-of-type(1) > div:nth-of-type(2) > span:nth-of-type(2)",
+            "text": "crm.mediaoctus.com/atr",
+            "fontPx": 12.75,
+            "time": 5.5,
+            "seconds": 4.5
+          },
+          {
+            "selector": "#browser-scene-3 > div:nth-of-type(1) > div:nth-of-type(2) > span:nth-of-type(2)",
+            "text": "crm.mediaoctus.com/proofs",
+            "fontPx": 12.75,
+            "time": 10.5,
+            "seconds": 4.5
+          },
+          {
+            "selector": "span.client-tag",
+            "text": "Media Octus",
+            "fontPx": 13,
+            "time": 0,
+            "seconds": 20
+          },
+          {
+            "selector": "div.developer-pill",
+            "text": "Engineered by",
+            "fontPx": 15,
+            "time": 0,
+            "seconds": 20
+          },
+          {
+            "selector": "div.developer-pill > span:nth-of-type(1)",
+            "text": "Binjwa IT Solutions",
+            "fontPx": 15,
+            "time": 0,
+            "seconds": 20
+          },
+          {
+            "selector": "span.brand-title",
+            "text": "Out-of-Home CRM",
+            "fontPx": 17,
+            "time": 0,
+            "seconds": 20
+          },
+          {
+            "selector": "#hero-sub",
+            "text": "Custom Built for · Engineered by",
+            "fontPx": 18,
+            "time": 2,
+            "seconds": 3
+          },
+          {
+            "selector": "#hero-sub > strong:nth-of-type(1)",
+            "text": "Media Octus",
+            "fontPx": 18,
+            "time": 2,
+            "seconds": 3
+          },
+          {
+            "selector": "#hero-sub > strong:nth-of-type(2)",
+            "text": "Binjwa IT Solutions",
+            "fontPx": 18,
+            "time": 2,
+            "seconds": 3
+          },
+          {
+            "selector": "#scene-2-header > p:nth-of-type(1)",
+            "text": "Real-time availability prevents double-booking across city-wide media assets",
+            "fontPx": 20,
+            "time": 5.25,
+            "seconds": 4.75
+          },
+          {
+            "selector": "#scene-3-header > p:nth-of-type(1)",
+            "text": "Generate public vendor upload links and audit physical billboard installations",
+            "fontPx": 20,
+            "time": 10.25,
+            "seconds": 4.75
+          },
+          {
+            "selector": "p.outro-client-text",
+            "text": "Engineered for",
+            "fontPx": 21.3,
+            "time": 15.5,
+            "seconds": 4.5
+          },
+          {
+            "selector": "p.outro-client-text > span:nth-of-type(1)",
+            "text": "Media Octus",
+            "fontPx": 21.3,
+            "time": 15.5,
+            "seconds": 4.5
+          },
+          {
+            "selector": "div.hook-old",
+            "text": "Still managing billboards on spreadsheets?",
+            "fontPx": 26,
+            "time": 0.375,
+            "seconds": 4.625
+          }
+        ]
+      }
+    ],
+    "enabled": true,
+    "step": 0.125,
+    "samples": 160
+  },
+  "audio": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "hdr": {
+    "autoPromotion": null,
+    "inspection": "available"
+  },
+  "snapshots": {
+    "enabled": false,
+    "files": [],
+    "times": [],
+    "findingFiles": []
+  }
+}

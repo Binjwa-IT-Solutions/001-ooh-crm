@@ -181,6 +181,12 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: ShieldCheck,
         roles: ['admin', 'hr'],
       },
+      {
+        href: '/settings/company',
+        label: 'Company settings',
+        icon: Building2,
+        roles: ['admin'],
+      },
     ],
   },
 ];

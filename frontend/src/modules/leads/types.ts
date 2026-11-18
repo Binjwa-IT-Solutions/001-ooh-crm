@@ -206,7 +206,9 @@ export interface LeadListQuery {
   overdueOnly?: boolean;
   fromDate?: string;
   toDate?: string;
-  sortBy?: 'receivedAt' | 'createdAt' | 'companyName' | 'source' | 'nextActionDate';
+  sortBy?: 'receivedAt' | 'createdAt' | 'claimedAt' | 'companyName' | 'source' | 'nextActionDate';
+  /** yes = a follow-up has been logged; no = not contacted yet */
+  contacted?: 'yes' | 'no';
   sortDir?: 'asc' | 'desc';
 }
 

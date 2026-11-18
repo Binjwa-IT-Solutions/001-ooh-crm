@@ -142,6 +142,12 @@ app.use('/api/candidates', candidateRoutes);
 import marketingRoutes from './modules/marketing/marketing.routes.js';
 app.use('/api/marketing', marketingRoutes);
 
+import { documentSignatureRoutes } from './modules/settings/document-signature.js';
+app.use('/api/settings/document-signature', documentSignatureRoutes);
+
+import { companyProfileRoutes } from './modules/settings/company-profile.js';
+app.use('/api/settings/company', companyProfileRoutes);
+
 import auditRoutes from './modules/audit/audit.routes.js';
 app.use('/api/audit', auditRoutes);
 

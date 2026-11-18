@@ -6,7 +6,7 @@ import { formatPaise, formatDate } from '@/modules/employees/format';
 import type { Payroll } from '../types';
 import { payrollApi } from '../api';
 import { X, Download, FileText, Building2, CheckCircle2, Printer } from 'lucide-react';
-import { COMPANY } from '@/shared/company';
+import { useCompanyAddressLines } from '@/shared/company-profile';
 
 interface PayslipModalProps {
   payroll: Payroll;
@@ -14,6 +14,7 @@ interface PayslipModalProps {
 }
 
 export function PayslipModal({ payroll, onClose }: PayslipModalProps) {
+  const companyAddressLines = useCompanyAddressLines();
   const [isDownloading, setIsDownloading] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const employee = payroll.employeeId;
@@ -103,7 +104,7 @@ export function PayslipModal({ payroll, onClose }: PayslipModalProps) {
                   MEDIA OCTUS PVT LTD
                 </h1>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  {COMPANY.address}
+                  {companyAddressLines.join(', ')}
                 </p>
                 <p className="text-xs text-slate-500">accounts@mediaoctus.com</p>
               </div>

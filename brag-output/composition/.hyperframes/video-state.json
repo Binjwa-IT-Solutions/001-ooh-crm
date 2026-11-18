@@ -1,0 +1,434 @@
+{
+  "version": 1,
+  "historyId": "afa033af-5a49-46ec-bb15-c1d9a09a2116",
+  "currentRevision": "f6814fe8-d1a4-4860-bacc-748ac1805369",
+  "pendingChanges": false,
+  "files": {
+    "assets/voiceover.wav": {
+      "hash": "96ca3654e700600ba82763661b2fe06c608424d718ab5c6c5ac3ff013f32ac36",
+      "content": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\96\\96ca3654e700600ba82763661b2fe06c608424d718ab5c6c5ac3ff013f32ac36"
+    },
+    "hyperframes.json": {
+      "hash": "53dbce1e19aa713cbb12ee0bc4d206143b45ab15e6ffbfcaa8f69572d4d24d50",
+      "content": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\53\\53dbce1e19aa713cbb12ee0bc4d206143b45ab15e6ffbfcaa8f69572d4d24d50"
+    },
+    "index.html": {
+      "hash": "7c635416fa35c3d60fcb00cf6276d48eb78e605d618468758ddac4e5a14bb355",
+      "content": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\7c\\7c635416fa35c3d60fcb00cf6276d48eb78e605d618468758ddac4e5a14bb355"
+    },
+    "package.json": {
+      "hash": "3b308395590d52af23799f0cff92a84a4181d6661336c46b0520828d5710a60f",
+      "content": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\3b\\3b308395590d52af23799f0cff92a84a4181d6661336c46b0520828d5710a60f"
+    },
+    "assets/music/track.mp3": {
+      "hash": "aa56ab1cdcbef6b05566c6a7c114323078580ccf6a740a9e6c6b6c4b40b4389f",
+      "content": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\aa\\aa56ab1cdcbef6b05566c6a7c114323078580ccf6a740a9e6c6b6c4b40b4389f"
+    },
+    "assets/screens/screen-campaigns.png": {
+      "hash": "74457facabfe8bd81d5a3386e58ac2d3e1dff0f3515c88deabe2f73f9c6d94b7",
+      "content": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\74\\74457facabfe8bd81d5a3386e58ac2d3e1dff0f3515c88deabe2f73f9c6d94b7"
+    },
+    "assets/screens/screen-dashboard.png": {
+      "hash": "e0700a6c4b1034d445d2fc6cf6b6a1f6a18387313a22bb646bb583cb78d5cc7a",
+      "content": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\e0\\e0700a6c4b1034d445d2fc6cf6b6a1f6a18387313a22bb646bb583cb78d5cc7a"
+    },
+    "assets/screens/screen-login.png": {
+      "hash": "94fc2e61890efd9223c3fc322b1fa1322176070f3871aa766617e11b0bb09e4f",
+      "content": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\94\\94fc2e61890efd9223c3fc322b1fa1322176070f3871aa766617e11b0bb09e4f"
+    },
+    "assets/screens/screen-proofs.png": {
+      "hash": "2b0f783824f0c48a1fba798e5c98f40a91e37d4de08d53649b740642bd482c9d",
+      "content": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\2b\\2b0f783824f0c48a1fba798e5c98f40a91e37d4de08d53649b740642bd482c9d"
+    },
+    "assets/screens/screen-quotations.png": {
+      "hash": "e3c3ceb536702fdd0fd83e50e388fb4a368cb30137c46fe56cc469244d1ede69",
+      "content": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\e3\\e3c3ceb536702fdd0fd83e50e388fb4a368cb30137c46fe56cc469244d1ede69"
+    },
+    "assets/screens/screen-sites.png": {
+      "hash": "d70103f2564fb10d69b12bec9f77a0695285959a4b42277a6e85ce6a3d2bdf5f",
+      "content": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\d7\\d70103f2564fb10d69b12bec9f77a0695285959a4b42277a6e85ce6a3d2bdf5f"
+    },
+    "capture-screens.mjs": {
+      "hash": "bccf9779be751cb7bb86e6ba8edaa32c3413285cf73123c6e2ccc023e1257a8c",
+      "content": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\bc\\bccf9779be751cb7bb86e6ba8edaa32c3413285cf73123c6e2ccc023e1257a8c"
+    },
+    "package-lock.json": {
+      "hash": "56fb1a52138f4999a4b5483e108d28a3405fc829b09f9fc7ea0e4f157e64c393",
+      "content": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\56\\56fb1a52138f4999a4b5483e108d28a3405fc829b09f9fc7ea0e4f157e64c393"
+    },
+    "assets/screens/screen-dashboard-bg.png": {
+      "hash": "e0700a6c4b1034d445d2fc6cf6b6a1f6a18387313a22bb646bb583cb78d5cc7a",
+      "content": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\e0\\e0700a6c4b1034d445d2fc6cf6b6a1f6a18387313a22bb646bb583cb78d5cc7a"
+    }
+  },
+  "revisions": {
+    "fd11abf3-1c3c-433b-9e74-e5cfd87406f0": {
+      "actor": {
+        "kind": "outside",
+        "name": "Outside"
+      },
+      "label": "Changed outside the app",
+      "startedAt": 1793173681279,
+      "endedAt": 1793173681282,
+      "files": {
+        "index.html": {
+          "before": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\46\\466d5d45d5a9cb32de7b5d044658e45bc9ff792b8166880dede1e913f630fedb",
+          "after": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\f3\\f3a6c052cf84e744c564ee660e3734d739dc864c7ce1226236104498f3667ad4"
+        }
+      }
+    },
+    "1ede0a0a-6066-4943-8295-de2925748a48": {
+      "actor": {
+        "kind": "outside",
+        "name": "Outside"
+      },
+      "label": "Changed outside the app",
+      "startedAt": 1793173713587,
+      "endedAt": 1793173713590,
+      "files": {
+        "index.html": {
+          "before": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\f3\\f3a6c052cf84e744c564ee660e3734d739dc864c7ce1226236104498f3667ad4",
+          "after": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\41\\416c952b6a8f0a30e7e60a80ba961cef6e45abce572d73191f4e7dcfbb27874f"
+        }
+      }
+    },
+    "7fa55098-711b-40e9-9679-6e970d3d2b06": {
+      "actor": {
+        "kind": "outside",
+        "name": "Outside"
+      },
+      "label": "Changed outside the app",
+      "startedAt": 1793174274804,
+      "endedAt": 1793174274869,
+      "files": {
+        "assets/voiceover.wav": {
+          "before": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\46\\4686a357cac27a5292ab4a0be876831268df17fd15724ac3c1e906ef055ebd9b",
+          "after": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\96\\96ca3654e700600ba82763661b2fe06c608424d718ab5c6c5ac3ff013f32ac36"
+        },
+        "index.html": {
+          "before": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\41\\416c952b6a8f0a30e7e60a80ba961cef6e45abce572d73191f4e7dcfbb27874f",
+          "after": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\0c\\0c4ea3f51cb87e41c688c644ff93ddaef64b9dfad634eb56ed9290785117b4d0"
+        }
+      }
+    },
+    "d67c2dfd-c9ed-419d-b59a-abf18073b7bd": {
+      "actor": {
+        "kind": "outside",
+        "name": "Outside"
+      },
+      "label": "Changed outside the app",
+      "startedAt": 1793184732955,
+      "endedAt": 1793184733083,
+      "files": {
+        "assets/screens/screen-campaigns.png": {
+          "before": null,
+          "after": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\74\\74457facabfe8bd81d5a3386e58ac2d3e1dff0f3515c88deabe2f73f9c6d94b7"
+        },
+        "assets/screens/screen-dashboard.png": {
+          "before": null,
+          "after": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\e0\\e0700a6c4b1034d445d2fc6cf6b6a1f6a18387313a22bb646bb583cb78d5cc7a"
+        },
+        "assets/screens/screen-login.png": {
+          "before": null,
+          "after": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\94\\94fc2e61890efd9223c3fc322b1fa1322176070f3871aa766617e11b0bb09e4f"
+        },
+        "assets/screens/screen-proofs.png": {
+          "before": null,
+          "after": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\2b\\2b0f783824f0c48a1fba798e5c98f40a91e37d4de08d53649b740642bd482c9d"
+        },
+        "assets/screens/screen-quotations.png": {
+          "before": null,
+          "after": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\e3\\e3c3ceb536702fdd0fd83e50e388fb4a368cb30137c46fe56cc469244d1ede69"
+        },
+        "assets/screens/screen-sites.png": {
+          "before": null,
+          "after": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\d7\\d70103f2564fb10d69b12bec9f77a0695285959a4b42277a6e85ce6a3d2bdf5f"
+        },
+        "capture-screens.mjs": {
+          "before": null,
+          "after": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\bc\\bccf9779be751cb7bb86e6ba8edaa32c3413285cf73123c6e2ccc023e1257a8c"
+        },
+        "index.html": {
+          "before": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\0c\\0c4ea3f51cb87e41c688c644ff93ddaef64b9dfad634eb56ed9290785117b4d0",
+          "after": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\6d\\6de5523709fb509de0128cc5f46524164a254126b767df90fb16c3a8338e8db8"
+        },
+        "package-lock.json": {
+          "before": null,
+          "after": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\56\\56fb1a52138f4999a4b5483e108d28a3405fc829b09f9fc7ea0e4f157e64c393"
+        },
+        "package.json": {
+          "before": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\3d\\3d5da3dfac2eabd85d093b83768328ca8f820fea3bfec29643bb08bb3fac34d6",
+          "after": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\3b\\3b308395590d52af23799f0cff92a84a4181d6661336c46b0520828d5710a60f"
+        }
+      }
+    },
+    "8c589a45-2e51-429a-89f6-1ad81c2c0e81": {
+      "actor": {
+        "kind": "outside",
+        "name": "Outside"
+      },
+      "label": "Changed outside the app",
+      "startedAt": 1793184776003,
+      "endedAt": 1793184776027,
+      "files": {
+        "assets/screens/screen-dashboard-bg.png": {
+          "before": null,
+          "after": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\e0\\e0700a6c4b1034d445d2fc6cf6b6a1f6a18387313a22bb646bb583cb78d5cc7a"
+        },
+        "index.html": {
+          "before": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\6d\\6de5523709fb509de0128cc5f46524164a254126b767df90fb16c3a8338e8db8",
+          "after": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\33\\33097c7532aa19aeecf0485d46d24302e5cb1052a7a9f152046435ab629c4403"
+        }
+      }
+    },
+    "f6814fe8-d1a4-4860-bacc-748ac1805369": {
+      "actor": {
+        "kind": "outside",
+        "name": "Outside"
+      },
+      "label": "Changed outside the app",
+      "startedAt": 1793184978432,
+      "endedAt": 1793184978436,
+      "files": {
+        "index.html": {
+          "before": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\33\\33097c7532aa19aeecf0485d46d24302e5cb1052a7a9f152046435ab629c4403",
+          "after": "C:\\Users\\Tarun\\.cache\\hyperframes\\history\\afa033af-5a49-46ec-bb15-c1d9a09a2116\\blobs\\7c\\7c635416fa35c3d60fcb00cf6276d48eb78e605d618468758ddac4e5a14bb355"
+        }
+      }
+    }
+  },
+  "checks": {
+    "latest": {
+      "revision": "f6814fe8-d1a4-4860-bacc-748ac1805369",
+      "id": "73fc2870-7110-41e4-9969-0f19511b765d"
+    },
+    "revisions": {
+      "fd11abf3-1c3c-433b-9e74-e5cfd87406f0": [
+        {
+          "id": "48e39268-1514-473e-935d-c076cb4b5065",
+          "scope": "project",
+          "metadata": {
+            "ok": false,
+            "browserSkipped": true,
+            "options": {
+              "samples": 9,
+              "atTransitions": false,
+              "maxIssues": 80,
+              "collapseStatic": true,
+              "tolerance": 2,
+              "timeout": 10000,
+              "contrast": true,
+              "strict": false,
+              "snapshots": false,
+              "browserGpuMode": "auto"
+            }
+          },
+          "createdAt": 1793173681712,
+          "contentHash": "d4063cfc933c8eddc876aaf5cb41d5060b165256ff8677ea5b61bf512fe161f4",
+          "revision": "fd11abf3-1c3c-433b-9e74-e5cfd87406f0",
+          "inputFingerprint": "eecc4142f9028c5e52a774fdb91e5a78c3de0891d5004b2d293585080d0ef761",
+          "inputScope": "local-project-files",
+          "attribution": "recorded-revision",
+          "status": "cleaned",
+          "cleanedAfterRender": "288fc1b5-90a4-4dde-bdff-527cffc15efb"
+        }
+      ],
+      "1ede0a0a-6066-4943-8295-de2925748a48": [
+        {
+          "id": "a69d72cd-0b77-4fa0-8224-4af541141dc1",
+          "scope": "project",
+          "metadata": {
+            "ok": true,
+            "browserSkipped": false,
+            "options": {
+              "samples": 9,
+              "atTransitions": false,
+              "maxIssues": 80,
+              "collapseStatic": true,
+              "tolerance": 2,
+              "timeout": 10000,
+              "contrast": true,
+              "strict": false,
+              "snapshots": false,
+              "browserGpuMode": "auto"
+            }
+          },
+          "createdAt": 1793173721787,
+          "contentHash": "2bcde132685693f1503ec3c6bb6dcdfb059c96e398dda47a0ab0c1e783af82fe",
+          "revision": "1ede0a0a-6066-4943-8295-de2925748a48",
+          "inputFingerprint": "176933ab3e304639410a0fc0a984dd84ae3a77eabe04fe185c0e257661225075",
+          "inputScope": "local-project-files",
+          "attribution": "recorded-revision",
+          "status": "cleaned",
+          "cleanedAfterRender": "d78a66fa-2601-4ee2-b571-8cf86ec486bc"
+        }
+      ],
+      "7fa55098-711b-40e9-9679-6e970d3d2b06": [
+        {
+          "id": "e416cd0f-f051-4036-aed5-03244c1aee47",
+          "scope": "project",
+          "report": "C:\\Users\\Tarun\\Documents\\binjwa\\001\\code\\brag-output\\composition\\.hyperframes\\artifacts\\checks\\e416cd0f-f051-4036-aed5-03244c1aee47.json",
+          "metadata": {
+            "ok": true,
+            "browserSkipped": false,
+            "options": {
+              "samples": 9,
+              "atTransitions": false,
+              "maxIssues": 80,
+              "collapseStatic": true,
+              "tolerance": 2,
+              "timeout": 10000,
+              "contrast": true,
+              "strict": false,
+              "snapshots": false,
+              "browserGpuMode": "auto"
+            }
+          },
+          "createdAt": 1793174282150,
+          "contentHash": "15a30b6a7b307fe702931b3c3c65c01632da47973013165b30690d48685df134",
+          "revision": "7fa55098-711b-40e9-9679-6e970d3d2b06",
+          "inputFingerprint": "33bb8e8df83078e1dcd642f636b2633cb6a98c226ec579c92f799f5bf6a08998",
+          "inputScope": "local-project-files",
+          "attribution": "recorded-revision"
+        }
+      ],
+      "d67c2dfd-c9ed-419d-b59a-abf18073b7bd": [
+        {
+          "id": "dd95387d-39f5-424f-81b6-f5a3c766599e",
+          "scope": "project",
+          "metadata": {
+            "ok": false,
+            "browserSkipped": true,
+            "options": {
+              "samples": 9,
+              "atTransitions": false,
+              "maxIssues": 80,
+              "collapseStatic": true,
+              "tolerance": 2,
+              "timeout": 10000,
+              "contrast": true,
+              "strict": false,
+              "snapshots": false,
+              "browserGpuMode": "auto"
+            }
+          },
+          "createdAt": 1793184733319,
+          "contentHash": "401b005d16155b4a28773ad0e8293534b3f81631595cb9add6ad69f73057d41b",
+          "revision": "d67c2dfd-c9ed-419d-b59a-abf18073b7bd",
+          "inputFingerprint": "7973d1c82c7e75c70442d5214a572337e37956a11f13017285255c1d4b9edc81",
+          "inputScope": "local-project-files",
+          "attribution": "recorded-revision",
+          "status": "cleaned",
+          "cleanedAfterRender": "d78a66fa-2601-4ee2-b571-8cf86ec486bc"
+        }
+      ],
+      "8c589a45-2e51-429a-89f6-1ad81c2c0e81": [
+        {
+          "id": "437a0b95-3b25-4f65-bc58-ad37a00bf433",
+          "scope": "project",
+          "metadata": {
+            "ok": true,
+            "browserSkipped": false,
+            "options": {
+              "samples": 9,
+              "atTransitions": false,
+              "maxIssues": 80,
+              "collapseStatic": true,
+              "tolerance": 2,
+              "timeout": 10000,
+              "contrast": true,
+              "strict": false,
+              "snapshots": false,
+              "browserGpuMode": "auto"
+            }
+          },
+          "createdAt": 1793184791620,
+          "contentHash": "a2ef851e8980917b64075b3d39a3dca451fb558153f36f8bf82b59d9bd0ee56b",
+          "revision": "8c589a45-2e51-429a-89f6-1ad81c2c0e81",
+          "inputFingerprint": "2271327146bedf9997d65718d33929987d4a29e7ac528522a237a5ea4b539ba8",
+          "inputScope": "local-project-files",
+          "attribution": "recorded-revision",
+          "status": "cleaned",
+          "cleanedAfterRender": "d78a66fa-2601-4ee2-b571-8cf86ec486bc"
+        }
+      ],
+      "f6814fe8-d1a4-4860-bacc-748ac1805369": [
+        {
+          "id": "73fc2870-7110-41e4-9969-0f19511b765d",
+          "scope": "project",
+          "report": "C:\\Users\\Tarun\\Documents\\binjwa\\001\\code\\brag-output\\composition\\.hyperframes\\artifacts\\checks\\73fc2870-7110-41e4-9969-0f19511b765d.json",
+          "metadata": {
+            "ok": true,
+            "browserSkipped": false,
+            "options": {
+              "samples": 9,
+              "atTransitions": false,
+              "maxIssues": 80,
+              "collapseStatic": true,
+              "tolerance": 2,
+              "timeout": 10000,
+              "contrast": true,
+              "strict": false,
+              "snapshots": false,
+              "browserGpuMode": "auto"
+            }
+          },
+          "createdAt": 1793184990202,
+          "contentHash": "261b8e39d3018b20e35d28dd80e51c328c9929aaa3bb2613051743350fae7716",
+          "revision": "f6814fe8-d1a4-4860-bacc-748ac1805369",
+          "inputFingerprint": "67d6671414c7db3c21bad141521955d331646a112c7aa0a6d94d42d4ffb3a9ce",
+          "inputScope": "local-project-files",
+          "attribution": "recorded-revision"
+        }
+      ]
+    },
+    "unversioned": [
+      {
+        "id": "8a5c2fca-f1dd-4d30-8d77-c6a219db3d02",
+        "scope": "project",
+        "report": "C:\\Users\\Tarun\\Documents\\binjwa\\001\\code\\brag-output\\composition\\.hyperframes\\artifacts\\checks\\8a5c2fca-f1dd-4d30-8d77-c6a219db3d02.json",
+        "metadata": {
+          "ok": false,
+          "browserSkipped": false,
+          "options": {
+            "samples": 9,
+            "atTransitions": false,
+            "maxIssues": 80,
+            "collapseStatic": true,
+            "tolerance": 2,
+            "timeout": 10000,
+            "contrast": true,
+            "strict": false,
+            "snapshots": false,
+            "browserGpuMode": "auto"
+          }
+        },
+        "createdAt": 1793173488764,
+        "contentHash": "3ab2999b01976d6b64d1c8fb92fb1e708f43f44131f774c18e89bccb6cf4a18f",
+        "revision": null,
+        "inputFingerprint": "f9ddf207ff7483f33eb8639ae2aa47f288536eaf4a44559bd9e48e36460c801e",
+        "inputScope": "local-project-files",
+        "attribution": "unversioned"
+      }
+    ]
+  },
+  "snapshots": {
+    "latest": null,
+    "revisions": {},
+    "unversioned": []
+  },
+  "renders": {
+    "latest": {
+      "id": "d78a66fa-2601-4ee2-b571-8cf86ec486bc",
+      "completedAt": 1793185079383,
+      "output": "C:\\Users\\Tarun\\Documents\\binjwa\\001\\code\\brag-output\\brag.mp4",
+      "status": "completed",
+      "revision": "f6814fe8-d1a4-4860-bacc-748ac1805369"
+    },
+    "retainedRevisions": [
+      "f6814fe8-d1a4-4860-bacc-748ac1805369",
+      "7fa55098-711b-40e9-9679-6e970d3d2b06"
+    ]
+  },
+  "pendingArtifactCleanup": []
+}

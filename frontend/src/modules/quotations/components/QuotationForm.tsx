@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -19,6 +19,7 @@ import type { Lead } from "@/modules/leads/types";
 import type { Quotation } from "../types";
 import LeadCombobox from "./LeadCombobox";
 import SiteCombobox, { SiteOption } from "./SiteCombobox";
+import { readImageFile, useCompanySignature } from "@/shared/document-signature";
 
 interface QuotationLineForm {
   siteId: string;
@@ -72,8 +73,12 @@ export default function QuotationForm({ initialLeadId, initialQuote, onBack, onS
   // E-Signature / Authorized Signatory State
   const [showSignature, setShowSignature] = useState<boolean>(true);
   const [signatureImage, setSignatureImage] = useState<string | undefined>(undefined);
-  const [signatoryName, setSignatoryName] = useState<string>("Rishabh Jain");
-  const [signatoryDesignation, setSignatoryDesignation] = useState<string>("Authorized Signatory");
+  // Empty = use the company default from Settings → Document signature
+  const [signatoryName, setSignatoryName] = useState<string>("");
+  const [signatoryDesignation, setSignatoryDesignation] = useState<string>("");
+  const companySignature = useCompanySignature();
+  const signatureInputRef = useRef<HTMLInputElement>(null);
+  const [signatureError, setSignatureError] = useState<string | null>(null);
 
   // Terms & Conditions Dynamic List
   const [termsList, setTermsList] = useState<string[]>([
@@ -159,8 +164,8 @@ export default function QuotationForm({ initialLeadId, initialQuote, onBack, onS
         if (q.bankDetails.ifscCode) setIfscCode(q.bankDetails.ifscCode);
         if (q.bankDetails.branch) setBranch(q.bankDetails.branch);
       }
+      setShowSignature(!q.hideSignature);
       if (q.signatureImage || q.signatoryName) {
-        setShowSignature(true);
         if (q.signatureImage) setSignatureImage(q.signatureImage);
         if (q.signatoryName) setSignatoryName(q.signatoryName);
         if (q.signatoryDesignation) setSignatoryDesignation(q.signatoryDesignation);
@@ -325,9 +330,11 @@ export default function QuotationForm({ initialLeadId, initialQuote, onBack, onS
               branch,
             }
           : undefined,
-        signatureImage: showSignature ? signatureImage : undefined,
-        signatoryName: showSignature ? signatoryName : undefined,
-        signatoryDesignation: showSignature ? signatoryDesignation : undefined,
+        // Blank fields fall back to the company signature on the server
+        hideSignature: !showSignature,
+        signatureImage: showSignature ? signatureImage ?? "" : "",
+        signatoryName: showSignature ? signatoryName.trim() : "",
+        signatoryDesignation: showSignature ? signatoryDesignation.trim() : "",
         validUntil,
         sites: lineItems.map((item, idx) => {
           const computed = computedLines[idx] || { days: 30 };
@@ -906,6 +913,77 @@ export default function QuotationForm({ initialLeadId, initialQuote, onBack, onS
           <span>4. Signatory, Validity &amp; Special Remarks</span>
         </h3>
 
+        {/* Signature */}
+        <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4 dark:border-slate-800 dark:bg-slate-800/40">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-200 cursor-pointer">
+              <input type="checkbox" checked={showSignature} onChange={(e) => setShowSignature(e.target.checked)} />
+              Print signature on this quote
+            </label>
+            {showSignature && (
+              <div className="flex items-center gap-2">
+                <input
+                  ref={signatureInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!file) return;
+                    try {
+                      setSignatureError(null);
+                      setSignatureImage(await readImageFile(file));
+                    } catch (err) {
+                      setSignatureError(err instanceof Error ? err.message : "Could not use that file.");
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => signatureInputRef.current?.click()}
+                  className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:border-[#8B2424] hover:text-[#8B2424] dark:border-slate-700 dark:bg-slate-900 dark:text-gray-200"
+                >
+                  {signatureImage ? "Replace this quote's signature" : "Use a different signature"}
+                </button>
+                {signatureImage && (
+                  <button
+                    type="button"
+                    onClick={() => setSignatureImage(undefined)}
+                    className="text-[11px] font-semibold text-gray-500 hover:text-[#8B2424]"
+                  >
+                    Use company signature
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {showSignature && (
+            <div className="mt-3 flex items-center gap-3">
+              <div className="h-14 min-w-[140px] rounded-lg border border-dashed border-gray-300 bg-white px-2 flex items-center justify-center dark:border-slate-700 dark:bg-slate-900">
+                {signatureImage || companySignature?.signatureImage ? (
+                  <img
+                    src={(signatureImage || companySignature?.signatureImage) as string}
+                    alt="Signature"
+                    className="max-h-12 max-w-[160px] object-contain"
+                  />
+                ) : (
+                  <span className="text-[10px] text-gray-400">No signature uploaded</span>
+                )}
+              </div>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                {signatureImage
+                  ? "This quote uses its own signature."
+                  : companySignature?.signatureImage
+                    ? "Company signature (from Settings → Document signature)."
+                    : "No company signature yet — an admin can upload one in Settings → Document signature. The name will still print."}
+              </p>
+            </div>
+          )}
+          {signatureError && <p className="mt-2 text-[11px] font-medium text-red-600">{signatureError}</p>}
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1">
@@ -915,7 +993,8 @@ export default function QuotationForm({ initialLeadId, initialQuote, onBack, onS
               type="text"
               value={signatoryName}
               onChange={(e) => setSignatoryName(e.target.value)}
-              placeholder="e.g. Rishabh Jain"
+              disabled={!showSignature}
+              placeholder={companySignature?.signatoryName ? `Default: ${companySignature.signatoryName}` : "e.g. Rishabh Jain"}
               className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-900 outline-none focus:border-[#8B2424] dark:border-slate-800 dark:bg-slate-900 dark:text-white"
             />
           </div>
@@ -928,7 +1007,8 @@ export default function QuotationForm({ initialLeadId, initialQuote, onBack, onS
               type="text"
               value={signatoryDesignation}
               onChange={(e) => setSignatoryDesignation(e.target.value)}
-              placeholder="Authorized Signatory"
+              disabled={!showSignature}
+              placeholder={companySignature?.signatoryDesignation ? `Default: ${companySignature.signatoryDesignation}` : "Authorized Signatory"}
               className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-900 outline-none focus:border-[#8B2424] dark:border-slate-800 dark:bg-slate-900 dark:text-white"
             />
           </div>

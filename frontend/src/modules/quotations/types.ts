@@ -38,6 +38,10 @@ export interface Quotation {
   terms?: string[];
   bankDetails?: BankDetails;
   signatureImage?: string;
+  /** true = print no signature on this quote */
+  hideSignature?: boolean;
+  /** Company stamp (public proposal payload) */
+  stampImage?: string | null;
   signatoryName?: string;
   signatoryDesignation?: string;
   sites: QuotationLineItem[];
@@ -118,6 +122,10 @@ export interface CreateQuotationFormValues {
   terms?: string[];
   bankDetails?: BankDetails;
   signatureImage?: string;
+  /** true = print no signature on this quote */
+  hideSignature?: boolean;
+  /** Company stamp (public proposal payload) */
+  stampImage?: string | null;
   signatoryName?: string;
   signatoryDesignation?: string;
   validUntil?: string;

@@ -6,6 +6,8 @@ import { invoicesApi } from '@/modules/finance/api';
 import type { Invoice } from '@/modules/finance/types';
 import { formatCurrency, formatDate } from '@/modules/finance/utils/formatters';
 import { COMPANY, DEFAULT_PLACE_OF_SUPPLY } from '@/shared/company';
+import type { CompanySignature } from '@/shared/document-signature';
+import { SignatureBlock } from '@/shared/signature-block';
 
 interface PublicShareInvoicePageProps {
   params: Promise<{ token: string }>;
@@ -14,6 +16,8 @@ interface PublicShareInvoicePageProps {
 export default function PublicShareInvoicePage({ params }: PublicShareInvoicePageProps) {
   const { token } = use(params);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
+  const [companySignature, setCompanySignature] = useState<CompanySignature | null>(null);
+  const [companyAddressLines, setCompanyAddressLines] = useState<string[]>([...COMPANY.addressLines]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,6 +28,8 @@ export default function PublicShareInvoicePage({ params }: PublicShareInvoicePag
       try {
         const res = await invoicesApi.getPublicInvoice(token);
         setInvoice(res.invoice || res.data);
+        setCompanySignature(res.companySignature ?? null);
+        if (res.companyAddressLines?.length) setCompanyAddressLines(res.companyAddressLines);
       } catch (err: any) {
         setError(err?.message || 'Invoice not found or link has expired.');
       } finally {
@@ -113,9 +119,13 @@ export default function PublicShareInvoicePage({ params }: PublicShareInvoicePag
               <img src="/logo.png?v=4" alt="Media Octus" className="h-12 w-auto object-contain mb-3" />
               <h2 className="text-base font-bold text-slate-900">Media Octus Pvt Ltd</h2>
               <p className="text-xs text-slate-500 leading-relaxed max-w-xs">
-                {COMPANY.addressLines[0]},
-                <br />
-                {COMPANY.addressLines[1]}, India
+                {companyAddressLines.map((line, i) => (
+                  <span key={i}>
+                    {line}
+                    {i === companyAddressLines.length - 1 ? ', India' : ','}
+                    <br />
+                  </span>
+                ))}
                 <br />
                 GSTIN: 27AABCM8899K1ZZ · Email: accounts@mediaoctus.com
                 <br />
@@ -366,15 +376,7 @@ export default function PublicShareInvoicePage({ params }: PublicShareInvoicePag
               <p className="text-[11px] font-medium text-slate-700">Thank you for your business!</p>
               <p className="text-[10px] text-slate-400 mt-0.5">This is a computer-generated tax invoice document.</p>
             </div>
-            <div className="text-right">
-              <p className="font-bold text-slate-900 text-xs uppercase tracking-wide">For Media Octus Pvt Ltd</p>
-              <div className="h-12 flex items-center justify-end pr-2">
-                <span className="font-serif italic text-base text-slate-700 select-none tracking-wider opacity-90">
-                  Media Octus
-                </span>
-              </div>
-              <p className="text-[11px] font-medium text-slate-600 border-t border-slate-300 pt-1">Authorized Signatory</p>
-            </div>
+            <SignatureBlock signature={companySignature} />
           </div>
         </div>
       </div>

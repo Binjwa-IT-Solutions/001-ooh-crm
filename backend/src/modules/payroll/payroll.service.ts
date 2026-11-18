@@ -1,7 +1,8 @@
 import { Types } from 'mongoose';
 import { formattedSequence } from '../../core/db/sequence.js';
 import { NotFoundError, ConflictError, ValidationError } from '../../core/errors/index.js';
-import { formatPaise, renderPdf, DEFAULT_BRAND } from '../../core/pdf/index.js';
+import { formatPaise, renderPdf } from '../../core/pdf/index.js';
+import { getCompanyBrand } from '../settings/company-profile.js';
 import { Employee, type IEmployee } from '../employees/employees.model.js';
 import { AuthUser } from '../../core/auth/auth-model.js';
 import { SalaryStructure, type ISalaryStructure } from './salary.model.js';
@@ -545,7 +546,7 @@ export class PayrollService {
     const employee = payroll.employeeId as unknown as IEmployee;
     const snapshot = payroll.salaryStructureSnapshot as any;
     const period = payroll.periodLabel;
-    const brand = DEFAULT_BRAND;
+    const brand = await getCompanyBrand();
 
     const isValidText = (val: unknown): val is string => {
       if (val === null || val === undefined) return false;

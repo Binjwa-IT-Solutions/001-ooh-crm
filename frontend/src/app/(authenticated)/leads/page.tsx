@@ -306,6 +306,7 @@ function LeadsContent() {
   const [city, setCity] = useState('');
   const [source, setSource] = useState<LeadSource | ''>('');
   const [overdueOnly, setOverdueOnly] = useState(() => urlOverdue);
+  const [contacted, setContacted] = useState<'' | 'yes' | 'no'>('');
   const [sortBy, setSortBy] = useState<'nextActionDate' | 'createdAt' | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
@@ -378,6 +379,7 @@ function LeadsContent() {
     ...(selectedAgentId && activeTab === 'all' ? { assignedTo: selectedAgentId } : {}),
     ...(overdueOnly && activeTab !== 'unclaimed' && activeTab !== 'rejected' ? { overdueOnly: true } : {}),
     ...(sortBy ? { sortBy, sortDir } : {}),
+    ...(contacted && activeTab !== 'unclaimed' && activeTab !== 'rejected' ? { contacted } : {}),
   };
 
   const pollInterval = activeTab === 'unclaimed' ? 15000 : undefined;
@@ -563,6 +565,7 @@ function LeadsContent() {
       const queryParams = new URLSearchParams();
       if (activeTab === 'unclaimed') queryParams.set('unassigned', 'true');
       if (activeTab === 'my-leads') queryParams.set('assignedToMe', 'true');
+      if (contacted && activeTab !== 'unclaimed' && activeTab !== 'rejected') queryParams.set('contacted', contacted);
       if (activeTab === 'rejected') queryParams.set('status', 'Rejected');
       else if (status) queryParams.set('status', status);
       if (city) queryParams.set('city', city);
@@ -821,6 +824,46 @@ function LeadsContent() {
               )}
             </button>
 
+            {/* Contacted / not contacted */}
+            <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-0.5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+              {([
+                { value: '', label: 'All' },
+                { value: 'no', label: 'Not contacted' },
+                { value: 'yes', label: 'Contacted' },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value || 'all'}
+                  type="button"
+                  onClick={() => {
+                    setContacted(opt.value);
+                    setPage(1);
+                  }}
+                  title={
+                    opt.value === 'no'
+                      ? 'Still New — no call or follow-up logged yet'
+                      : opt.value === 'yes'
+                        ? 'At least one call / follow-up logged'
+                        : undefined
+                  }
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+                    contacted === opt.value
+                      ? opt.value === 'no'
+                        ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
+                        : opt.value === 'yes'
+                          ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+                          : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100'
+                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {activeTab === 'my-leads' && !sortBy && (
+              <span className="text-[11px] text-slate-400 dark:text-slate-500">Sorted: most recently claimed first</span>
+            )}
+
             {sortBy === 'nextActionDate' && (
               <button
                 type="button"
@@ -834,11 +877,12 @@ function LeadsContent() {
             )}
           </div>
 
-          {(overdueOnly || sortBy || search || status || city || source) && (
+          {(overdueOnly || sortBy || search || status || city || source || contacted) && (
             <button
               type="button"
               onClick={() => {
                 setOverdueOnly(false);
+                setContacted('');
                 setSortBy('');
                 setSortDir('asc');
                 setSearch('');

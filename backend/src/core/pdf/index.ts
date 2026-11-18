@@ -36,6 +36,20 @@ export const DEFAULT_BRAND: PdfBrand = {
   email: 'hello@mediaoctus.com',
 };
 
+/** Decodes a `data:image/...;base64,` URL (or reads a file path) into a buffer PDFKit can draw. */
+export function imageBuffer(source?: string | null): Buffer | null {
+  if (!source) return null;
+  try {
+    if (source.startsWith('data:image/')) {
+      return Buffer.from(source.replace(/^data:image\/[\w+.-]+;base64,/, ''), 'base64');
+    }
+    if (fs.existsSync(source)) return fs.readFileSync(source);
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
+
 const PAGE_MARGIN = 48;
 const INK = '#0f172a';
 const MUTED = '#64748b';
@@ -345,6 +359,8 @@ export interface QuotationBillBookPdfOptions {
     image?: string;
     signatoryName?: string;
     signatoryDesignation?: string;
+    /** Company stamp/seal, drawn beside the signature. */
+    stamp?: string;
   };
 }
 
@@ -804,24 +820,23 @@ export function renderQuotationBillBookPdf(options: QuotationBillBookPdfOptions)
       );
 
       let imageRendered = false;
-      if (options.signature?.image) {
+      const stampBuf = imageBuffer(options.signature?.stamp);
+      if (stampBuf) {
         try {
-          let sigBuf: Buffer | null = null;
-          const sigStr = options.signature.image;
-          if (sigStr.startsWith('data:image/')) {
-            const base64Data = sigStr.replace(/^data:image\/\w+;base64,/, '');
-            sigBuf = Buffer.from(base64Data, 'base64');
-          } else if (fs.existsSync(sigStr)) {
-            sigBuf = fs.readFileSync(sigStr);
-          }
-          if (sigBuf) {
-            const imgWidth = 72;
-            const imgHeight = 24;
-            const imgX = signBoxX + (signBoxWidth - imgWidth) / 2;
-            const imgY = signY + 14;
-            doc.image(sigBuf, imgX, imgY, { fit: [imgWidth, imgHeight], align: 'center' });
-            imageRendered = true;
-          }
+          doc.image(stampBuf, signBoxX + 4, signY + 12, { fit: [30, 30] });
+        } catch {
+          // ignore a broken stamp image
+        }
+      }
+      const sigBuf = imageBuffer(options.signature?.image);
+      if (sigBuf) {
+        try {
+          const imgWidth = 72;
+          const imgHeight = 24;
+          const imgX = signBoxX + (signBoxWidth - imgWidth) / 2;
+          const imgY = signY + 14;
+          doc.image(sigBuf, imgX, imgY, { fit: [imgWidth, imgHeight], align: 'center' });
+          imageRendered = true;
         } catch {
           // ignore error and render text fallback
         }
