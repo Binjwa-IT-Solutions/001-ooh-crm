@@ -35,6 +35,22 @@ test('redact is case-insensitive about key names', () => {
   assert.equal(masked.PANNumber, '[redacted]');
 });
 
+test('redact masks MFA enrollment material', () => {
+  const masked = redact({
+    enrollmentToken: 'setup-token',
+    secret: 'base32-secret',
+    otpauthUrl: 'otpauth://totp/example?secret=base32-secret',
+    totpCode: '123456',
+    secondAdmin: { password: 'password', totpCode: '654321' },
+  }) as Record<string, unknown>;
+
+  assert.equal(masked.enrollmentToken, '[redacted]');
+  assert.equal(masked.secret, '[redacted]');
+  assert.equal(masked.otpauthUrl, '[redacted]');
+  assert.equal(masked.totpCode, '[redacted]');
+  assert.deepEqual(masked.secondAdmin, { password: '[redacted]', totpCode: '[redacted]' });
+});
+
 test('redact reaches into nested objects and arrays', () => {
   const masked = redact({
     user: { profile: { password: 'secret' } },

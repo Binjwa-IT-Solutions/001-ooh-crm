@@ -113,21 +113,27 @@ export default function NotificationBell() {
   }, [open]);
 
   async function handleMarkRead(id: string, link?: string) {
-    try {
-      await api.post(`/api/notifications/${id}/read`, {});
-      setNotifications((prev) =>
-        prev.map((n) =>
-          n._id === id ? { ...n, readAt: new Date().toISOString() } : n,
-        ),
-      );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
-    } catch {
-      // ignore
-    }
-
     if (link) {
       setOpen(false);
-      router.push(link);
+      try {
+        router.push(link);
+      } catch (navErr) {
+        console.error("[NotificationBell] Navigation error:", navErr);
+      }
+    }
+
+    try {
+      await api.delete(`/api/notifications/${id}`);
+      setNotifications((prev) => {
+        const target = prev.find((n) => n._id === id);
+        if (target && !target.readAt) {
+          setUnreadCount((count) => Math.max(0, count - 1));
+        }
+        return prev.filter((n) => n._id !== id);
+      });
+      setToastNotification((prev) => (prev?._id === id ? null : prev));
+    } catch (err) {
+      console.error("[NotificationBell] Failed to delete notification:", err);
     }
   }
 
@@ -152,7 +158,7 @@ export default function NotificationBell() {
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         aria-label="View notifications"
-        className="relative -m-2.5 p-2.5 text-text-secondary hover:text-text-primary rounded-full border border-border-subtle shadow-sm ml-2 h-10 w-10 flex items-center justify-center transition-colors cursor-pointer hover:bg-slate-50 focus:outline-none"
+        className="relative m-1.5 p-2.5 text-text-secondary hover:text-text-primary rounded-full border border-border-subtle shadow-sm ml-2 h-10 w-10 flex items-center justify-center transition-colors cursor-pointer hover:bg-slate-50 focus:outline-none"
       >
         <Bell className="h-5 w-5 text-gray-700" />
 
@@ -214,18 +220,16 @@ export default function NotificationBell() {
                   <div
                     key={n._id}
                     onClick={() => handleMarkRead(n._id, n.link)}
-                    className={`flex items-start gap-3 p-3.5 transition-colors cursor-pointer ${
-                      isUnread
-                        ? "bg-[#FFF8F8] hover:bg-[#FFF0F0]"
-                        : "bg-white hover:bg-gray-50"
-                    }`}
+                    className={`flex items-start gap-3 p-3.5 transition-colors cursor-pointer ${isUnread
+                      ? "bg-[#FFF8F8] hover:bg-[#FFF0F0]"
+                      : "bg-white hover:bg-gray-50"
+                      }`}
                   >
                     <div
-                      className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                        isEscalation
-                          ? "bg-linear-to-br from-[#8B2424] to-[#A8333B] text-white shadow-xs"
-                          : "bg-blue-100 text-blue-700"
-                      }`}
+                      className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isEscalation
+                        ? "bg-linear-to-br from-[#8B2424] to-[#A8333B] text-white shadow-xs"
+                        : "bg-blue-100 text-blue-700"
+                        }`}
                     >
                       {isEscalation ? (
                         <ArrowUpRight className="h-4 w-4" />
@@ -237,9 +241,8 @@ export default function NotificationBell() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1">
                         <p
-                          className={`text-xs font-semibold truncate ${
-                            isUnread ? "text-gray-900" : "text-gray-700"
-                          }`}
+                          className={`text-xs font-semibold truncate ${isUnread ? "text-gray-900" : "text-gray-700"
+                            }`}
                         >
                           {n.title}
                         </p>

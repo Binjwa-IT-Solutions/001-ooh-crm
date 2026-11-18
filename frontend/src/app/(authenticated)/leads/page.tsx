@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/shared/auth/auth-context';
 import { useLeads } from '@/modules/leads/hooks/use-leads';
 import { leadsApi } from '@/modules/leads/api';
@@ -10,7 +12,8 @@ import { LeadStatus, LeadSource, Lead, LogCallValues } from '@/modules/leads/typ
 import { Card, Button, Badge, Spinner, Field, SelectField, Alert, Modal, TextAreaField } from '@/shared/ui';
 import LogCallModal from '@/modules/leads/component/log-call-modal';
 import QuickLogActionModal from '@/modules/leads/component/quick-log-action-modal';
-import { Timer, CheckCircle2, AlertCircle, Building2, Phone, Mail, MapPin, Info, Clock, ArrowUpDown, Download, Plus, ChevronDown, X, Check } from 'lucide-react';
+import EditLeadModal from '@/modules/leads/component/edit-lead-modal';
+import { Timer, CheckCircle2, AlertCircle, Building2, Phone, Mail, MapPin, Info, Clock, ArrowUpDown, Download, Plus, ChevronDown, X, Check, Pencil, RotateCw, XCircle } from 'lucide-react';
 
 const STATUS_STYLES: Record<string, string> = {
   New: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300',
@@ -52,20 +55,30 @@ function formatDateTime(dateStr?: string | Date | null) {
   });
 }
 
+function formatDate(dateStr?: string | Date | null) {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
 let toastIdCounter = 0;
 
 function getOverdueDetails(dateStr?: string | Date | null, now?: number) {
   if (!dateStr) return null;
   const d = new Date(dateStr);
+  d.setHours(23, 59, 59, 999);
   const currentMs = now ?? Date.now();
   const diffMs = currentMs - d.getTime();
   if (diffMs <= 0) return null;
   const hours = Math.floor(diffMs / (1000 * 60 * 60));
   const days = Math.floor(hours / 24);
   if (days > 0) return `${days}d overdue`;
-  if (hours > 0) return `${hours}h overdue`;
-  const mins = Math.max(1, Math.floor(diffMs / (1000 * 60)));
-  return `${mins}m overdue`;
+  return `1d overdue`;
 }
 
 function SlaCountdown({ end }: { end?: string | null }) {
@@ -82,7 +95,7 @@ function SlaCountdown({ end }: { end?: string | null }) {
   const diff = endMs - now;
   if (diff <= 0) {
     return (
-      <span className="ml-2 inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+      <span className="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold bg-rose-100 text-rose-700 border border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-900 shrink-0">
         SLA Breach
       </span>
     );
@@ -94,7 +107,7 @@ function SlaCountdown({ end }: { end?: string | null }) {
 
   if (hours > 0) {
     return (
-      <span className="ml-2 inline-flex items-center text-xs font-medium text-[#8B2424] dark:text-red-400">
+      <span className="inline-flex items-center text-xs font-medium text-[#8B2424] dark:text-red-400 shrink-0">
         <Timer className="w-3.5 h-3.5 inline mr-1 shrink-0" />
         {hours}h {minutes}m
       </span>
@@ -102,7 +115,7 @@ function SlaCountdown({ end }: { end?: string | null }) {
   }
 
   return (
-    <span className="ml-2 inline-flex items-center text-xs font-medium text-[#8B2424] dark:text-red-400">
+    <span className="inline-flex items-center text-xs font-medium text-[#8B2424] dark:text-red-400 shrink-0">
       <Timer className="w-3.5 h-3.5 inline mr-1 shrink-0" />
       {minutes}m {String(seconds).padStart(2, '0')}s
     </span>
@@ -270,20 +283,58 @@ function SearchableCitySelect({
   );
 }
 
-export default function LeadsPage() {
+function LeadsContent() {
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const isManagerOrAdmin = ['admin', 'manager'].includes(user?.role?.toLowerCase() || '');
-  const [activeTab, setActiveTab] = useState<'my-leads' | 'unclaimed' | 'all' | 'rejected'>('my-leads');
+
+  const urlStatus = searchParams?.get('status') as LeadStatus | null;
+  const urlTab = searchParams?.get('tab') as 'my-leads' | 'unclaimed' | 'all' | 'rejected' | null;
+  const urlSearch = searchParams?.get('search');
+  const urlOverdue = searchParams?.get('overdue') === 'true';
+
+  const [activeTab, setActiveTab] = useState<'my-leads' | 'unclaimed' | 'all' | 'rejected'>(() => {
+    if (urlTab && ['my-leads', 'unclaimed', 'all', 'rejected'].includes(urlTab)) {
+      return urlTab;
+    }
+    return 'my-leads';
+  });
 
   // Filters
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<LeadStatus | ''>('');
+  const [search, setSearch] = useState(() => urlSearch || '');
+  const [status, setStatus] = useState<LeadStatus | ''>(() => urlStatus || '');
   const [city, setCity] = useState('');
   const [source, setSource] = useState<LeadSource | ''>('');
-  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [overdueOnly, setOverdueOnly] = useState(() => urlOverdue);
+  const [contacted, setContacted] = useState<'' | 'yes' | 'no'>('');
   const [sortBy, setSortBy] = useState<'nextActionDate' | 'createdAt' | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
+
+  // Sync state when URL params change
+  useEffect(() => {
+    const s = searchParams?.get('status') as LeadStatus | null;
+    const t = searchParams?.get('tab') as 'my-leads' | 'unclaimed' | 'all' | 'rejected' | null;
+    const q = searchParams?.get('search');
+    const o = searchParams?.get('overdue');
+
+    if (s !== null) {
+      setStatus(s || '');
+      setPage(1);
+    }
+    if (t && ['my-leads', 'unclaimed', 'all', 'rejected'].includes(t)) {
+      setActiveTab(t);
+      setPage(1);
+    }
+    if (q !== null) {
+      setSearch(q || '');
+      setPage(1);
+    }
+    if (o !== null) {
+      setOverdueOnly(o === 'true');
+      setPage(1);
+    }
+  }, [searchParams]);
 
   const [claimedIds, setClaimedIds] = useState<string[]>([]);
   const [toastList, setToastList] = useState<Array<{ id: number; message: string; type?: 'success' | 'error' }>>([]);
@@ -302,6 +353,20 @@ export default function LeadsPage() {
   const [claimReviewLead, setClaimReviewLead] = useState<Lead | null>(null);
   const [isClaiming, setIsClaiming] = useState(false);
 
+  // Edit Lead Modal State
+  const [editTargetLead, setEditTargetLead] = useState<Lead | null>(null);
+
+  // Executive Summary & Agent Filter State (For Admin & Manager)
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('');
+  const [agentOptions, setAgentOptions] = useState<{ _id: string; name: string; email: string; role: string }[]>([]);
+  const [stats, setStats] = useState<{
+    totalActive: number;
+    overdueCount: number;
+    unclaimedCount: number;
+    wonCount: number;
+    wonRevenue: number;
+  } | null>(null);
+
   const filters = {
     search,
     status: activeTab === 'rejected' ? ('Rejected' as LeadStatus) : status,
@@ -311,8 +376,10 @@ export default function LeadsPage() {
     limit: 25,
     ...(activeTab === 'unclaimed' ? { unassigned: true } : {}),
     ...(activeTab === 'my-leads' ? { assignedToMe: true } : {}),
+    ...(selectedAgentId && activeTab === 'all' ? { assignedTo: selectedAgentId } : {}),
     ...(overdueOnly && activeTab !== 'unclaimed' && activeTab !== 'rejected' ? { overdueOnly: true } : {}),
     ...(sortBy ? { sortBy, sortDir } : {}),
+    ...(contacted && activeTab !== 'unclaimed' && activeTab !== 'rejected' ? { contacted } : {}),
   };
 
   const pollInterval = activeTab === 'unclaimed' ? 15000 : undefined;
@@ -321,6 +388,24 @@ export default function LeadsPage() {
 
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [availableCities, setAvailableCities] = useState<string[]>(['Indore', 'Mumbai', 'Bhopal', 'New Delhi']);
+
+  useEffect(() => {
+    if (isManagerOrAdmin) {
+      leadsApi.listAgents()
+        .then((res) => {
+          if (res.agents) setAgentOptions(res.agents);
+        })
+        .catch(() => {});
+    }
+  }, [isManagerOrAdmin]);
+
+  useEffect(() => {
+    if (isManagerOrAdmin && activeTab === 'all') {
+      leadsApi.getStats()
+        .then((res) => setStats(res))
+        .catch(() => {});
+    }
+  }, [isManagerOrAdmin, activeTab, data]);
 
   useEffect(() => {
     leadsApi.getCities()
@@ -338,6 +423,27 @@ export default function LeadsPage() {
     const timer = setInterval(() => setCurrentTime(Date.now()), 30000);
     return () => clearInterval(timer);
   }, []);
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const [menuAnchor, setMenuAnchor] = useState<{
+    lead: Lead;
+    rect: { top: number; bottom: number; right: number };
+  } | null>(null);
+
+  useEffect(() => {
+    if (!menuAnchor) return;
+    const handleClose = () => setMenuAnchor(null);
+    document.addEventListener('click', handleClose);
+    window.addEventListener('scroll', handleClose, true);
+    window.addEventListener('resize', handleClose);
+    return () => {
+      document.removeEventListener('click', handleClose);
+      window.removeEventListener('scroll', handleClose, true);
+      window.removeEventListener('resize', handleClose);
+    };
+  }, [menuAnchor]);
 
   function showToast(message: string, type: 'success' | 'error' = 'success') {
     const id = ++toastIdCounter;
@@ -382,7 +488,7 @@ export default function LeadsPage() {
 
   const openRejectModal = (leadId: string) => {
     setRejectTargetId(leadId);
-    setRejectReason('Spam / Bot / Fake Number');
+    setRejectReason('Client Not Genuine / Fake Inquiry');
     setRejectCustomNote('');
     setRejectModalOpen(true);
   };
@@ -405,6 +511,41 @@ export default function LeadsPage() {
     }
   };
 
+  // Release / Unclaim to pool state & handlers
+  const [releaseModalOpen, setReleaseModalOpen] = useState(false);
+  const [releaseTargetId, setReleaseTargetId] = useState<string | null>(null);
+  const [releaseReason, setReleaseReason] = useState<string>('Client Inactive / Unreachable after multiple attempts');
+  const [releaseCustomNote, setReleaseCustomNote] = useState<string>('');
+  const [isReleasing, setIsReleasing] = useState(false);
+
+  const openReleaseModal = (leadId: string) => {
+    setReleaseTargetId(leadId);
+    setReleaseReason('Client Inactive / Unreachable after multiple attempts');
+    setReleaseCustomNote('');
+    setReleaseModalOpen(true);
+  };
+
+  const handleConfirmRelease = async () => {
+    if (!releaseTargetId) return;
+    setIsReleasing(true);
+    try {
+      const finalRemarks = releaseReason === 'Other' && releaseCustomNote.trim()
+        ? `Other: ${releaseCustomNote.trim()}`
+        : releaseReason;
+      await leadsApi.updateLead(releaseTargetId, {
+        assignedTo: null,
+        remarks: `Moved to Unclaimed Pool: ${finalRemarks}`,
+      });
+      showToast('Lead released back to Unclaimed pool', 'success');
+      setReleaseModalOpen(false);
+      await mutate();
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to release lead', 'error');
+    } finally {
+      setIsReleasing(false);
+    }
+  };
+
   const handleRestore = async (leadId: string) => {
     try {
       await leadsApi.changeStatus(leadId, { status: 'New' });
@@ -424,6 +565,7 @@ export default function LeadsPage() {
       const queryParams = new URLSearchParams();
       if (activeTab === 'unclaimed') queryParams.set('unassigned', 'true');
       if (activeTab === 'my-leads') queryParams.set('assignedToMe', 'true');
+      if (contacted && activeTab !== 'unclaimed' && activeTab !== 'rejected') queryParams.set('contacted', contacted);
       if (activeTab === 'rejected') queryParams.set('status', 'Rejected');
       else if (status) queryParams.set('status', status);
       if (city) queryParams.set('city', city);
@@ -528,7 +670,70 @@ export default function LeadsPage() {
         </button>
       </div>
 
-      <Card className="grid grid-cols-1 gap-8 p-6 md:grid-cols-2 xl:grid-cols-4">
+      {/* Executive KPI Summary Cards (All Leads Tab for Admin & Manager) */}
+      {isManagerOrAdmin && activeTab === 'all' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Card 1: Active Pipeline */}
+          <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Pipeline</p>
+              <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
+                {stats ? stats.totalActive : '-'}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Assigned & in-progress</p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 flex items-center justify-center shrink-0">
+              <Building2 className="w-5 h-5" />
+            </div>
+          </div>
+
+          {/* Card 2: Team Overdue */}
+          <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Team Overdue</p>
+              <p className="text-2xl font-bold text-rose-600 dark:text-rose-400 mt-1">
+                {stats ? stats.overdueCount : '-'}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Missed follow-up schedule</p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 flex items-center justify-center shrink-0">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+          </div>
+
+          {/* Card 3: Unclaimed Pool */}
+          <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Unclaimed Pool</p>
+              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">
+                {stats ? stats.unclaimedCount : '-'}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Live unassigned inquiries</p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Timer className="w-5 h-5" />
+            </div>
+          </div>
+
+          {/* Card 4: Won Deals & Value */}
+          <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Won Deals</p>
+              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                {stats ? stats.wonCount : '-'}
+              </p>
+              <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium mt-0.5">
+                Successfully converted
+              </p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Card className={`grid grid-cols-1 gap-6 p-6 md:grid-cols-2 ${isManagerOrAdmin && activeTab === 'all' ? 'xl:grid-cols-5' : 'xl:grid-cols-4'}`}>
         <Field
           label="Search"
           placeholder="Company or Mobile"
@@ -574,6 +779,18 @@ export default function LeadsPage() {
           onChange={(newCity) => { setCity(newCity); setPage(1); }}
           placeholder="All Cities"
         />
+        {isManagerOrAdmin && activeTab === 'all' && (
+          <SelectField
+            label="Assigned Agent"
+            options={[
+              { label: 'All Agents', value: '' },
+              ...agentOptions.map((a) => ({ label: `${a.name} (${a.role})`, value: a._id })),
+            ]}
+            value={selectedAgentId}
+            onChange={(e) => { setSelectedAgentId(e.target.value); setPage(1); }}
+            placeholder="All Agents"
+          />
+        )}
       </Card>
 
       {activeTab !== 'unclaimed' && activeTab !== 'rejected' && (
@@ -607,6 +824,46 @@ export default function LeadsPage() {
               )}
             </button>
 
+            {/* Contacted / not contacted */}
+            <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-0.5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+              {([
+                { value: '', label: 'All' },
+                { value: 'no', label: 'Not contacted' },
+                { value: 'yes', label: 'Contacted' },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value || 'all'}
+                  type="button"
+                  onClick={() => {
+                    setContacted(opt.value);
+                    setPage(1);
+                  }}
+                  title={
+                    opt.value === 'no'
+                      ? 'Still New — no call or follow-up logged yet'
+                      : opt.value === 'yes'
+                        ? 'At least one call / follow-up logged'
+                        : undefined
+                  }
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+                    contacted === opt.value
+                      ? opt.value === 'no'
+                        ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
+                        : opt.value === 'yes'
+                          ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+                          : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100'
+                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {activeTab === 'my-leads' && !sortBy && (
+              <span className="text-[11px] text-slate-400 dark:text-slate-500">Sorted: most recently claimed first</span>
+            )}
+
             {sortBy === 'nextActionDate' && (
               <button
                 type="button"
@@ -620,11 +877,12 @@ export default function LeadsPage() {
             )}
           </div>
 
-          {(overdueOnly || sortBy || search || status || city || source) && (
+          {(overdueOnly || sortBy || search || status || city || source || contacted) && (
             <button
               type="button"
               onClick={() => {
                 setOverdueOnly(false);
+                setContacted('');
                 setSortBy('');
                 setSortDir('asc');
                 setSearch('');
@@ -652,14 +910,14 @@ export default function LeadsPage() {
       ) : (
         <div className="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
+            <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300 min-w-[980px]">
               <thead className="bg-slate-50 text-slate-500 dark:bg-slate-800/50 dark:text-slate-400">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Company</th>
-                  <th className="px-4 py-3 font-medium">Contact</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">Company</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">Contact</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">Status</th>
                   <th
-                    className={`px-4 py-3 font-medium ${
+                    className={`px-4 py-3 font-medium whitespace-nowrap ${
                       activeTab !== 'unclaimed' && activeTab !== 'rejected'
                         ? 'cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-200'
                         : ''
@@ -689,20 +947,25 @@ export default function LeadsPage() {
                       )}
                     </div>
                   </th>
-                  <th className="px-4 py-3 font-medium">Source</th>
-                  <th className="px-4 py-3 font-medium">Agent</th>
-                  <th className="px-4 py-3 font-medium">Action</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">Source</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">Agent</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                 {displayedLeads.map((lead: Lead) => {
-                  const isOverdue = Boolean(lead.nextActionDate && new Date(lead.nextActionDate).getTime() < currentTime);
+                  const isClosed = lead.status === 'Won' || lead.status === 'Lost' || lead.status === 'Rejected';
+                  const isOverdue = !isClosed && Boolean(lead.nextActionDate && (() => {
+                    const d = new Date(lead.nextActionDate);
+                    d.setHours(23, 59, 59, 999);
+                    return d.getTime() < currentTime;
+                  })());
 
                   return (
                     <tr key={lead._id || lead.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 max-w-[200px]">
                         <div className="flex items-center gap-1.5 font-medium text-slate-900 dark:text-white">
-                          <Link href={`/leads/${lead._id || lead.id}`} className="hover:underline">
+                          <Link href={`/leads/${lead._id || lead.id}`} className="hover:underline truncate" title={lead.companyName}>
                             {lead.companyName}
                           </Link>
                           {Boolean(lead.cycle && lead.cycle > 1) && (
@@ -714,27 +977,27 @@ export default function LeadsPage() {
                             </span>
                           )}
                         </div>
-                        <div className="text-xs">{lead.city}</div>
+                        <div className="text-xs text-slate-500 truncate" title={lead.city}>{lead.city || '-'}</div>
                       </td>
-                      <td className="px-4 py-3">
-                        <div>{lead.contactPerson}</div>
-                        <div className="text-xs">{lead.mobile}</div>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="text-slate-900 dark:text-white font-medium">{lead.contactPerson}</div>
+                        <div className="text-xs text-slate-500">{lead.mobile}</div>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap items-center gap-1.5">
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5 flex-nowrap">
                           <StatusBadge status={lead.status} />
                           {activeTab !== 'unclaimed' && activeTab !== 'rejected' && ((lead.status === 'New' || lead.status === 'Contacted') && !lead.firstResponseAt && !lead.firstCallAt) && (
                             <SlaCountdown end={lead.slaTimerEnd || (lead.createdAt ? new Date(new Date(lead.createdAt).getTime() + 24 * 60 * 60 * 1000).toISOString() : null)} />
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 whitespace-nowrap">
                         {activeTab === 'unclaimed' ? (
                           <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">
                             {formatDateTime(lead.createdAt || lead.receivedAt)}
                           </span>
                         ) : activeTab === 'rejected' ? (
-                          <span className="text-xs text-rose-600 dark:text-rose-400 font-medium italic">
+                          <span className="text-xs text-rose-600 dark:text-rose-400 font-medium italic max-w-[200px] truncate block" title={lead.qualification?.lostReason || (lead.statusHistory && lead.statusHistory.length > 0 ? lead.statusHistory[lead.statusHistory.length - 1]?.reason : undefined) || 'Junk / Irrelevant'}>
                             {lead.qualification?.lostReason || (lead.statusHistory && lead.statusHistory.length > 0 ? lead.statusHistory[lead.statusHistory.length - 1]?.reason : undefined) || 'Junk / Irrelevant'}
                           </span>
                         ) : lead.nextActionDate ? (
@@ -750,7 +1013,7 @@ export default function LeadsPage() {
                                   }`}
                                 >
                                   {isOverdue && <AlertCircle className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />}
-                                  {formatDateTime(lead.nextActionDate)}
+                                  {formatDate(lead.nextActionDate)}
                                 </span>
                                 {overdueText && (
                                   <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 ml-0.5">
@@ -764,9 +1027,9 @@ export default function LeadsPage() {
                           <span className="text-xs text-slate-400">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-3">{lead.source}</td>
-                      <td className="px-4 py-3">{lead.assignedTo?.name || lead.claimedBy?.name || 'Unassigned'}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 whitespace-nowrap">{lead.source}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">{lead.assignedTo?.name || lead.claimedBy?.name || 'Unassigned'}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
                         {activeTab === 'unclaimed' ? (
                           <div className="flex items-center gap-2">
                             <Button variant="secondary" onClick={() => setClaimReviewLead(lead)}>
@@ -799,22 +1062,57 @@ export default function LeadsPage() {
                             </Button>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 flex-nowrap" data-lead-action-menu>
                             <Link href={`/leads/${lead._id || lead.id}`}>
                               <Button
                                 variant="ghost"
-                                className="bg-blue-50 text-blue-700 border border-blue-200/60 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/50"
+                                className="bg-blue-50 text-blue-700 border border-blue-200/60 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/50 text-xs px-2.5 py-1 h-8"
                               >
                                 View
                               </Button>
                             </Link>
+
                             <Button
                               variant="ghost"
-                              className="bg-primary-100 text-primary hover:bg-[#F2CACA] border border-primary/20 font-medium shadow-2xs"
+                              className="bg-primary-100 text-primary hover:bg-[#F2CACA] border border-primary/20 font-medium shadow-2xs text-xs px-2.5 py-1 h-8"
                               onClick={() => openLogModal(lead._id || lead.id)}
                             >
                               Log Action
                             </Button>
+
+                            {/* 3-Dots More Options Menu Button */}
+                            <button
+                              type="button"
+                              className={`inline-flex items-center justify-center h-8 w-8 rounded-lg border text-slate-600 transition-colors shadow-2xs shrink-0 ${
+                                menuAnchor?.lead && (menuAnchor.lead._id || menuAnchor.lead.id) === (lead._id || lead.id)
+                                  ? 'bg-slate-100 border-slate-300 text-slate-900 dark:bg-slate-800 dark:border-slate-600 dark:text-white'
+                                  : 'border-slate-200 bg-white hover:text-slate-900 hover:bg-slate-100 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
+                              }`}
+                              title="More Options"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const leadKey = lead._id || lead.id;
+                                if (menuAnchor?.lead && (menuAnchor.lead._id || menuAnchor.lead.id) === leadKey) {
+                                  setMenuAnchor(null);
+                                } else {
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setMenuAnchor({
+                                    lead,
+                                    rect: {
+                                      top: rect.top,
+                                      bottom: rect.bottom,
+                                      right: window.innerWidth - rect.right,
+                                    },
+                                  });
+                                }
+                              }}
+                            >
+                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                <circle cx="12" cy="12" r="2" />
+                                <circle cx="19" cy="12" r="2" />
+                                <circle cx="5" cy="12" r="2" />
+                              </svg>
+                            </button>
                           </div>
                         )}
                       </td>
@@ -924,7 +1222,10 @@ export default function LeadsPage() {
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
             options={[
+              { value: 'Client Not Genuine / Fake Inquiry', label: 'Client Not Genuine / Fake Inquiry' },
               { value: 'Spam / Bot / Fake Number', label: 'Spam / Bot / Fake Number' },
+              { value: 'Wrong Contact Details / Person Not Available', label: 'Wrong Contact Details / Person Not Available' },
+              { value: 'Competitor / Rate Checking', label: 'Competitor / Rate Checking' },
               { value: 'Job / Career Inquiry', label: 'Job / Career Inquiry (Looking for job/resumé)' },
               { value: 'Irrelevant Service (Not OOH / Billboard)', label: 'Irrelevant Service (e.g. Visiting card/pamphlet printing)' },
               { value: 'Budget Too Low / Student Inquiry', label: 'Budget Too Low / Student Inquiry' },
@@ -949,10 +1250,59 @@ export default function LeadsPage() {
             </Button>
             <Button
               isLoading={isRejecting}
-              className="bg-rose-600 hover:bg-rose-700 text-white"
+              className="bg-[#8B2424] hover:bg-[#6E1D1D] text-white shadow-xs"
               onClick={handleConfirmReject}
             >
               Confirm Reject
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Release Lead Back to Unclaimed Pool Modal */}
+      <Modal
+        open={releaseModalOpen}
+        onClose={() => setReleaseModalOpen(false)}
+        title="Release Lead Back to Unclaimed Pool"
+      >
+        <div className="space-y-4 pt-2">
+          <p className="text-xs text-slate-600 dark:text-slate-300">
+            This will remove ownership from your account and return this lead to the live <strong>Unclaimed</strong> pool so another agent or manager can claim it.
+          </p>
+
+          <SelectField
+            label="Reason for Releasing *"
+            value={releaseReason}
+            onChange={(e) => setReleaseReason(e.target.value)}
+            options={[
+              { value: 'Client Inactive / Unreachable after multiple attempts', label: 'Client Inactive / Unreachable after multiple attempts' },
+              { value: 'Client requested different location / language / city', label: 'Client requested different location / language / city' },
+              { value: 'Requires Senior Agent / Specialized Pitch', label: 'Requires Senior Agent / Specialized Pitch' },
+              { value: 'Releasing due to current workload / bandwidth', label: 'Releasing due to current workload / bandwidth' },
+              { value: 'Other', label: 'Other (Specify reason below)' },
+            ]}
+          />
+
+          {releaseReason === 'Other' && (
+            <TextAreaField
+              label="Specify Reason"
+              placeholder="Explain why you are releasing this lead back to the pool..."
+              value={releaseCustomNote}
+              onChange={(e) => setReleaseCustomNote(e.target.value)}
+              rows={2}
+            />
+          )}
+
+          <div className="flex justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+            <Button variant="secondary" onClick={() => setReleaseModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              isLoading={isReleasing}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleConfirmRelease}
+            >
+              Confirm Release to Pool
             </Button>
           </div>
         </div>
@@ -1088,6 +1438,91 @@ export default function LeadsPage() {
         )}
       </Modal>
 
+      {/* Edit Lead Modal */}
+      <EditLeadModal
+        isOpen={Boolean(editTargetLead)}
+        lead={editTargetLead}
+        onClose={() => setEditTargetLead(null)}
+        onSuccess={async () => {
+          showToast('Lead updated successfully', 'success');
+          await mutate();
+        }}
+      />
+
+      {/* Floating 3-Dots Portal Menu */}
+      {mounted && menuAnchor && typeof document !== 'undefined' && createPortal(
+        (() => {
+          const lead = menuAnchor.lead;
+          const spaceBelow = window.innerHeight - menuAnchor.rect.bottom;
+          const openUpward = spaceBelow < 170;
+
+          return (
+            <div
+              style={{
+                position: 'fixed',
+                ...(openUpward
+                  ? { bottom: `${window.innerHeight - menuAnchor.rect.top + 6}px` }
+                  : { top: `${menuAnchor.rect.bottom + 6}px` }),
+                right: `${Math.max(12, menuAnchor.rect.right)}px`,
+                zIndex: 9999,
+              }}
+              className="w-48 rounded-xl border border-slate-200 bg-white py-1.5 shadow-xl dark:border-slate-800 dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800 animate-in fade-in-0 zoom-in-95 duration-100"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="py-1">
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left font-medium"
+                  onClick={() => {
+                    const target = lead;
+                    setMenuAnchor(null);
+                    setEditTargetLead(target);
+                  }}
+                >
+                  <Pencil className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Edit Lead Details</span>
+                </button>
+              </div>
+
+              {Boolean(lead.assignedTo || lead.claimedBy) && lead.status !== 'Won' && lead.status !== 'Lost' && (
+                <div className="py-1">
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors text-left font-medium"
+                    onClick={() => {
+                      const id = lead._id || lead.id;
+                      setMenuAnchor(null);
+                      openReleaseModal(id);
+                    }}
+                  >
+                    <RotateCw className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Release to Pool</span>
+                  </button>
+                </div>
+              )}
+
+              {lead.status !== 'Won' && lead.status !== 'Lost' && (
+                <div className="py-1">
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors text-left font-medium"
+                    onClick={() => {
+                      const id = lead._id || lead.id;
+                      setMenuAnchor(null);
+                      openRejectModal(id);
+                    }}
+                  >
+                    <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Reject (Junk/Fake)</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })(),
+        document.body
+      )}
+
       {/* Toasts */}
       <div className="fixed right-6 bottom-6 flex flex-col gap-2">
         {toastList.map((t) => (
@@ -1097,5 +1532,19 @@ export default function LeadsPage() {
         ))}
       </div>
     </div>
+  );
+}
+
+export default function LeadsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-48 items-center justify-center">
+          <Spinner label="Loading Leads..." />
+        </div>
+      }
+    >
+      <LeadsContent />
+    </Suspense>
   );
 }

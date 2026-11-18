@@ -4,6 +4,17 @@ import { basePlugin, type BaseDocument } from '../../core/db/basePlugin.js';
 export const CANDIDATE_STATUSES = ['Scheduled', 'Interviewed', 'Selected', 'Rejected', 'On Hold'] as const;
 export type CandidateStatus = (typeof CANDIDATE_STATUSES)[number];
 
+export interface InterviewRound {
+  _id?: Types.ObjectId;
+  roundNumber?: number;
+  roundName?: string;
+  interviewDate: Date;
+  interviewedBy: Types.ObjectId;
+  notes?: string | null;
+  status?: string | null;
+  createdAt?: Date;
+}
+
 export interface Candidate extends BaseDocument {
   name: string;
   email: string;
@@ -14,7 +25,20 @@ export interface Candidate extends BaseDocument {
   status: CandidateStatus;
   resumeFileKey?: string | null;
   notes?: string | null;
+  interviewRounds?: InterviewRound[];
 }
+
+const interviewRoundSchema = new Schema(
+  {
+    roundNumber: { type: Number, default: 1 },
+    roundName: { type: String, default: 'Interview Round' },
+    interviewDate: { type: Date, required: true },
+    interviewedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    notes: { type: String, default: null },
+    status: { type: String, default: 'Scheduled' },
+  },
+  { _id: true, timestamps: { createdAt: true, updatedAt: false } }
+);
 
 const candidateSchema = new Schema<Candidate>(
   {
@@ -32,6 +56,10 @@ const candidateSchema = new Schema<Candidate>(
     },
     resumeFileKey: { type: String, default: null },
     notes: { type: String, default: null },
+    interviewRounds: {
+      type: [interviewRoundSchema],
+      default: [],
+    },
   },
   { collection: 'candidates' }
 );

@@ -52,7 +52,29 @@ router.patch(
   '/:id',
   requireAuth,
   requirePermission('candidates.manage'),
+  handleMulterUpload,
   asyncHandler(candidatesController.update)
+);
+
+router.post(
+  '/:id/rounds',
+  requireAuth,
+  requirePermission('candidates.manage'),
+  asyncHandler(candidatesController.addRound)
+);
+
+router.patch(
+  '/:id/rounds/:roundId',
+  requireAuth,
+  requirePermission('candidates.manage'),
+  asyncHandler(candidatesController.updateRound)
+);
+
+router.delete(
+  '/:id/rounds/:roundId',
+  requireAuth,
+  requirePermission('candidates.manage'),
+  asyncHandler(candidatesController.deleteRound)
 );
 
 export default router;

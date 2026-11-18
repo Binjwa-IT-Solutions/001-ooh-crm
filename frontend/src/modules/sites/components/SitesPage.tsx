@@ -1,21 +1,30 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import { useSites } from "@/modules/sites/hooks/useSites";
+
 import type {
   Site,
-  SiteType,
-  SiteStatus,
+  MediaType,
+  ATRStatus,
+  AvailabilityStatus,
 } from "@/modules/sites/types";
 
 import SiteFilters from "./SiteFilters";
 import SiteForm from "./SiteForm";
 import SiteTable from "./SiteTable";
+import { useAuth } from "@/shared/auth/auth-context";
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 25;
 
 export default function SitesPage() {
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission("sites.manage");
   const {
     sites,
     loading,
@@ -24,21 +33,28 @@ export default function SitesPage() {
     editSite,
   } = useSites();
 
-  // ---------------------------------
-  // FILTER STATE
-  // ---------------------------------
+  /* =========================
+     FILTER STATES
+     ========================= */
 
+  const [search, setSearch] = useState("");
+  const [state, setState] = useState("");
   const [city, setCity] = useState("");
+  const [vendorName, setVendorName] =
+    useState("");
 
-  const [type, setType] =
-    useState<SiteType | "">("");
+  const [mediaType, setMediaType] =
+    useState<MediaType | "">("");
+
+  const [availability, setAvailability] =
+    useState<AvailabilityStatus | "">("");
 
   const [status, setStatus] =
-    useState<SiteStatus | "">("");
+    useState<ATRStatus | "">("");
 
-  // ---------------------------------
-  // FORM STATE
-  // ---------------------------------
+  /* =========================
+     FORM
+     ========================= */
 
   const [showForm, setShowForm] =
     useState(false);
@@ -46,44 +62,160 @@ export default function SitesPage() {
   const [selectedSite, setSelectedSite] =
     useState<Site | null>(null);
 
-  // ---------------------------------
-  // PAGINATION
-  // ---------------------------------
-
   const [currentPage, setCurrentPage] =
     useState(1);
 
-  // ---------------------------------
-  // FILTER SITES
-  // ---------------------------------
+  /* =========================
+     STATE OPTIONS
+     ========================= */
+
+  const stateOptions = useMemo(() => {
+    const values = sites
+      .map((site) =>
+        site.state?.trim()
+      )
+      .filter(
+        (value): value is string =>
+          Boolean(value)
+      );
+
+    return Array.from(
+      new Set(values)
+    ).sort((a, b) =>
+      a.localeCompare(b)
+    );
+  }, [sites]);
+
+  /* =========================
+     CITY OPTIONS
+     ========================= */
+
+  const cityOptions = useMemo(() => {
+    const values = sites
+      .filter(
+        (site) =>
+          !state ||
+          site.state?.trim() === state
+      )
+      .map((site) =>
+        site.city?.trim()
+      )
+      .filter(
+        (value): value is string =>
+          Boolean(value)
+      );
+
+    return Array.from(
+      new Set(values)
+    ).sort((a, b) =>
+      a.localeCompare(b)
+    );
+  }, [sites, state]);
+
+  /* =========================
+     VENDOR OPTIONS
+     ========================= */
+
+  const vendorOptions = useMemo(() => {
+    const values = sites
+      .map((site) =>
+        site.vendorName?.trim()
+      )
+      .filter(
+        (value): value is string =>
+          Boolean(value)
+      );
+
+    return Array.from(
+      new Set(values)
+    ).sort((a, b) =>
+      a.localeCompare(b)
+    );
+  }, [sites]);
+
+  /* =========================
+     FILTERED SITES
+     ========================= */
 
   const filteredSites = useMemo(() => {
+    const query = search
+      .trim()
+      .toLowerCase();
+
     return sites.filter((site) => {
-      const matchesCity = city
-        ? site.city
+      const matchesSearch =
+        !query ||
+        [
+          site.clientName,
+          site.salesPersonName,
+          site.salesPersonContact,
+          site.vendorContact,
+          site.state,
+          site.city,
+          site.location,
+          site.vendorName,
+          site.mediaType,
+          site.atrNo,
+          site.status,
+          site.availability,
+        ].some((value) =>
+          String(value ?? "")
             .toLowerCase()
-            .includes(city.toLowerCase())
-        : true;
+            .includes(query)
+        );
 
-      const matchesType = type
-        ? site.type === type
-        : true;
+      const matchesState =
+        !state ||
+        site.state?.trim() === state;
 
-      const matchesStatus = status
-        ? site.status === status
-        : true;
+      const matchesCity =
+        !city ||
+        site.city?.trim() === city;
+
+      const matchesVendor =
+        !vendorName ||
+        site.vendorName
+          ?.toLowerCase()
+          .includes(
+            vendorName.toLowerCase()
+          );
+
+      const matchesMediaType =
+        !mediaType ||
+        site.mediaType === mediaType;
+
+      const matchesStatus =
+        !status ||
+        site.status === status;
+
+      const matchesAvailability =
+        !availability ||
+        site.availability === availability;
 
       return (
+        matchesSearch &&
+        matchesState &&
         matchesCity &&
-        matchesType &&
-        matchesStatus
+        matchesVendor &&
+        matchesMediaType &&
+        matchesStatus &&
+        matchesAvailability
       );
     });
-  }, [sites, city, type, status]);
+  }, [
+    sites,
+    search,
+    state,
+    city,
+    vendorName,
+    mediaType,
+    status,
+    availability,
+  ]);
 
-  // ---------------------------------
-  // TOTAL PAGES
-  // ---------------------------------
+  /* =========================
+     PAGINATION
+     ========================= */
 
   const totalPages = Math.max(
     1,
@@ -93,38 +225,51 @@ export default function SitesPage() {
     )
   );
 
-  // ---------------------------------
-  // PAGINATED SITES
-  // ---------------------------------
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, filteredSites.length);
 
-  const paginatedSites = useMemo(() => {
-    const startIndex =
-      (currentPage - 1) *
-      ITEMS_PER_PAGE;
-
-    const endIndex =
-      startIndex + ITEMS_PER_PAGE;
-
+  const visibleSites = useMemo(() => {
     return filteredSites.slice(
       startIndex,
-      endIndex
+      startIndex + ITEMS_PER_PAGE
     );
   }, [
     filteredSites,
-    currentPage,
+    startIndex,
   ]);
 
-  // ---------------------------------
-  // RESET PAGE WHEN FILTER CHANGES
-  // ---------------------------------
+  /* =========================
+     RESET PAGE
+     ========================= */
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [city, type, status]);
+  }, [
+    search,
+    state,
+    city,
+    vendorName,
+    mediaType,
+    status,
+    availability,
+  ]);
 
-  // ---------------------------------
-  // HANDLE INVALID PAGE
-  // ---------------------------------
+  /* =========================
+     VALID CITY
+     ========================= */
+
+  useEffect(() => {
+    if (
+      city &&
+      !cityOptions.includes(city)
+    ) {
+      setCity("");
+    }
+  }, [city, cityOptions]);
+
+  /* =========================
+     KEEP PAGE VALID
+     ========================= */
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -135,60 +280,9 @@ export default function SitesPage() {
     totalPages,
   ]);
 
-  // ---------------------------------
-  // SUMMARY
-  // ---------------------------------
-
-  const totalSites = sites.length;
-
-  const activeSites = sites.filter(
-    (site) =>
-      site.status === "Active"
-  ).length;
-
-  const maintenanceSites =
-    sites.filter(
-      (site) =>
-        site.status === "Maintenance"
-    ).length;
-
-  const inactiveSites = sites.filter(
-    (site) =>
-      site.status === "Inactive"
-  ).length;
-
-  // ---------------------------------
-  // ADD SITE
-  // ---------------------------------
-
-  const handleAddSite = () => {
-    setSelectedSite(null);
-    setShowForm(true);
-  };
-
-  // ---------------------------------
-  // EDIT SITE
-  // ---------------------------------
-
-  const handleEditSite = (
-    site: Site
-  ) => {
-    setSelectedSite(site);
-    setShowForm(true);
-  };
-
-  // ---------------------------------
-  // CLOSE FORM
-  // ---------------------------------
-
-  const handleCloseForm = () => {
-    setShowForm(false);
-    setSelectedSite(null);
-  };
-
-  // ---------------------------------
-  // SUBMIT
-  // ---------------------------------
+  /* =========================
+     FORM SUBMIT
+     ========================= */
 
   const handleSubmit = async (
     data: Parameters<
@@ -203,303 +297,281 @@ export default function SitesPage() {
     } else {
       await addSite(data);
     }
-  };
 
-  // ---------------------------------
-  // SUCCESS
-  // ---------------------------------
-
-  const handleSuccess = () => {
     setShowForm(false);
     setSelectedSite(null);
   };
 
-  // ---------------------------------
-  // PAGE NUMBERS
-  // ---------------------------------
 
-  const pageNumbers = Array.from(
-    {
-      length: totalPages,
-    },
-    (_, index) => index + 1
-  );
 
-  // ---------------------------------
-  // DISPLAY RANGE
-  // ---------------------------------
+  /* =========================
+     CLEAR FILTERS
+     ========================= */
 
-  const startItem =
-    filteredSites.length === 0
-      ? 0
-      : (currentPage - 1) *
-          ITEMS_PER_PAGE +
-        1;
+  const clearFilters = () => {
+    setSearch("");
+    setState("");
+    setCity("");
+    setVendorName("");
+    setMediaType("");
+    setStatus("");
+    setAvailability("");
+  };
 
-  const endItem = Math.min(
-    currentPage * ITEMS_PER_PAGE,
-    filteredSites.length
-  );
-
-  // ---------------------------------
-  // UI
-  // ---------------------------------
+  const hasFilters =
+    Boolean(search) ||
+    Boolean(state) ||
+    Boolean(city) ||
+    Boolean(vendorName) ||
+    Boolean(mediaType) ||
+    Boolean(status) ||
+    Boolean(availability);
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA] p-6">
+    <div className="min-h-screen bg-white">
 
-      {/* ================= HEADER ================= */}
+      {/* HEADER */}
 
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-[#1F2937]">
-            Selected Media Registry
-          </h1>
+      <div className="border-b border-[#E8E8EC] bg-white px-6 py-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
 
-          <p className="mt-1 text-sm text-[#667085]">
-            Manage and monitor your media sites
-          </p>
-        </div>
+          <div>
+            <div className="flex items-center gap-2 text-xs text-[#667085]">
+              <span>Media Buying</span>
+              <span>/</span>
 
-        <button
-          type="button"
-          onClick={handleAddSite}
-          className="rounded-lg bg-[#8B2424] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#F9DADA] hover:text-[#8B2424]"
-        >
-          + Add Site
-        </button>
-      </div>
+              <span className="text-[#A8383B]">
+                ATR Plan
+              </span>
+            </div>
 
-      {/* ================= SUMMARY CARDS ================= */}
+            <h1 className="mt-2 text-xl font-semibold text-[#1F2937]">
+              ATR Plan
+            </h1>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <p className="mt-1 text-sm text-[#667085]">
+              Manage available ATR plans
+            </p>
+          </div>
 
-        {/* TOTAL */}
-
-        <div className="rounded-xl border border-[#E8E8EC] bg-white p-4">
-          <p className="text-xs font-medium text-[#667085]">
-            Total Sites
-          </p>
-
-          <p className="mt-2 text-2xl font-semibold text-[#1F2937]">
-            {totalSites}
-          </p>
-        </div>
-
-        {/* ACTIVE */}
-
-        <div className="rounded-xl border border-[#E8E8EC] bg-white p-4">
-          <p className="text-xs font-medium text-[#667085]">
-            Active
-          </p>
-
-          <p className="mt-2 text-2xl font-semibold text-[#1F2937]">
-            {activeSites}
-          </p>
-        </div>
-
-        {/* MAINTENANCE */}
-
-        <div className="rounded-xl border border-[#E8E8EC] bg-white p-4">
-          <p className="text-xs font-medium text-[#667085]">
-            Maintenance
-          </p>
-
-          <p className="mt-2 text-2xl font-semibold text-[#1F2937]">
-            {maintenanceSites}
-          </p>
-        </div>
-
-        {/* INACTIVE */}
-
-        <div className="rounded-xl border border-[#E8E8EC] bg-white p-4">
-          <p className="text-xs font-medium text-[#667085]">
-            Inactive
-          </p>
-
-          <p className="mt-2 text-2xl font-semibold text-[#1F2937]">
-            {inactiveSites}
-          </p>
+          {canManage ? (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedSite(null);
+                setShowForm(true);
+              }}
+              className="rounded-lg bg-[#8B2424] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#741D1D]"
+            >
+              + Add ATR
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              Read-Only Access
+            </span>
+          )}
         </div>
       </div>
 
-      {/* ================= FILTERS ================= */}
+      {/* FILTERS */}
 
-      <div className="mb-5">
-        <SiteFilters
-          city={city}
-          type={type}
-          status={status}
-          onCityChange={setCity}
-          onTypeChange={setType}
-          onStatusChange={setStatus}
-        />
-      </div>
+      <section className="mx-6 mt-6 rounded-xl border border-[#E8E8EC] bg-white">
 
-      {/* ================= ERROR ================= */}
-
-      {error && (
-        <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      {/* ================= RESULTS HEADER ================= */}
-
-      <div className="mb-3 flex items-center justify-between">
-
-        <div>
+        <div className="border-b border-[#E8E8EC] px-5 py-4">
           <h2 className="text-sm font-semibold text-[#1F2937]">
-            Sites
+            ATR Filters
           </h2>
 
-          <p className="mt-0.5 text-xs text-[#667085]">
-            Showing {startItem} - {endItem}{" "}
-            of {filteredSites.length} sites
+          <p className="mt-1 text-xs text-[#667085]">
+            Filter by state, city, vendor,
+            type, availability and status
           </p>
         </div>
 
-        <p className="text-xs text-[#667085]">
-          Page {currentPage} of{" "}
-          {totalPages}
-        </p>
-      </div>
+        <div className="p-4">
+          <SiteFilters
+            search={search}
+            state={state}
+            city={city}
+            vendorName={vendorName}
+            mediaType={mediaType}
+            availability={availability}
+            status={status}
+            stateOptions={stateOptions}
+            cityOptions={cityOptions}
+            vendorOptions={vendorOptions}
+            onSearchChange={setSearch}
+            onStateChange={setState}
+            onCityChange={setCity}
+            onVendorChange={setVendorName}
+            onMediaTypeChange={
+              setMediaType
+            }
+            onAvailabilityChange={
+              setAvailability
+            }
+            onStatusChange={setStatus}
+          />
 
-      {/* ================= TABLE ================= */}
+          {hasFilters && (
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="text-sm font-medium text-[#8B2424] hover:underline"
+              >
+                Clear Filters
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
 
-      <div className="rounded-xl border border-[#E8E8EC] bg-white">
+      {/* TABLE */}
+
+      <section className="mx-6 mt-5 rounded-xl border border-[#E8E8EC] bg-white">
+
+        <div className="border-b border-[#E8E8EC] px-5 py-4">
+          <h2 className="text-sm font-semibold text-[#1F2937]">
+            ATR Plans
+          </h2>
+
+          <p className="mt-1 text-xs text-[#667085]">
+            {filteredSites.length} ATR
+            {filteredSites.length === 1
+              ? ""
+              : "s"} found
+          </p>
+        </div>
 
         {loading ? (
-          <div className="flex min-h-[250px] items-center justify-center">
-            <p className="text-sm text-[#667085]">
-              Loading sites...
-            </p>
+          <div className="p-8 text-center text-sm text-[#667085]">
+            Loading ATR plans...
           </div>
-        ) : paginatedSites.length ===
-          0 ? (
-          <div className="flex min-h-[250px] items-center justify-center">
-            <div className="text-center">
-
-              <p className="text-sm font-medium text-[#1F2937]">
-                No sites found
-              </p>
-
-              <p className="mt-1 text-xs text-[#667085]">
-                Try changing your filters
-                or add a new site.
-              </p>
-
-            </div>
+        ) : error ? (
+          <div className="p-8 text-center text-sm text-red-600">
+            {error}
           </div>
         ) : (
-          <SiteTable
-            sites={paginatedSites}
-            onEdit={handleEditSite}
-          />
-        )}
+          <>
+            <SiteTable
+              sites={visibleSites}
+              canManage={canManage}
+              onEdit={(site) => {
+                setSelectedSite(site);
+                setShowForm(true);
+              }}
+            />
 
-      </div>
+            {/* PAGINATION */}
 
-      {/* ================= PAGINATION ================= */}
+            {filteredSites.length > 0 && (
+              <div className="flex flex-col items-center justify-between gap-4 border-t border-[#E8E8EC] bg-white px-5 py-4 sm:flex-row">
+                <p className="text-sm text-[#667085]">
+                  Showing{" "}
+                  <span className="font-semibold text-[#1F2937]">
+                    {filteredSites.length === 0 ? 0 : startIndex + 1}
+                  </span>{" "}
+                  to{" "}
+                  <span className="font-semibold text-[#1F2937]">
+                    {endIndex}
+                  </span>{" "}
+                  of{" "}
+                  <span className="font-semibold text-[#1F2937]">
+                    {filteredSites.length}
+                  </span>{" "}
+                  ATR sites
+                </p>
 
-      {!loading &&
-        filteredSites.length > 0 &&
-        totalPages > 1 && (
-          <div className="mt-4 flex items-center justify-between rounded-xl border border-[#E8E8EC] bg-white px-4 py-3">
-
-            {/* SHOWING */}
-
-            <p className="text-xs text-[#667085]">
-              Showing {startItem} -{" "}
-              {endItem} of{" "}
-              {filteredSites.length}
-            </p>
-
-            {/* CONTROLS */}
-
-            <div className="flex items-center gap-1">
-
-              {/* PREVIOUS */}
-
-              <button
-                type="button"
-                disabled={
-                  currentPage === 1
-                }
-                onClick={() =>
-                  setCurrentPage(
-                    (page) =>
-                      Math.max(
-                        1,
-                        page - 1
-                      )
-                  )
-                }
-                className="rounded-lg border border-[#E8E8EC] px-3 py-1.5 text-xs font-medium text-[#667085] transition hover:bg-[#F9DADA] hover:text-[#8B2424] disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Previous
-              </button>
-
-              {/* PAGE NUMBERS */}
-
-              {pageNumbers.map(
-                (page) => (
+                <div className="flex items-center gap-2">
                   <button
-                    key={page}
                     type="button"
+                    disabled={currentPage <= 1}
                     onClick={() =>
-                      setCurrentPage(
-                        page
-                      )
+                      setCurrentPage((page) => Math.max(1, page - 1))
                     }
-                    className={`min-w-[32px] rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${
-                      currentPage === page
-                        ? "bg-[#8B2424] text-white"
-                        : "border border-[#E8E8EC] text-[#667085] hover:bg-[#F9DADA] hover:text-[#8B2424]"
-                    }`}
+                    className="flex items-center gap-1 rounded-lg border border-[#E8E8EC] bg-white px-3 py-1.5 text-sm font-medium text-[#1F2937] transition hover:border-[#8B2424] hover:bg-[#F9DADA] hover:text-[#8B2424] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-[#E8E8EC] disabled:hover:bg-white disabled:hover:text-[#1F2937]"
                   >
-                    {page}
+                    <span>‹</span>
+                    <span>Previous</span>
                   </button>
-                )
-              )}
 
-              {/* NEXT */}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.max(1, totalPages) }, (_, idx) => idx + 1)
+                      .filter((page) => {
+                        if (page === 1 || page === totalPages) return true;
+                        if (Math.abs(page - currentPage) <= 1) return true;
+                        return false;
+                      })
+                      .reduce<(number | string)[]>((acc, page, idx, arr) => {
+                        if (idx > 0 && page - (arr[idx - 1] as number) > 1) {
+                          acc.push("...");
+                        }
+                        acc.push(page);
+                        return acc;
+                      }, [])
+                      .map((item, idx) => {
+                        if (item === "...") {
+                          return (
+                            <span key={`dots-${idx}`} className="px-1 text-xs text-gray-400">
+                              …
+                            </span>
+                          );
+                        }
+                        const pageNum = item as number;
+                        const isActive = pageNum === currentPage;
+                        return (
+                          <button
+                            key={pageNum}
+                            type="button"
+                            onClick={() => setCurrentPage(pageNum)}
+                            className={`h-8 min-w-[32px] rounded-lg px-2 text-xs font-semibold transition ${
+                              isActive
+                                ? "bg-[#8B2424] text-white shadow-sm"
+                                : "border border-[#E8E8EC] bg-white text-[#1F2937] hover:border-[#8B2424] hover:bg-[#F9DADA] hover:text-[#8B2424]"
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+                  </div>
 
-              <button
-                type="button"
-                disabled={
-                  currentPage ===
-                  totalPages
-                }
-                onClick={() =>
-                  setCurrentPage(
-                    (page) =>
-                      Math.min(
-                        totalPages,
-                        page + 1
-                      )
-                  )
-                }
-                className="rounded-lg border border-[#E8E8EC] px-3 py-1.5 text-xs font-medium text-[#667085] transition hover:bg-[#F9DADA] hover:text-[#8B2424] disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Next
-              </button>
-
-            </div>
-          </div>
+                  <button
+                    type="button"
+                    disabled={currentPage >= totalPages}
+                    onClick={() =>
+                      setCurrentPage((page) => Math.min(totalPages, page + 1))
+                    }
+                    className="flex items-center gap-1 rounded-lg border border-[#E8E8EC] bg-white px-3 py-1.5 text-sm font-medium text-[#1F2937] transition hover:border-[#8B2424] hover:bg-[#F9DADA] hover:text-[#8B2424] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-[#E8E8EC] disabled:hover:bg-white disabled:hover:text-[#1F2937]"
+                  >
+                    <span>Next</span>
+                    <span>›</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
+      </section>
 
-      {/* ================= FORM ================= */}
+      {/* FORM */}
 
       {showForm && (
         <SiteForm
           site={selectedSite}
-          onClose={handleCloseForm}
-          onSuccess={handleSuccess}
+          onClose={() => {
+            setShowForm(false);
+            setSelectedSite(null);
+          }}
+          onSuccess={() => {
+            setShowForm(false);
+            setSelectedSite(null);
+          }}
           onSubmit={handleSubmit}
         />
       )}
-
     </div>
   );
 }

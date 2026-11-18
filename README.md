@@ -213,23 +213,24 @@ Errors always come back as:
 
 ---
 
-## OTP in development vs production
+## Authenticator MFA and email fallback
 
-Controlled entirely by environment variables — see `backend/.env.example`.
+On first sign-in, the user verifies the existing email code, scans an authenticator
+QR code, and confirms a TOTP code. No session is issued until enrollment is
+confirmed. Future sign-ins use the authenticator; users can explicitly request an
+email code as a fallback. TOTP secrets are encrypted in MongoDB.
+
+Configure the backend environment using `backend/.env.example`:
 
 | Variable | Dev | Production |
 |---|---|---|
 | `OTP_DELIVERY` | `console` — the code is printed to the server log | `email` |
-| `OTP_EXPOSE_IN_RESPONSE` | `true` — the login screen shows and pre-fills the code | ignored; **force-disabled** when `NODE_ENV=production` |
+| `OTP_EXPOSE_IN_RESPONSE` | `true` — development-only manual code hint | ignored; **force-disabled** when `NODE_ENV=production` |
+| `MFA_ENCRYPTION_KEY` | development fallback | required: 32 random bytes encoded as 64 hex characters |
 
-### Switching on real email MFA later
+### Configure email delivery
 
-Nothing in the auth service or the UI has to change:
-
-1. Get the client's email provider account (Resend / SES / Postmark) with domain
-   verification. **Not VPS SMTP** — OTP mail lands in spam and blocks logins entirely.
-2. Implement `emailTransport.send()` in `backend/src/core/notifications/transports.ts`.
-3. Set `OTP_DELIVERY=email` plus `EMAIL_PROVIDER` / `EMAIL_API_KEY` / `EMAIL_FROM`.
-
-The `devOtp` field simply stops being returned, and the dev-mode panel on the
-login screen disappears on its own.
+The implemented provider is Resend. Use a verified sender domain, then set
+`OTP_DELIVERY=email`, `EMAIL_PROVIDER=resend`, `EMAIL_API_KEY`, and `EMAIL_FROM`.
+Email fallback cannot deliver until these are configured. Never use VPS SMTP for
+login codes.

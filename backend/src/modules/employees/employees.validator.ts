@@ -13,6 +13,10 @@ const objectId = z
   .regex(/^[0-9a-fA-F]{24}$/, 'Not a valid id');
 
 const isoDate = z.coerce.date();
+const optionalDate = z
+  .union([z.coerce.date(), z.literal(''), z.null()])
+  .optional()
+  .transform((val) => (val === '' || val === null || val === undefined ? null : val));
 
 /**
  * Money arrives from the UI in **rupees** and is stored in **integer paise**.
@@ -41,14 +45,21 @@ const baseEmployeeShape = {
     .optional()
     .or(z.literal('')),
   mobile: z.string().trim().regex(MOBILE, 'Enter a valid 10-digit Indian mobile number'),
-  dateOfBirth: isoDate.optional().nullable(),
+  personalMobile: z
+    .string()
+    .trim()
+    .regex(MOBILE, 'Enter a valid 10-digit Indian mobile number')
+    .optional()
+    .or(z.literal('')),
+  dateOfBirth: optionalDate,
 
   department: z.enum(DEPARTMENTS),
   designation: z.string().trim().min(2, 'Designation is required').max(120),
   employmentType: z.enum(EMPLOYMENT_TYPES).default('Full-time'),
   dateOfJoining: isoDate,
-  dateOfExit: isoDate.optional().nullable(),
-  reportingManagerId: objectId.optional().nullable(),
+  dateOfExit: optionalDate,
+  reportingManagerId: objectId.optional().nullable().or(z.literal('')),
+  teamName: z.string().trim().max(100).optional().or(z.literal('')),
   workLocation: z.string().trim().min(2, 'Work location is required').max(120),
   status: z.enum(EMPLOYEE_STATUSES).default('Active'),
 
@@ -107,6 +118,29 @@ export const updateEmployeeSchema = z
   .partial()
   .refine((data) => Object.keys(data).length > 0, { message: 'Nothing to update' });
 
+/**
+ * What an employee may set on their own record: personal details, emergency
+ * contact/address, and their own PAN/Aadhaar/bank details. Everything else —
+ * work email, department, designation, dates, manager, status, CTC — is owned by
+ * HR. Unknown keys are stripped, so sending them does nothing.
+ */
+export const updateMyProfileSchema = z
+  .object({
+    fullName: baseEmployeeShape.fullName,
+    mobile: baseEmployeeShape.mobile,
+    personalMobile: baseEmployeeShape.personalMobile,
+    personalEmail: baseEmployeeShape.personalEmail,
+    dateOfBirth: baseEmployeeShape.dateOfBirth,
+    workLocation: baseEmployeeShape.workLocation,
+    panNumber: baseEmployeeShape.panNumber,
+    aadhaarNumber: baseEmployeeShape.aadhaarNumber,
+    bankAccountNumber: baseEmployeeShape.bankAccountNumber,
+    ifsc: baseEmployeeShape.ifsc,
+    emergencyContact: baseEmployeeShape.emergencyContact,
+    address: baseEmployeeShape.address,
+  })
+  .partial();
+
 export const listEmployeesSchema = z.object({
   search: z.string().trim().max(120).optional(),
   department: z.enum(DEPARTMENTS).optional(),
@@ -121,6 +155,45 @@ export const listEmployeesSchema = z.object({
 
 export const employeeIdSchema = z.object({ id: objectId });
 
+export const createTeamSchema = z.object({
+  name: z.string().trim().min(1, 'Team name is required').max(100, 'Team name cannot exceed 100 characters'),
+  description: z.string().trim().max(500).optional().default(''),
+  managerId: objectId.optional(),
+});
+
+export const updateTeamSchema = z.object({
+  name: z.string().trim().min(1, 'Team name is required').max(100, 'Team name cannot exceed 100 characters').optional(),
+  description: z.string().trim().max(500).optional(),
+});
+
+export const addTeamMemberSchema = z.object({
+  employeeId: objectId,
+});
+
+export const reassignTeamMemberSchema = z.object({
+  employeeId: objectId,
+  sourceTeamId: objectId,
+  targetTeamId: objectId,
+});
+
+export const updateTeamNameSchema = z.object({
+  managerId: objectId.optional(),
+  teamName: z.string().trim().min(1, 'Team name is required').max(100, 'Team name is too long'),
+});
+
+export const assignTeamMemberSchema = z.object({
+  employeeId: objectId,
+  managerId: objectId.nullable().optional(),
+});
+
 export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
 export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;
+export type UpdateMyProfileInput = z.infer<typeof updateMyProfileSchema>;
 export type ListEmployeesQuery = z.infer<typeof listEmployeesSchema>;
+export type CreateTeamInput = z.infer<typeof createTeamSchema>;
+export type UpdateTeamInput = z.infer<typeof updateTeamSchema>;
+export type AddTeamMemberInput = z.infer<typeof addTeamMemberSchema>;
+export type ReassignTeamMemberInput = z.infer<typeof reassignTeamMemberSchema>;
+export type UpdateTeamNameInput = z.infer<typeof updateTeamNameSchema>;
+export type AssignTeamMemberInput = z.infer<typeof assignTeamMemberSchema>;
+

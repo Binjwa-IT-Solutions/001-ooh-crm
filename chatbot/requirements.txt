@@ -1,0 +1,13 @@
+langchain
+langchain-core
+langchain-groq
+python-dotenv
+langchain-ollama
+flask
+pymongo
+dnspython
+openai
+fpdf2
+matplotlib
+seaborn
+pandas

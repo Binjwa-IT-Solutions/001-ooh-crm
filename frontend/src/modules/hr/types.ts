@@ -4,15 +4,32 @@ export type LeaveStatus = 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
 
 export interface EmployeeRef {
   id: string;
+  _id?: string;
   name?: string;
   fullName?: string;
   department?: string;
+  employeeCode?: string;
+  workEmail?: string;
   [key: string]: unknown;
 }
 
 export interface IGps {
   lat: number;
   lng: number;
+}
+
+export interface BreakRecord {
+  type: 'Lunch' | 'Tea' | 'Other';
+  startTime: string | number | Date;
+  endTime: string | number | Date;
+  durationMinutes: number;
+}
+
+export interface ShiftSnapshot {
+  name?: string;
+  startTime?: string;
+  endTime?: string;
+  requiredHours?: number;
 }
 
 export interface Attendance {
@@ -25,19 +42,34 @@ export interface Attendance {
   checkInGps?: IGps;
   checkOutGps?: IGps;
   totalHours?: number;
+  actualHours?: number;
+  overtimeHours?: number;
+  totalBreakMinutes?: number;
+  breaks?: BreakRecord[];
+  shiftDetails?: ShiftSnapshot;
   workType: WorkType;
   status: AttendanceStatus;
   deviceInfo?: string;
+  reviewNotes?: string;
 }
+
+export type QuotaPeriod = 'Monthly' | 'Yearly' | 'Unlimited';
 
 export interface LeaveType {
   id: string;
   _id?: string;
   name: string;
   code: string;
+  /** Monthly = quotaDays credited every month · Yearly = quotaDays per year · Unlimited */
+  quotaPeriod: QuotaPeriod;
+  quotaDays: number;
+  /** Derived: days per full year (null = unlimited) */
   annualQuota: number | null;
   carryForward: boolean;
+  /** 0 = no limit */
   maxCarryForward: number;
+  /** Carried days must be used within N months of the new year (null = whole year) */
+  carryForwardExpiryMonths: number | null;
   encashable: boolean;
   requiresDocument: boolean;
   status: 'Active' | 'Inactive';
@@ -57,6 +89,10 @@ export interface LeaveRequest {
   approverId?: string;
   rejectionReason?: string;
   approvedAt?: string | null;
+  /** Who approved / rejected it, e.g. "Priya Sharma" + "HR". */
+  decidedByName?: string;
+  decidedByRole?: string;
+  decidedAt?: string | null;
   employeeName?: string;
   employeeCode?: string;
   department?: string;
@@ -86,6 +122,40 @@ export interface LeaveBalance {
   used: number;
   carriedForward: number;
   balance: number;
+  unlimited?: boolean;
+  quotaPeriod?: QuotaPeriod;
+  quotaDays?: number;
+  yearEntitlement?: number | null;
+  carriedExpiresOn?: string | null;
+  carriedExpired?: boolean;
+}
+
+export interface EmployeeLeaveSummary {
+  year: number;
+  balances: LeaveBalance[];
+  stats: {
+    presentDays: number;
+    lateDays: number;
+    halfDays: number;
+    approvedLeaveDays: number;
+    unapprovedAbsenceDays: number;
+    workingDaysSoFar: number;
+  };
+  approvedLeaves: Array<{
+    id: string;
+    type: string;
+    fromDate: string;
+    toDate: string;
+    days: number;
+    reason: string;
+    decidedByName?: string;
+    decidedByRole?: string;
+    decidedAt: string | null;
+    upcoming: boolean;
+  }>;
+  pendingLeaves: Array<{ id: string; type: string; fromDate: string; toDate: string; days: number }>;
+  rejectedLeaves: number;
+  unapprovedAbsences: Array<{ date: string; markedAbsent: boolean }>;
 }
 
 export interface Holiday {
@@ -100,6 +170,11 @@ export interface DayAttendanceDetail {
   checkInTime?: string | Date;
   checkOutTime?: string | Date;
   totalHours?: number;
+  actualHours?: number;
+  overtimeHours?: number;
+  totalBreakMinutes?: number;
+  breaks?: BreakRecord[];
+  shiftDetails?: ShiftSnapshot;
   workType?: string;
   location?: string;
 }
@@ -116,7 +191,32 @@ export interface AbsenceRow {
   status: string;
 }
 
+export interface OvertimeRow {
+  employee: EmployeeRef;
+  daysCount: number;
+  totalOvertimeHours: number;
+  avgMinutesPerDay: number;
+  records: Array<{
+    date: string;
+    actualHours: number;
+    overtimeHours: number;
+    checkInTime?: string;
+    checkOutTime?: string;
+  }>;
+}
+
 export type CandidateStatus = 'Scheduled' | 'Interviewed' | 'Selected' | 'Rejected' | 'On Hold';
+
+export interface InterviewRound {
+  _id?: string;
+  roundNumber?: number;
+  roundName?: string;
+  interviewDate: string;
+  interviewedBy: { _id: string; name: string; role?: string } | string;
+  notes?: string | null;
+  status?: string | null;
+  createdAt?: string;
+}
 
 export interface Candidate {
   _id: string;
@@ -125,11 +225,12 @@ export interface Candidate {
   mobile: string;
   position: string;
   interviewDate: string;
-  interviewedBy?: { _id: string; name: string } | string;
+  interviewedBy?: { _id: string; name: string; role?: string } | string;
   status: CandidateStatus;
   resumeFileKey?: string | null;
   resumeUrl?: string | null;
   notes?: string | null;
+  interviewRounds?: InterviewRound[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -138,6 +239,7 @@ export interface CandidateListQuery {
   search?: string;
   status?: CandidateStatus | '';
   position?: string;
+  resume?: 'all' | 'available' | 'none';
   startDate?: string;
   endDate?: string;
   page?: number;

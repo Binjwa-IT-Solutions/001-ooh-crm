@@ -125,6 +125,8 @@ export default function ImportSitesPage() {
       <div>
         <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Import Sites</h1>
         <p className="text-sm text-slate-500">Upload a CSV file to bulk import sites.</p>
+        <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Import Media Plan</h1>
+        <p className="text-sm text-slate-500">Upload a CSV file to bulk import media plan inventory.</p>
       </div>
 
       <Card className="p-6 space-y-4">

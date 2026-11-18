@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useVendor } from '@/modules/vendors/hooks/use-vendors';
+import { useVendor } from '@/modules/vendors/hooks/useVendors';
 import VendorForm from '@/modules/vendors/components/VendorForm';
 import { Spinner } from '@/shared/ui';
 

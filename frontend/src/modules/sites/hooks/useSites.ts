@@ -1,10 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 
 import {
-  getSites,
   createSite,
+  getSites,
   updateSite,
 } from "../api";
 
@@ -12,11 +16,10 @@ import type {
   CreateSiteData,
   Site,
   SiteFilters,
+  UpdateSiteData,
 } from "../types";
 
-export function useSites(
-  filters?: SiteFilters
-) {
+export function useSites(filters: SiteFilters = {}) {
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -26,61 +29,65 @@ export function useSites(
       setLoading(true);
       setError("");
 
-      const data = await getSites();
-
+      const data = await getSites(filters);
       setSites(data);
-    } catch (err: any) {
-      setSites([]);
-
+    } catch (error) {
       setError(
-        err?.message ||
-          "Failed to load sites."
+        error instanceof Error
+          ? error.message
+          : "Failed to load ATR"
       );
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [
+    filters.search,
+    filters.state,
+    filters.city,
+    filters.vendorName,
+    filters.salesPersonName,
+    filters.mediaType,
+    filters.availability,
+    filters.status,
+  ]);
 
   useEffect(() => {
     loadSites();
   }, [loadSites]);
 
-  const addSite = async (
-    data: CreateSiteData
-  ) => {
+  const addSite = async (data: CreateSiteData) => {
     try {
       setError("");
-
       await createSite(data);
-
       await loadSites();
-    } catch (err: any) {
+    } catch (error) {
       const message =
-        err?.message ||
-        "Failed to create site.";
+        error instanceof Error
+          ? error.message
+          : "Failed to create ATR";
 
       setError(message);
-      throw err;
+      throw error;
     }
   };
 
   const editSite = async (
     id: string,
-    data: Partial<CreateSiteData>
+    data: UpdateSiteData
   ) => {
     try {
       setError("");
 
       await updateSite(id, data);
-
       await loadSites();
-    } catch (err: any) {
+    } catch (error) {
       const message =
-        err?.message ||
-        "Failed to update site.";
+        error instanceof Error
+          ? error.message
+          : "Failed to update ATR";
 
       setError(message);
-      throw err;
+      throw error;
     }
   };
 
@@ -88,7 +95,7 @@ export function useSites(
     sites,
     loading,
     error,
-    loadSites,
+    reload: loadSites,
     addSite,
     editSite,
   };

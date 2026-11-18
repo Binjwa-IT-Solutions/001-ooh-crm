@@ -200,3 +200,14 @@ test('departments and statuses are non-empty enums', () => {
   assert.ok(DEPARTMENTS.length > 0);
   assert.ok(EMPLOYEE_STATUSES.includes('Active'));
 });
+
+test('personalMobile is accepted when valid and rejected when malformed', () => {
+  const valid = updateEmployeeSchema.parse({ personalMobile: '9876543210' });
+  assert.equal(valid.personalMobile, '9876543210');
+
+  const empty = updateEmployeeSchema.parse({ personalMobile: '' });
+  assert.equal(empty.personalMobile, '');
+
+  assert.throws(() => updateEmployeeSchema.parse({ personalMobile: '123' }));
+});
+

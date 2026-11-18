@@ -6,19 +6,50 @@ export type PurchaseOrderStatus =
 
 export interface PurchaseOrderLineItem {
   _id?: string;
-  siteId: string;
-  from: string;
-  to: string;
-  negotiatedRatePerDay: number;
-  days: number;
-  amount: number;
+  siteId?: string;
+  city?: string;
+  spaceType?: string;
+  from?: string;
+  to?: string;
+  ratePerDay?: number;
+  negotiatedRatePerDay?: number;
+  days?: number;
+  amount?: number;
+
+  item?: string;
+  service?: string;
+  description?: string;
+  hsn?: string;
+  qty?: number;
+  unit?: string;
+  rate?: number;
+  discount?: number;
+  tax?: number;
+}
+
+export interface BankDetails {
+  bankName?: string;
+  personName?: string;
+  accountNumber?: string;
+  ifsc?: string;
+  branch?: string;
+}
+
+export interface CompanyProfile {
+  companyName?: string;
+  companyAddress?: string;
+  companyGstin?: string;
+  companyEmail?: string;
+  companyPhone?: string;
 }
 
 export interface PurchaseOrder {
   _id: string;
   poNumber: string;
-  campaignId:
+  pricingId?: string;
+  campaignId?:
     | string
+    | null
     | {
         _id: string;
         name: string;
@@ -28,18 +59,69 @@ export interface PurchaseOrder {
         endDate?: string;
         status?: string;
       };
-  vendorId:
+  campaignName?: string;
+  vendorId?:
     | string
     | {
         _id: string;
         name: string;
         state?: string;
         city?: string;
+        address?: string;
+        gstin?: string;
         status?: string;
         contactPerson?: string;
         mobile?: string;
         email?: string;
       };
+  vendorName?: string;
+
+  city?: string;
+  spaceType?: string;
+  cardRate?: number;
+  negotiatedRate?: number;
+  discountGiven?: number;
+  discountPercent?: number;
+  companyCostPrice?: number;
+  companySellingPrice?: number;
+  profitPerUnit?: number;
+  profitMarginPercent?: number;
+  durationDays?: number;
+  validityFrom?: string;
+  validityTo?: string;
+  negotiationRounds?: number;
+  negotiationNotes?: string;
+  approvedBy?: string;
+
+  poDate?: string;
+  placeOfSupply?: string;
+  vendorAddress?: string;
+  vendorGstin?: string;
+  subtotal?: number;
+  gstRate?: number;
+  gstAmount?: number;
+  companyName?: string;
+  companyAddress?: string;
+  companyGstin?: string;
+  companyEmail?: string;
+  companyPhone?: string;
+  notes?: string;
+  termsAndConditions?: string[];
+  bankDetails?: BankDetails | null;
+
+  // Payment Tracking
+  paymentTerms?: string;
+  dueDate?: string;
+  paymentMethod?: string;
+  gstApplicable?: boolean;
+  accountsStatus?: string;
+  accountsComments?: string;
+  invoiceNumber?: string;
+  invoiceDate?: string;
+  paymentStatus?: "Pending" | "Partial" | "Paid";
+  paidAmount?: number;
+  paymentDate?: string;
+
   lineItems: PurchaseOrderLineItem[];
   totalAmount: number;
   status: PurchaseOrderStatus;
@@ -50,12 +132,66 @@ export interface PurchaseOrder {
 }
 
 export interface PurchaseOrderFormData {
-  campaignId: string;
-  vendorId: string;
-  lineItems: Omit<
-    PurchaseOrderLineItem,
-    "amount" | "days"
-  >[];
+  poNumber?: string;
+  pricingId?: string;
+  vendorId?: string;
+  vendorName?: string;
+  campaignId?: string;
+  campaignName?: string;
+
+  city?: string;
+  spaceType?: string;
+
+  cardRate?: number;
+  negotiatedRate?: number;
+  discountGiven?: number;
+  discountPercent?: number;
+
+  companyCostPrice?: number;
+  companySellingPrice?: number;
+  profitPerUnit?: number;
+  profitMarginPercent?: number;
+
+  durationDays?: number;
+  validityFrom?: string;
+  validityTo?: string;
+
+  negotiationRounds?: number;
+  negotiationNotes?: string;
+  approvedBy?: string;
+
+  poDate?: string;
+  placeOfSupply?: string;
+  vendorAddress?: string;
+  vendorGstin?: string;
+  subtotal?: number;
+  gstRate?: number;
+  gstAmount?: number;
+  companyName?: string;
+  companyAddress?: string;
+  companyGstin?: string;
+  companyEmail?: string;
+  companyPhone?: string;
+  notes?: string;
+  termsAndConditions?: string[];
+  bankDetails?: BankDetails | null;
+  status?: PurchaseOrderStatus;
+
+  totalAmount?: number;
+  lineItems?: PurchaseOrderLineItem[];
+}
+
+export interface PaymentTrackingData {
+  invoiceNumber?: string;
+  invoiceDate?: string;
+  paidAmount?: number;
+  paymentDate?: string;
+  paymentTerms?: string;
+  dueDate?: string;
+  paymentMethod?: string;
+  gstApplicable?: boolean;
+  accountsStatus?: string;
+  accountsComments?: string;
 }
 
 export interface CampaignOption {
@@ -73,6 +209,8 @@ export interface VendorOption {
   name: string;
   state?: string;
   city?: string;
+  address?: string;
+  gstin?: string;
   status?: string;
   contactPerson?: string;
   mobile?: string;
@@ -83,6 +221,7 @@ export interface PurchaseOrderFilters {
   status?: string;
   campaignId?: string;
   vendorId?: string;
+  city?: string;
 }
 
 export interface PurchaseOrdersResponse {

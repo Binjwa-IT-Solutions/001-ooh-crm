@@ -4,13 +4,23 @@ import { config } from '../../config/index.js';
 import { UnauthorizedError } from '../errors/index.js';
 import { AuthService } from './auth-service.js';
 import {
+  listUsersSchema,
   loginSchema,
+  emailFallbackSchema,
+  completeMfaEnrollmentSchema,
   logoutSchema,
   refreshSchema,
   registerSchema,
+  resetUserMfaSchema,
   resendOtpSchema,
+  updateUserSchema,
+  userIdParamSchema,
   verifyOtpSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  resetTokenParamSchema,
 } from './auth-validator.js';
+import { checkPasswordResetToken, requestPasswordReset, resetPassword } from './password-reset.js';
 import { auditService } from '../audit/index.js';
 
 /**
@@ -19,7 +29,7 @@ import { auditService } from '../audit/index.js';
  * forwards rejections to the central error handler.
  */
 export class AuthController {
-  /** POST /api/auth/register — admin only. */
+  /** POST /api/auth/register (or /api/auth/users) — authorized roles with users.create. */
   static async register(req: Request, res: Response) {
     const input = registerSchema.parse(req.body);
 
@@ -28,21 +38,84 @@ export class AuthController {
       email: input.email,
       passwordPlain: input.password,
       role: input.role,
+      status: input.status,
+      reportingManagerId: input.reportingManagerId || undefined,
     });
 
     res.status(201).json({ message: 'User created', user });
   }
 
-  /** POST /api/auth/login — step 1: password check, then OTP is issued. */
-  static async login(req: Request, res: Response) {
-    const input = loginSchema.parse(req.body);
-    const challenge = await AuthService.startLogin(input.email, input.password);
+  /** GET /api/auth/users — list users with pagination, filters & search. */
+  static async listUsers(req: Request, res: Response) {
+    const query = listUsersSchema.parse(req.query);
+    const result = await AuthService.listUsers(query);
+    res.status(200).json(result);
+  }
+
+  /** GET /api/auth/users/:id — get user by id. */
+  static async getUserById(req: Request, res: Response) {
+    const { id } = userIdParamSchema.parse(req.params);
+    const user = await AuthService.getUserById(id);
+    res.status(200).json({ user });
+  }
+
+  /** PATCH /api/auth/users/:id — update user role/status/name/password. */
+  static async updateUser(req: Request, res: Response) {
+    const { id } = userIdParamSchema.parse(req.params);
+    const input = updateUserSchema.parse(req.body);
+
+    const user = await AuthService.updateUser(id, {
+      name: input.name,
+      role: input.role,
+      status: input.status,
+      passwordPlain: input.password,
+      reportingManagerId:
+        input.reportingManagerId !== undefined ? input.reportingManagerId : undefined,
+    });
+
+    res.status(200).json({ message: 'User updated', user });
+  }
+
+  /** POST /api/auth/users/:id/reset-mfa — admin recovery with fresh MFA proof. */
+  static async resetUserMfa(req: Request, res: Response) {
+    const { id } = userIdParamSchema.parse(req.params);
+    if (!req.ctx) throw new UnauthorizedError();
+    const input = resetUserMfaSchema.parse(req.body);
+    const result = await AuthService.resetUserMfa(id, req.ctx.user.id, input);
 
     res.status(200).json({
-      message: 'Verification code sent',
+      message: 'Authenticator reset. The user must enroll again at next sign-in.',
+      ...result,
+    });
+  }
+
+  /** DELETE /api/auth/users/:id — soft delete / deactivate user. */
+  static async deleteUser(req: Request, res: Response) {
+    const { id } = userIdParamSchema.parse(req.params);
+    const result = await AuthService.deleteUser(id);
+    res.status(200).json({ message: 'User deactivated', ...result });
+  }
+
+  /** POST /api/auth/login — step 1: validate password and request a second factor. */
+  static async login(req: Request, res: Response) {
+    const input = loginSchema.parse(req.body);
+    const result = await AuthService.startLogin(input.email, input.password, {
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      deviceId: input.deviceId,
+      location: input.location,
+    });
+
+    if ('requiresAdminApproval' in result) {
+      res.status(202).json({ message: 'Admin approval required', ...result });
+      return;
+    }
+
+    res.status(200).json({
+      message: result.method === 'email' ? 'Verification code sent' : 'Authenticator required',
       // The client uses this to decide whether to show the dev-mode OTP hint.
       devMode: config.otp.exposeInResponse,
-      challenge,
+      challenge: result,
     });
   }
 
@@ -58,15 +131,43 @@ export class AuthController {
     });
   }
 
+  /** POST /api/auth/email-fallback — explicitly use email instead of TOTP. */
+  static async requestEmailFallback(req: Request, res: Response) {
+    const input = emailFallbackSchema.parse(req.body);
+    const challenge = await AuthService.requestEmailFallback(input.challengeId);
+
+    res.status(200).json({
+      message: 'A verification code has been sent by email',
+      devMode: config.otp.exposeInResponse,
+      challenge,
+    });
+  }
+
   /** POST /api/auth/verify-otp — step 2: code check, session issued. */
   static async verifyOtp(req: Request, res: Response) {
     const input = verifyOtpSchema.parse(req.body);
 
-    const session = await AuthService.verifyOtp(input.challengeId, input.code, {
+    const result = await AuthService.verifyOtp(input.challengeId, input.code, {
+      userAgent: req.headers['user-agent'],
+      ip: req.ip,
+    });
+
+    if ('requiresMfaEnrollment' in result) {
+      res.status(200).json({ message: 'Authenticator enrollment required', ...result });
+      return;
+    }
+
+    res.status(200).json({ message: 'Signed in', ...result });
+  }
+
+  /** POST /api/auth/complete-mfa-enrollment — verify TOTP setup and issue session. */
+  static async completeMfaEnrollment(req: Request, res: Response) {
+    const input = completeMfaEnrollmentSchema.parse(req.body);
+    const session = await AuthService.completeMfaEnrollment(input.enrollmentToken, input.code, {
       userAgent: req.headers['user-agent'],
     });
 
-    res.status(200).json({ message: 'Signed in', ...session });
+    res.status(200).json({ message: 'Authenticator enabled', ...session });
   }
 
   /** POST /api/auth/refresh — rotate the refresh token. */
@@ -90,6 +191,9 @@ export class AuthController {
         action: 'logout',
         entity: 'Auth',
         ctx: req.ctx,
+        method: 'POST',
+        path: '/api/auth/logout',
+        statusCode: 200,
         ip: req.ip,
         userAgent: req.headers['user-agent'],
       });
@@ -106,3 +210,32 @@ export class AuthController {
     res.status(200).json({ user });
   }
 }
+
+/**
+ * Self-service password reset (public, no auth). Kept separate from AuthController's
+ * login flow — see core/auth/password-reset.ts for the security notes.
+ */
+export const PasswordResetController = {
+  /** POST /api/auth/forgot-password */
+  async forgotPassword(req: Request, res: Response) {
+    const { email } = forgotPasswordSchema.parse(req.body);
+    const result = await requestPasswordReset(email, { ip: req.ip });
+    res.status(200).json(result);
+  },
+
+  /** GET /api/auth/reset-password/:token — is the link still usable? */
+  async checkResetToken(req: Request, res: Response) {
+    const parsed = resetTokenParamSchema.safeParse(req.params);
+    if (!parsed.success) {
+      res.status(200).json({ valid: false });
+      return;
+    }
+    res.status(200).json(await checkPasswordResetToken(parsed.data.token));
+  },
+
+  /** POST /api/auth/reset-password */
+  async resetPassword(req: Request, res: Response) {
+    const { token, password } = resetPasswordSchema.parse(req.body);
+    res.status(200).json(await resetPassword(token, password));
+  },
+};

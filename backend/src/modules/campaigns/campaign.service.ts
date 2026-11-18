@@ -9,10 +9,10 @@ import Campaign, {
 
 import { Quotation } from "../quotations/quotations.model.js";
 import { Lead } from "../leads/leads.model.js";
+import { Site } from "../sites/site.model.js";
 import { AuthUser } from "../../core/auth/auth-model.js";
-import { createBooking, releaseCampaignBookings } from "../bookings/booking.service.js";
 import { checkSitesExist } from "../sites/site.service.js";
-import { generateForCampaign } from "../tasks/task.service.js";
+import { employeeService } from "../employees/employees.service.js";
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
@@ -43,34 +43,39 @@ type CampaignFilters = {
   startDate?: Date;
   endDate?: Date;
   search?: string;
+  myCampaigns?: boolean;
+  agentId?: string;
+  tab?: "all" | "live" | "closed" | "renewals";
 };
 
 /* -------------------------------------------------------------------------- */
 /* Status Transitions                                                         */
 /* -------------------------------------------------------------------------- */
 
-const STATUS_TRANSITIONS: Record<
-  CampaignStatus,
-  CampaignStatus[]
-> = {
-  [CampaignStatus.DRAFT]: [
-    CampaignStatus.APPROVED,
-    CampaignStatus.CANCELLED,
-  ],
+const ALL_TARGET_STATUSES = [
+  "Campaign Live",
+  "In Progress",
+  "InProgress",
+  "Campaign End",
+  "Complete",
+  "Completed",
+  "Rejected",
+  "Draft",
+  "Approved",
+  "Cancelled",
+];
 
-  [CampaignStatus.APPROVED]: [
-    CampaignStatus.IN_PROGRESS,
-    CampaignStatus.CANCELLED,
-  ],
-
-  [CampaignStatus.IN_PROGRESS]: [
-    CampaignStatus.COMPLETED,
-    CampaignStatus.CANCELLED,
-  ],
-
-  [CampaignStatus.COMPLETED]: [],
-
-  [CampaignStatus.CANCELLED]: [],
+const STATUS_TRANSITIONS: Record<string, string[]> = {
+  "In Progress": ALL_TARGET_STATUSES,
+  "InProgress": ALL_TARGET_STATUSES,
+  "Campaign Live": ALL_TARGET_STATUSES,
+  "Campaign End": ALL_TARGET_STATUSES,
+  "Complete": ALL_TARGET_STATUSES,
+  "Completed": ALL_TARGET_STATUSES,
+  "Rejected": ALL_TARGET_STATUSES,
+  "Draft": ALL_TARGET_STATUSES,
+  "Approved": ALL_TARGET_STATUSES,
+  "Cancelled": ALL_TARGET_STATUSES,
 };
 
 /* -------------------------------------------------------------------------- */
@@ -525,7 +530,7 @@ export async function createFromQuotation(
           Math.min(
             ...sites.map((site) =>
               new Date(
-                site.startDate,
+                site.startDate || Date.now(),
               ).getTime(),
             ),
           ),
@@ -536,7 +541,7 @@ export async function createFromQuotation(
           Math.max(
             ...sites.map((site) =>
               new Date(
-                site.endDate,
+                site.endDate || (Date.now() + (site.days || 30) * 86400000),
               ).getTime(),
             ),
           ),
@@ -559,6 +564,44 @@ export async function createFromQuotation(
         session ?? undefined,
       );
 
+      /* -------------------------- Resolve City & State ------------------- */
+
+      let campaignCity = quotation.clientCity?.trim() || "";
+      let campaignState = quotation.clientState?.trim() || "";
+      let assignedManager: Types.ObjectId | undefined = undefined;
+
+      if (quotation.leadId) {
+        const leadDoc = await Lead.findById(quotation.leadId)
+          .session(session ?? null)
+          .lean();
+        if (leadDoc) {
+          if (!campaignCity) {
+            campaignCity = leadDoc.city?.trim() || leadDoc.qualification?.city?.trim() || "";
+          }
+          if (leadDoc.assignedTo && Types.ObjectId.isValid(leadDoc.assignedTo)) {
+            assignedManager = new Types.ObjectId(leadDoc.assignedTo);
+          }
+        }
+      }
+
+      if ((!campaignCity || !campaignState) && sites.length > 0) {
+        const siteDoc = await Site.findById(sites[0].siteId)
+          .session(session ?? null)
+          .lean();
+        if (siteDoc) {
+          if (!campaignCity) {
+            campaignCity = siteDoc.city?.trim() || "";
+          }
+          if (!campaignState) {
+            campaignState = siteDoc.state?.trim() || "";
+          }
+        }
+      }
+
+      if (!campaignCity) {
+        campaignCity = "National";
+      }
+
       /* -------------------------- Create Campaign ------------------------ */
 
       const campaign =
@@ -578,7 +621,17 @@ export async function createFromQuotation(
           quotationId:
             quotation._id,
 
-          city: "",
+          quotationNo:
+            quotation.quoteNumber || "",
+
+          quotationName:
+            quotation.clientName || "",
+
+          state:
+            campaignState || "",
+
+          city:
+            campaignCity,
 
           startDate,
 
@@ -595,6 +648,8 @@ export async function createFromQuotation(
 
           status:
             CampaignStatus.DRAFT,
+
+          assignedManager,
         });
 
       await campaign.save({
@@ -622,12 +677,55 @@ export async function listCampaigns(
 ) {
   const query: Record<string, any> = {};
 
-  if (filters.status) {
-    query.status = filters.status;
+  /* --------------------------- Agent / My Campaigns Scoping ----------------- */
+  const targetAgentId =
+    filters.agentId || (filters.myCampaigns ? ctx.userId : undefined);
+
+  if (targetAgentId && Types.ObjectId.isValid(targetAgentId)) {
+    const agentLeads = await Lead.find({
+      $or: [
+        { assignedTo: new Types.ObjectId(targetAgentId) },
+        { createdBy: new Types.ObjectId(targetAgentId) },
+      ],
+    })
+      .select("_id")
+      .lean();
+
+    const agentLeadIds = agentLeads.map((l) => l._id);
+    if (agentLeadIds.length === 0) {
+      return [];
+    }
+
+    if (filters.leadId && Types.ObjectId.isValid(filters.leadId)) {
+      const requestedId = new Types.ObjectId(filters.leadId);
+      const isOwned = agentLeadIds.some((id) => id.equals(requestedId));
+      if (!isOwned) {
+        return [];
+      }
+      query.leadId = requestedId;
+    } else {
+      query.leadId = { $in: agentLeadIds };
+    }
+  } else if (filters.leadId && Types.ObjectId.isValid(filters.leadId)) {
+    query.leadId = new Types.ObjectId(filters.leadId);
   }
 
-  if (filters.leadId && Types.ObjectId.isValid(filters.leadId)) {
-    query.leadId = new Types.ObjectId(filters.leadId);
+  /* --------------------------- Tab Filters (Live / Closed / Renewals) -------- */
+  if (filters.tab === "live") {
+    query.status = CampaignStatus.IN_PROGRESS;
+  } else if (filters.tab === "closed") {
+    query.status = {
+      $in: [CampaignStatus.COMPLETED, CampaignStatus.CANCELLED],
+    };
+  } else if (filters.tab === "renewals") {
+    const now = new Date();
+    const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    query.status = {
+      $nin: [CampaignStatus.COMPLETED, CampaignStatus.CANCELLED],
+    };
+    query.endDate = { $gte: now, $lte: in7Days };
+  } else if (filters.status) {
+    query.status = filters.status;
   }
 
   if (filters.city?.trim()) {
@@ -714,11 +812,42 @@ export async function listCampaigns(
     query.$or = searchConditions;
   }
 
+  if (ctx.role === "manager") {
+    const scopedUserIds = await employeeService.getScopedUserIds({
+      user: { id: String(ctx.userId), role: ctx.role },
+    } as any);
+    if (scopedUserIds) {
+      const teamLeads = await Lead.find({
+        deletedAt: null,
+        $or: [
+          { assignedTo: { $in: scopedUserIds } },
+          { claimedBy: { $in: scopedUserIds } },
+          { createdBy: { $in: scopedUserIds } },
+        ],
+      }).select("_id");
+
+      const teamScope = {
+        $or: [
+          { assignedManager: { $in: scopedUserIds } },
+          { leadId: { $in: teamLeads.map((l) => l._id) } },
+        ],
+      };
+
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, teamScope];
+        delete query.$or;
+      } else {
+        query.$or = teamScope.$or;
+      }
+    }
+  }
+
   return Campaign.find(query)
-    .populate(
-      "leadId",
-      "companyName contactPerson email mobile city",
-    )
+    .populate({
+      path: "leadId",
+      select: "companyName contactPerson email mobile city assignedTo",
+      populate: { path: "assignedTo", select: "name email role" },
+    })
     .populate(
       "siteIds",
       "name code city type size baseCostPerDay",
@@ -794,6 +923,19 @@ export async function updateCampaign(
     throw new Error("Campaign not found");
   }
 
+  const lockedStatuses = [
+    "Campaign End",
+    "Completed",
+    "Complete",
+    "Rejected",
+    "Cancelled",
+  ];
+  if (lockedStatuses.includes(campaign.status)) {
+    throw new Error(
+      `Cannot edit campaign in ${campaign.status} status.`,
+    );
+  }
+
   if (input.name !== undefined) campaign.name = input.name;
   if (input.leadId !== undefined) {
     if (!Types.ObjectId.isValid(input.leadId)) {
@@ -853,6 +995,7 @@ export async function updateCampaignStatus(
   id: string,
   nextStatus: CampaignStatus,
   ctx: RequestContext,
+  reason?: string,
 ) {
   if (
     !Types.ObjectId.isValid(id)
@@ -918,103 +1061,6 @@ export async function updateCampaignStatus(
           ),
           session ?? undefined,
         );
-
-        /*
-         * Pre-check for booking conflicts before writing anything.
-         * Gives a clear error listing the conflicting sites and date
-         * rather than a low-level duplicate key error.
-         */
-        const { SiteBooking } = await import(
-          "../bookings/site-booking.model.js"
-        );
-
-        const conflictingInfo: string[] = [];
-
-        for (const siteId of campaign.siteIds) {
-          const conflicts = await SiteBooking.find({
-            siteId: new Types.ObjectId(String(siteId)),
-            date: {
-              $gte: campaign.startDate,
-              $lte: campaign.endDate,
-            },
-            campaignId: { $ne: campaign._id },
-          })
-            .populate("campaignId", "campaignCode name status")
-            .session(session ?? null)
-            .lean();
-
-          for (const conflict of conflicts) {
-            const ownerCamp = conflict.campaignId as any;
-            if (
-              !ownerCamp ||
-              ownerCamp.status === "Cancelled" ||
-              ownerCamp.status === "Completed"
-            ) {
-              // Stale booking from inactive/completed campaign: clean it up
-              await SiteBooking.deleteMany({
-                _id: conflict._id,
-              }).session(session ?? null);
-              continue;
-            }
-
-            const ownerCode =
-              ownerCamp.campaignCode ||
-              ownerCamp.name ||
-              String(conflict.campaignId);
-            const conflictMsg = `Site ${String(siteId)} is already booked by campaign ${ownerCode} (${ownerCamp.status})`;
-            if (!conflictingInfo.includes(conflictMsg)) {
-              conflictingInfo.push(conflictMsg);
-            }
-          }
-        }
-
-        if (conflictingInfo.length > 0) {
-          throw new Error(
-            `Cannot approve campaign: booking conflicts detected.\n${conflictingInfo.join("\n")}`,
-          );
-        }
-
-        /*
-         * Create bookings one by one.
-         *
-         * This is intentionally sequential.
-         * It avoids Promise.all() creating multiple
-         * independent booking operations while the
-         * campaign itself is inside a transaction.
-         */
-
-        for (const siteId of campaign.siteIds) {
-          await createBooking({
-            siteId: String(siteId),
-
-            campaignId:
-              String(
-                campaign._id,
-              ),
-
-            from:
-              campaign.startDate,
-
-            to:
-              campaign.endDate,
-          });
-        }
-      }
-
-      /* ---- Release bookings when campaign is cancelled or completed ---- */
-
-      if (
-        nextStatus === CampaignStatus.CANCELLED ||
-        nextStatus === CampaignStatus.COMPLETED
-      ) {
-        try {
-          await releaseCampaignBookings(String(campaign._id));
-        } catch (releaseErr) {
-          console.warn(
-            `[Bookings] Could not release bookings for ${nextStatus} campaign ${campaign._id}:`,
-            releaseErr,
-          );
-        }
       }
 
       /* ------------------------- Update Status ---------------------------- */
@@ -1022,35 +1068,13 @@ export async function updateCampaignStatus(
       campaign.status =
         nextStatus;
 
+      if (reason && reason.trim()) {
+        campaign.rejectionReason = reason.trim();
+      }
+
       await campaign.save({
         session,
       });
-
-      /* -------------------------------------------------------------------- */
-      /* Auto Generate Tasks After Approval                                   */
-      /* -------------------------------------------------------------------- */
-
-      if (
-        nextStatus ===
-        CampaignStatus.APPROVED
-      ) {
-        try {
-          await generateForCampaign(
-            campaign,
-            {
-              userId: String(
-                ctx.userId,
-              ),
-              role: ctx.role,
-            },
-          );
-        } catch (taskErr) {
-          console.error(
-            `[D1] Failed to auto-generate tasks for campaign ${campaign._id}:`,
-            taskErr,
-          );
-        }
-      }
 
       return campaign;
     },

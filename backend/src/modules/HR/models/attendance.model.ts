@@ -5,6 +5,20 @@ interface IGps {
     lng: number;
 }
 
+export interface IAttendanceBreak {
+    type: 'Lunch' | 'Tea' | 'Other';
+    startTime: Date;
+    endTime: Date;
+    durationMinutes: number;
+}
+
+export interface IShiftSnapshot {
+    name?: string;
+    startTime?: string;
+    endTime?: string;
+    requiredHours?: number;
+}
+
 export interface IAttendance extends Document {
     employeeId: mongoose.Types.ObjectId;
     date: Date;
@@ -12,10 +26,18 @@ export interface IAttendance extends Document {
     checkOutTime?: Date;
     checkInGps?: IGps;
     checkOutGps?: IGps;
-    totalHours?: number;
+    totalHours?: number;       // Gross hours between check-in and check-out
+    actualHours?: number;      // Net working hours (totalHours - totalBreakMinutes/60)
+    overtimeHours?: number;    // MAX(actualHours - 8, 0)
+    totalBreakMinutes?: number;// Total break duration in minutes
+    breaks?: IAttendanceBreak[];
+    shiftDetails?: IShiftSnapshot;
     workType: 'Office' | 'Remote' | 'Field Visit';
     status: 'Present' | 'Absent' | 'Leave' | 'Break' | 'Half-Day' | 'Late';
     deviceInfo?: string;
+    autoClosed?: boolean;
+    flaggedForReview?: boolean;
+    reviewNotes?: string;
     createdBy?: mongoose.Types.ObjectId;
     updatedBy?: mongoose.Types.ObjectId;
     deletedAt?: Date | null;
@@ -29,6 +51,26 @@ const gpsSchema = new Schema<IGps>(
     { _id: false }
 );
 
+const breakSchema = new Schema<IAttendanceBreak>(
+    {
+        type: { type: String, enum: ['Lunch', 'Tea', 'Other'], default: 'Lunch' },
+        startTime: { type: Date, required: true },
+        endTime: { type: Date, required: true },
+        durationMinutes: { type: Number, required: true, default: 0 },
+    },
+    { _id: false }
+);
+
+const shiftSnapshotSchema = new Schema<IShiftSnapshot>(
+    {
+        name: { type: String },
+        startTime: { type: String },
+        endTime: { type: String },
+        requiredHours: { type: Number, default: 8 },
+    },
+    { _id: false }
+);
+
 const attendanceSchema = new Schema<IAttendance>(
     {
         employeeId: { type: Schema.Types.ObjectId, ref: 'Employee', required: true },
@@ -38,6 +80,11 @@ const attendanceSchema = new Schema<IAttendance>(
         checkInGps: { type: gpsSchema },
         checkOutGps: { type: gpsSchema },
         totalHours: { type: Number },
+        actualHours: { type: Number },
+        overtimeHours: { type: Number, default: 0 },
+        totalBreakMinutes: { type: Number, default: 0 },
+        breaks: { type: [breakSchema], default: [] },
+        shiftDetails: { type: shiftSnapshotSchema },
         workType: {
             type: String,
             enum: ['Office', 'Remote', 'Field Visit'],
@@ -49,6 +96,9 @@ const attendanceSchema = new Schema<IAttendance>(
             default: 'Present',
         },
         deviceInfo: { type: String },
+        autoClosed: { type: Boolean, default: false },
+        flaggedForReview: { type: Boolean, default: false },
+        reviewNotes: { type: String },
         createdBy: { type: Schema.Types.ObjectId, ref: 'Employee' },
         updatedBy: { type: Schema.Types.ObjectId, ref: 'Employee' },
         deletedAt: { type: Date, default: null },

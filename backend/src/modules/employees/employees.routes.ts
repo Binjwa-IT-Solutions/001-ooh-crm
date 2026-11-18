@@ -3,7 +3,9 @@ import { Router } from 'express';
 import { requireAuth } from '../../core/auth/auth-middleware.js';
 import { asyncHandler } from '../../core/http/asyncHandler.js';
 import { requirePermission } from '../../core/rbac/index.js';
+import { uploadSingle } from '../../core/files/index.js';
 import { EmployeesController } from './employees.controller.js';
+import { PayrollController } from '../payroll/payroll.controller.js';
 
 /**
  * REFERENCE MODULE — routes.
@@ -17,11 +19,78 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/me', requirePermission('employees.self'), asyncHandler(EmployeesController.me));
+router.patch('/me', requirePermission('employees.self'), asyncHandler(EmployeesController.updateMine));
 
 router.get(
   '/manager-options',
   requirePermission('employees.view'),
   asyncHandler(EmployeesController.managerOptions),
+);
+
+router.get(
+  '/teams',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.teams),
+);
+
+router.post(
+  '/teams',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.createTeam),
+);
+
+router.post(
+  '/teams/reassign',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.reassignTeamMember),
+);
+
+router.patch(
+  '/teams/name',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.updateTeamName),
+);
+
+router.post(
+  '/teams/members',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.assignTeamMember),
+);
+
+router.delete(
+  '/teams/members/:id',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.removeTeamMember),
+);
+
+router.patch(
+  '/teams/:id',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.updateTeam),
+);
+
+router.delete(
+  '/teams/:id',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.deleteTeam),
+);
+
+router.post(
+  '/teams/:id/members',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.addMemberToTeam),
+);
+
+router.delete(
+  '/teams/:id/members/:employeeId',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.removeMemberFromTeam),
+);
+
+router.get(
+  '/:id/crm-summary',
+  requirePermission('employees.view'),
+  asyncHandler(EmployeesController.memberCrmSummary),
 );
 
 router.get('/', requirePermission('employees.view'), asyncHandler(EmployeesController.list));
@@ -42,10 +111,54 @@ router.patch(
   asyncHandler(EmployeesController.update),
 );
 
+router.get(
+  '/:id/salary',
+  requirePermission('salary.view'),
+  asyncHandler(PayrollController.getEmployeeSalary),
+);
+
+router.post(
+  '/:id/salary',
+  requirePermission('salary.create'),
+  asyncHandler(PayrollController.upsertEmployeeSalary),
+);
+
+router.patch(
+  '/:id/salary',
+  requirePermission('salary.update'),
+  asyncHandler(PayrollController.upsertEmployeeSalary),
+);
+
+router.get(
+  '/:id/salary/history',
+  requirePermission('salary.view'),
+  asyncHandler(PayrollController.getSalaryHistory),
+);
+
 router.delete(
   '/:id',
   requirePermission('employees.manage'),
   asyncHandler(EmployeesController.deactivate),
 );
 
+router.post(
+  '/:id/documents',
+  requirePermission('employees.manage'),
+  uploadSingle('file', [
+    'application/pdf',
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/jpg',
+  ]),
+  asyncHandler(EmployeesController.uploadDocument),
+);
+
+router.delete(
+  '/:id/documents/:docId',
+  requirePermission('employees.manage'),
+  asyncHandler(EmployeesController.deleteDocument),
+);
+
 export default router;
+

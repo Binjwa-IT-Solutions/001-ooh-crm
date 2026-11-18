@@ -60,3 +60,48 @@ export async function getAbsenceReport(req: Request, res: Response, next: NextFu
     next(err);
   }
 }
+
+export async function getOvertimeReport(req: Request, res: Response, next: NextFunction) {
+  try {
+    const fromMonth = parseInt((req.query.fromMonth || req.query.month) as string, 10);
+    const fromYear = parseInt((req.query.fromYear || req.query.year) as string, 10);
+    const toMonth = parseInt((req.query.toMonth || req.query.month) as string, 10);
+    const toYear = parseInt((req.query.toYear || req.query.year) as string, 10);
+    const minHours = parseFloat((req.query.minHours as string) || '0');
+
+    if (isNaN(fromMonth) || isNaN(fromYear) || isNaN(toMonth) || isNaN(toYear)) {
+      return res.status(400).json({ error: { message: 'Valid month and year parameters are required' } });
+    }
+
+    const data = await service.getOvertimeReport(fromMonth, fromYear, toMonth, toYear, minHours, req.ctx!);
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function exportReport(req: Request, res: Response, next: NextFunction) {
+  try {
+    const reportType = (req.query.reportType as any) || 'monthly';
+    const date = req.query.date as string;
+    const fromDate = req.query.fromDate as string;
+    const toDate = req.query.toDate as string;
+    const fromMonth = req.query.fromMonth ? parseInt(req.query.fromMonth as string, 10) : undefined;
+    const fromYear = req.query.fromYear ? parseInt(req.query.fromYear as string, 10) : undefined;
+    const toMonth = req.query.toMonth ? parseInt(req.query.toMonth as string, 10) : undefined;
+    const toYear = req.query.toYear ? parseInt(req.query.toYear as string, 10) : undefined;
+    const department = req.query.department as string;
+    const employeeId = req.query.employeeId as string;
+
+    const { filename, csv } = await service.exportAttendanceCsv(
+      { reportType, date, fromDate, toDate, fromMonth, fromYear, toMonth, toYear, department, employeeId },
+      req.ctx!,
+    );
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.status(200).send(csv);
+  } catch (err) {
+    next(err);
+  }
+}

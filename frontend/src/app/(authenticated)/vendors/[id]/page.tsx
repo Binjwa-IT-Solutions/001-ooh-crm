@@ -2,7 +2,7 @@
 
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { useVendor } from '@/modules/vendors/hooks/use-vendors';
+import { useVendor } from '@/modules/vendors/hooks/useVendors';
 import { Card, Badge, Spinner, Button } from '@/shared/ui';
 import { useAuth } from '@/shared/auth/auth-context';
 

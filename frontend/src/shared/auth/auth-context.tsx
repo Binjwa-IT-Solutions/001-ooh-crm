@@ -25,6 +25,9 @@ import type { AuthSessionResponse, AuthUser } from './types';
  * `user` by hand in every component.
  */
 
+/** sessionStorage flag set on a fresh sign-in; read (and cleared) by the check-in reminder. */
+export const JUST_SIGNED_IN_KEY = 'mo.justSignedIn';
+
 interface AuthContextValue {
   user: AuthUser | null;
   /** True until the stored session has been checked on first load. */
@@ -34,6 +37,7 @@ interface AuthContextValue {
   completeSignIn: (session: AuthSessionResponse) => void;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  updateUser: (user: AuthUser) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -89,6 +93,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [router]);
 
   const completeSignIn = useCallback((session: AuthSessionResponse) => {
+    // Lets the app shell show the "don't forget to check in" reminder right after login.
+    try {
+      window.sessionStorage.setItem(JUST_SIGNED_IN_KEY, '1');
+    } catch {
+      /* storage unavailable — the reminder simply won't auto-open */
+    }
     sessionStore.save({
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
@@ -114,6 +124,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(fresh);
   }, []);
 
+  const updateUser = useCallback((updatedUser: AuthUser) => {
+    sessionStore.saveUser(updatedUser);
+    setUser(updatedUser);
+  }, []);
+
   const hasPermission = useCallback(
     (permission: string) => Boolean(user?.permissions?.includes(permission)),
     [user],
@@ -128,8 +143,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       completeSignIn,
       signOut,
       refreshUser,
+      updateUser,
     }),
-    [user, isLoading, hasPermission, completeSignIn, signOut, refreshUser],
+    [user, isLoading, hasPermission, completeSignIn, signOut, refreshUser, updateUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

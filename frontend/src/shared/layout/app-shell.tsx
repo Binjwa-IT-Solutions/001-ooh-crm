@@ -2,13 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useState, useEffect } from 'react';
+import { exceptionsApi } from '@/modules/exceptions/api';
 import {
   LayoutDashboard,
   Users,
   FileText,
   MapPin,
-  CalendarCheck,
   Building2,
   ShoppingCart,
   Megaphone,
@@ -21,77 +21,172 @@ import {
   TrendingUp,
   Clock,
   CalendarDays,
+  CalendarCheck,
   ShieldCheck,
   AlertTriangle,
+  CreditCard,
   Search,
-  Bell,
   Menu,
   X,
   LogOut,
-  ChevronDown,
+  type LucideIcon,
 } from 'lucide-react';
 
 import { useAuth } from '../auth/auth-context';
 import { ROLE_LABELS } from '../auth/types';
 import { Button, cx } from '../ui';
-import { type LucideIcon } from 'lucide-react';
 import NotificationBell from './NotificationBell';
+import { ChatbotNavButton } from '../chatbot/ChatbotNavButton';
+import { AttendanceNavButton } from '@/modules/hr/components/attendance-nav-button';
+import ProfileMenu from './ProfileMenu';
 import { PageHeaderProvider } from './page-header-context';
 import { PageHeader } from './page-header';
+import { EmployeesNavIcon, InterviewsNavIcon, UserManagementNavIcon } from './nav-icons';
 
 interface NavGroup {
   label: string;
-  items: Array<{ href: string; label: string; icon: LucideIcon; permission?: string }>;
+  items: Array<{
+    href: string;
+    label: string;
+    icon: LucideIcon | React.ComponentType<{ className?: string }>;
+    permission?: string;
+    roles?: string[];
+  }>;
 }
 
 export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Overview',
-    items: [{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }],
+    items: [
+      { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      // Holidays & approved leave — for everyone
+      { href: '/calendar', label: 'Calendar', icon: CalendarCheck },
+    ],
   },
   {
     label: 'SALES',
     items: [
       { href: '/leads', label: 'Leads', icon: Users, permission: 'leads.view' },
       { href: '/quotations', label: 'Quotations', icon: FileText, permission: 'quotations.view' },
+      {
+        href: '/my-campaigns',
+        label: 'My Campaigns',
+        icon: Megaphone,
+        permission: 'campaigns.view',
+      },
+    ],
+  },
+  {
+    label: 'MARKETING',
+    items: [
+      {
+        href: '/marketing',
+        label: 'Marketing Hub',
+        icon: Megaphone,
+        roles: ['admin', 'superadmin', 'managing_director', 'manager'],
+      },
     ],
   },
   {
     label: 'OPERATIONS',
     items: [
-      { href: '/sites', label: 'Sites', icon: MapPin, permission: 'sites.view' },
-      { href: '/booking', label: 'Bookings', icon: CalendarCheck, permission: 'bookings.view' },
       { href: '/vendors', label: 'Vendors', icon: Building2, permission: 'vendors.view' },
-      { href: '/purchase-orders', label: 'Purchase Orders', icon: ShoppingCart, permission: 'purchase_orders.view' },
-      { href: '/campaigns', label: 'Campaigns', icon: Megaphone, permission: 'campaigns.view' },
-      { href: '/tasks', label: 'Tasks', icon: ClipboardCheck, permission: 'tasks.view' },
-      { href: '/escalations', label: 'Escalations', icon: ArrowUpRight, permission: 'tasks.view' },
+      { href: '/sites', label: 'ATR', icon: MapPin, permission: 'sites.view' },
+      {
+        href: '/purchase-orders',
+        label: 'Purchase Orders',
+        icon: ShoppingCart,
+        permission: 'purchase_orders.view',
+      },
+      {
+        href: '/campaigns',
+        label: 'Campaigns',
+        icon: Megaphone,
+        permission: 'campaigns.view',
+      },
+      {
+        href: '/escalations',
+        label: 'Escalations',
+        icon: ArrowUpRight,
+        permission: 'tasks.view',
+        roles: ['admin', 'superadmin', 'manager', 'ops'],
+      },
       { href: '/proofs', label: 'Proofs', icon: Camera, permission: 'proofs.view' },
     ],
   },
   {
     label: 'FINANCE & ANALYTICS',
     items: [
-      { href: '/payments-in', label: 'Payments In', icon: ArrowDownToLine, permission: 'finance.view' },
-      { href: '/payments-out', label: 'Payments Out', icon: ArrowUpFromLine, permission: 'finance.view' },
-      { href: '/analytics', label: 'Sales Analytics', icon: BarChart3, permission: 'analytics.view' },
-      { href: '/profitability', label: 'Profitability', icon: TrendingUp, permission: 'profitability.view' },
+      {
+        href: '/finance/sales-dashboard',
+        label: 'Sales Revenue',
+        icon: BarChart3,
+        permission: 'finance.view_reports',
+        roles: ['admin', 'superadmin', 'manager', 'finance'],
+      },
+      { href: '/finance/profit-dashboard', label: 'Profit Dashboard', icon: TrendingUp, permission: 'finance.view_leadership_reports' },
+      {
+        href: '/finance/invoices',
+        label: 'Invoices',
+        icon: FileText,
+        permission: 'finance.view_payments',
+        roles: ['admin', 'superadmin', 'manager', 'finance'],
+      },
+      {
+        href: '/finance/payments-in',
+        label: 'Client Payments',
+        icon: ArrowDownToLine,
+        permission: 'finance.view_payments',
+        roles: ['admin', 'superadmin', 'manager', 'finance'],
+      },
+      {
+        href: '/finance/payments-out',
+        label: 'Vendor Payments',
+        icon: ArrowUpFromLine,
+        permission: 'finance.view_payments',
+        roles: ['admin', 'superadmin', 'manager', 'finance'],
+      },
+      { href: '/finance/payroll', label: 'Payroll / Salary Payments', icon: CreditCard, permission: 'payroll.view' },
     ],
   },
   {
     label: 'HR',
     items: [
-      { href: '/employees', label: 'Employees', icon: Users, permission: 'employees.view' },
-      { href: '/candidates', label: 'Interviews', icon: Users, permission: 'candidates.view' },
+      { href: '/employees', label: 'Employees', icon: EmployeesNavIcon, permission: 'employees.view' },
+      { href: '/candidates', label: 'Interviews', icon: InterviewsNavIcon, permission: 'candidates.view' },
       { href: '/attendance', label: 'Attendance', icon: Clock, permission: 'attendance.self' },
       { href: '/leave', label: 'Leave', icon: CalendarDays, permission: 'leave.self' },
+      { href: '/hr/salary', label: 'Salary Management', icon: CreditCard, permission: 'salary.view' },
     ],
   },
   {
     label: 'COMPLIANCE',
     items: [
       { href: '/audit', label: 'Audit', icon: ShieldCheck, permission: 'audit.view' },
-      { href: '/exceptions', label: 'Exceptions', icon: AlertTriangle, permission: 'exceptions.view' },
+      {
+        href: '/exceptions',
+        label: 'Exceptions',
+        icon: AlertTriangle,
+        permission: 'audit.view',
+      },
+    ],
+  },
+  {
+    label: 'ADMINISTRATION',
+    items: [
+      { href: '/users', label: 'Users', icon: UserManagementNavIcon, permission: 'users.view' },
+      {
+        href: '/security/approvals',
+        label: 'Login approvals',
+        icon: ShieldCheck,
+        roles: ['admin', 'hr'],
+      },
+      {
+        href: '/settings/company',
+        label: 'Company settings',
+        icon: Building2,
+        roles: ['admin'],
+      },
     ],
   },
 ];
@@ -100,13 +195,25 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { user, hasPermission, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [exceptionCount, setExceptionCount] = useState<number>(0);
+
+  useEffect(() => {
+    exceptionsApi
+      .getCount()
+      .then((res) => {
+        if (res.data?.totalUnresolved !== undefined) {
+          setExceptionCount(res.data.totalUnresolved);
+        }
+      })
+      .catch(() => {});
+  }, [pathname]);
 
   return (
     <div className="min-h-screen bg-white font-sans">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-slate-900/80 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-slate-900/80 backdrop-blur-sm lg:hidden print:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -114,14 +221,18 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Sidebar (Fixed on Desktop, Drawer on Mobile) */}
       <div
         className={cx(
-          'fixed inset-y-0 left-0 z-50 w-64 flex-col border-r border-[#E6E8EC] bg-white transition-transform duration-300 lg:flex',
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+          'fixed inset-y-0 left-0 z-50 w-64 flex-col border-r border-[#E6E8EC] bg-white transition-transform duration-300 lg:flex print:hidden',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
       >
         <div className="relative flex h-16 shrink-0 items-center justify-center px-4">
           <Link href="/dashboard" className="flex items-center justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png?v=4" alt="Media Octus" className="h-[52px] w-auto max-w-[190px] object-contain" />
+            <img
+              src="/logo.png?v=4"
+              alt="Media Octus"
+              className="h-[52px] w-auto max-w-[190px] object-contain"
+            />
           </Link>
           <button
             onClick={() => setSidebarOpen(false)}
@@ -134,9 +245,33 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex flex-1 flex-col overflow-y-auto pt-4 pb-12 no-scrollbar">
           <nav className="flex-1 space-y-6">
             {NAV_GROUPS.map((group) => {
-              const visibleItems = group.items.filter(
-                (item) => !item.permission || hasPermission(item.permission)
-              );
+              const visibleItems = group.items.filter((item) => {
+                if (item.href === '/marketing') {
+                  const roleStr = (user?.role || '').toLowerCase();
+                  // Admin, superadmin, manager always see Marketing Hub
+                  if (['admin', 'superadmin', 'managing_director', 'manager'].includes(roleStr)) {
+                    return true;
+                  }
+                  // Marketing employees see it (by email or designation)
+                  if (roleStr === 'employee') {
+                    const email = (user?.email || '').toLowerCase();
+                    const desig = (user?.designation || '').toLowerCase();
+                    return (
+                      email.includes('marketing') ||
+                      /marketing|designer|editor|content|creative|reel|video|social|media/.test(desig)
+                    );
+                  }
+                  return false;
+                }
+
+                if (item.roles) {
+                  const userRole = (user?.role || '').toLowerCase();
+                  if (!item.roles.map((r) => r.toLowerCase()).includes(userRole)) {
+                    return false;
+                  }
+                }
+                return !item.permission || hasPermission(item.permission);
+              });
 
               if (visibleItems.length === 0) return null;
 
@@ -151,23 +286,35 @@ export function AppShell({ children }: { children: ReactNode }) {
                   )}
                   <ul className="space-y-0.5">
                     {visibleItems.map((item) => {
-                      const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                      const isActive =
+                        pathname === item.href || pathname.startsWith(item.href + '/');
                       const Icon = item.icon;
 
                       return (
                         <li key={item.href}>
                           <Link
                             href={item.href}
+                            prefetch={false}
                             className={cx(
                               'flex items-center gap-3 px-6 py-2.5 text-sm transition-colors border-l-4',
                               isActive
                                 ? 'bg-[#F8E6E6] text-[#6E1D1D] border-[#6E1D1D] font-medium'
-                                : 'border-transparent text-slate-500 hover:bg-[#F8E6E6] hover:text-[#6E1D1D]'
+                                : 'border-transparent text-slate-500 hover:bg-[#F8E6E6] hover:text-[#6E1D1D]',
                             )}
                             onClick={() => setSidebarOpen(false)}
                           >
-                            <Icon className={cx('h-5 w-5', isActive ? 'text-[#6E1D1D]' : 'text-slate-500')} />
-                            {item.label}
+                            <Icon
+                              className={cx(
+                                'h-5 w-5',
+                                isActive ? 'text-[#6E1D1D]' : 'text-slate-500',
+                              )}
+                            />
+                            <span className="flex-1">{item.label}</span>
+                            {item.href === '/exceptions' && exceptionCount > 0 && (
+                              <span className="ml-auto rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-bold text-white shadow-xs">
+                                {exceptionCount}
+                              </span>
+                            )}
                           </Link>
                         </li>
                       );
@@ -182,9 +329,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Main content wrapper */}
       <PageHeaderProvider>
-        <div className="flex flex-1 flex-col lg:pl-64 min-h-screen">
+        <div className="flex flex-1 flex-col lg:pl-64 min-h-screen print:pl-0 print:m-0 print:min-h-0 print:w-full">
           {/* Header (Sticky) */}
-          <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between gap-x-4 border-b border-[#E6E8EC] bg-white px-4 sm:gap-x-6 sm:px-6 lg:px-8">
+          <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between gap-x-4 border-b border-[#E6E8EC] bg-white px-4 sm:gap-x-6 sm:px-6 lg:px-8 print:hidden">
             <div className="flex items-center gap-4">
               <button
                 type="button"
@@ -201,7 +348,12 @@ export function AppShell({ children }: { children: ReactNode }) {
 
               <div className="flex items-center justify-end gap-x-4 lg:gap-x-6">
                 {/* Search Bar - aligned to the right */}
-                <form className="relative flex w-64 items-center" action="#" method="GET" onSubmit={(e) => e.preventDefault()}>
+                <form
+                  className="relative flex w-64 items-center"
+                  action="#"
+                  method="GET"
+                  onSubmit={(e) => e.preventDefault()}
+                >
                   <label htmlFor="search-field" className="sr-only">
                     Search
                   </label>
@@ -217,27 +369,25 @@ export function AppShell({ children }: { children: ReactNode }) {
                   </div>
                 </form>
 
+                {/* Check in / Check out — always visible */}
+                <AttendanceNavButton />
+
+                {/* Ask Octus AI Navbar Button */}
+                <ChatbotNavButton />
+
                 <div className="flex items-center gap-x-3">
                   {/* Notification Bell */}
                   <NotificationBell />
 
-                  {/* Profile Pill */}
-                  <div className="flex items-center gap-2 border border-[#E6E8EC] rounded-full p-1 pr-3 shadow-sm cursor-pointer hover:bg-slate-50 transition-colors bg-white">
-                    <div className="flex items-center justify-center h-8 w-8 rounded-full overflow-hidden shrink-0 bg-primary-100 text-primary font-bold text-sm">
-                      {user?.name?.[0]?.toUpperCase() ?? 'U'}
-                    </div>
-                    <div className="hidden sm:flex flex-col text-left mr-1">
-                      <span className="text-[13px] font-semibold leading-none text-[#1F2937]">
-                        {user?.name ?? 'User'}
-                      </span>
-                      <span className="text-[11px] font-medium text-[#687280] mt-0.5 capitalize">
-                        {user ? (ROLE_LABELS[user.role] ?? user.role) : 'Admin'}
-                      </span>
-                    </div>
-                    <ChevronDown className="h-4 w-4 text-[#687280]" />
-                  </div>
+                  {/* Shared Profile Menu */}
+                  <ProfileMenu />
 
-                  <Button variant="ghost" onClick={() => void signOut()} className="h-10 px-3 text-[#687280] hover:text-primary transition-colors border border-transparent" title="Sign out">
+                  <Button
+                    variant="ghost"
+                    onClick={() => void signOut()}
+                    className="h-10 px-3 text-[#687280] hover:text-primary transition-colors border border-transparent"
+                    title="Sign out"
+                  >
                     <LogOut className="h-4 w-4" />
                     <span className="sr-only">Sign out</span>
                   </Button>
@@ -247,8 +397,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           </header>
 
           {/* Main content */}
-          <main className="flex-1 bg-white p-4 sm:p-6 lg:p-8">
-            <div className="mx-auto w-full max-w-[1200px]">
+          <main className="flex-1 bg-white p-4 sm:p-6 lg:p-8 print:p-0 print:m-0 print:w-full">
+            <div className="mx-auto w-full max-w-[1200px] print:max-w-none print:w-full print:m-0 print:p-0">
               {children}
             </div>
           </main>

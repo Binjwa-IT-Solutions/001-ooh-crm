@@ -5,6 +5,7 @@ import type {
   Quotation,
   QuotationFilters,
   QuotationsListResponse,
+  QuotationStats,
 } from './types';
 
 function buildQuery(query: QuotationFilters): string {
@@ -22,6 +23,9 @@ export const quotationsApi = {
   list: (query: QuotationFilters = {}) =>
     api.get<QuotationsListResponse>(`/api/quotations${buildQuery(query)}`),
 
+  getStats: () =>
+    api.get<QuotationStats>('/api/quotations/stats'),
+
   getById: (id: string) =>
     api.get<{ quotation: Quotation }>(`/api/quotations/${id}`).then((res) => res.quotation),
 
@@ -37,27 +41,47 @@ export const quotationsApi = {
   getPdfUrl: (id: string) =>
     api.get<{ pdfKey?: string; pdfUrl: string }>(`/api/quotations/${id}/pdf`),
 
+  downloadPdf: async (url: string, filename: string) => {
+    const blob = await api.getBlob(url);
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+  },
+
   uploadPdf: (id: string, file: File) => {
     const formData = new FormData();
     formData.append('file', file);
     return api.post<{ pdfKey: string; pdfUrl: string }>(`/api/quotations/${id}/upload-pdf`, formData);
   },
 
-  send: (id: string, sentTo: string, message?: string) =>
+  send: (
+    id: string,
+    sentTo: string,
+    message?: string,
+    channel: 'email' | 'whatsapp' | 'link' = 'email',
+  ) =>
     api.post<{ quotation: Quotation; trackingToken: string; publicUrl: string }>(
       `/api/quotations/${id}/send`,
-      { sentTo, message },
+      { sentTo, message, channel },
     ),
+
+  acceptInternal: (id: string) =>
+    api.post<{ quotation: Quotation }>(`/api/quotations/${id}/accept`, {}).then((res) => res.quotation),
 
   // --- Public Unauthenticated API Methods ---
   getPublic: (token: string) =>
-    api.get<{ proposal: PublicProposalView }>(`/q/${token}`).then((res) => res.proposal),
+    api.get<{ proposal: PublicProposalView }>(`/api/q/${token}`).then((res) => res.proposal),
 
   acceptPublic: (token: string) =>
-    api.post<{ proposal: PublicProposalView }>(`/q/${token}/accept`, {}).then((res) => res.proposal),
+    api.post<{ proposal: PublicProposalView }>(`/api/q/${token}/accept`, {}).then((res) => res.proposal),
 
   rejectPublic: (token: string, rejectionReason: string) =>
     api
-      .post<{ proposal: PublicProposalView }>(`/q/${token}/reject`, { rejectionReason })
+      .post<{ proposal: PublicProposalView }>(`/api/q/${token}/reject`, { rejectionReason })
       .then((res) => res.proposal),
 };

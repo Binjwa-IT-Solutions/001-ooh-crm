@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { reportsApi } from '../api';
-import { Attendance, MonthlyRegisterRow, AbsenceRow } from '../types';
+import { Attendance, MonthlyRegisterRow, AbsenceRow, OvertimeRow } from '../types';
 
 export function useDailySummary() {
   const [data, setData] = useState<Attendance[] | null>(null);
@@ -78,6 +78,28 @@ export function useAbsenceReport() {
     try {
       const res = await reportsApi.getAbsenceReport(fromDate, toDate);
       setData(res as AbsenceRow[]);
+      setError(null);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err : new Error(String(err)));
+      setData(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  return { data, isLoading, error, fetchReport };
+}
+
+export function useOvertimeReport() {
+  const [data, setData] = useState<OvertimeRow[] | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const fetchReport = useCallback(async (fromMonth: number, fromYear: number, toMonth?: number, toYear?: number, minHours = 0) => {
+    setIsLoading(true);
+    try {
+      const res = await reportsApi.getOvertimeReport(fromMonth, fromYear, toMonth, toYear, minHours);
+      setData(res as OvertimeRow[]);
       setError(null);
     } catch (err: unknown) {
       setError(err instanceof Error ? err : new Error(String(err)));

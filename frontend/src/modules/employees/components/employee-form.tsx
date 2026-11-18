@@ -1,11 +1,12 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { FileText, Trash2, Upload, ExternalLink } from 'lucide-react';
 
 import { ApiError, toErrorMessage } from '@/shared/api/errors';
 import { useAuth } from '@/shared/auth/auth-context';
-import { Alert, Button, Card, Field, SelectField, TextAreaField } from '@/shared/ui';
+import { Alert, Button, Card, Field, SelectField, TextAreaField, DatePicker } from '@/shared/ui';
 
 import { employeesApi } from '../api';
 import { useManagerOptions } from '../hooks/use-employees';
@@ -13,8 +14,11 @@ import {
   DEPARTMENTS,
   EMPLOYEE_STATUSES,
   EMPLOYMENT_TYPES,
+  type Department,
   type Employee,
+  type EmployeeDocument,
   type EmployeeFormValues,
+  type EmploymentType,
 } from '../types';
 import { paiseToRupeeInput, toDateInput } from '../format';
 
@@ -31,6 +35,7 @@ const EMPTY: EmployeeFormValues = {
   workEmail: '',
   personalEmail: '',
   mobile: '',
+  personalMobile: '',
   dateOfBirth: '',
   department: '',
   designation: '',
@@ -57,14 +62,15 @@ function fromEmployee(employee: Employee): EmployeeFormValues {
     workEmail: employee.workEmail,
     personalEmail: employee.personalEmail ?? '',
     mobile: employee.mobile,
+    personalMobile: employee.personalMobile ?? '',
     dateOfBirth: toDateInput(employee.dateOfBirth),
-    department: employee.department,
-    designation: employee.designation,
-    employmentType: employee.employmentType,
+    department: (employee.department as Department) || '',
+    designation: employee.designation || '',
+    employmentType: (employee.employmentType as EmploymentType) || 'Full-time',
     dateOfJoining: toDateInput(employee.dateOfJoining),
     dateOfExit: toDateInput(employee.dateOfExit),
     reportingManagerId: employee.reportingManager?.id ?? '',
-    workLocation: employee.workLocation,
+    workLocation: employee.workLocation || '',
     status: employee.status,
     panNumber: employee.panNumber ?? '',
     aadhaarNumber: employee.aadhaarNumber ?? '',
@@ -100,7 +106,28 @@ function Section({
   );
 }
 
-export function EmployeeForm({ employee }: { employee?: Employee }) {
+export interface EmployeeFormProps {
+  employee?: Employee;
+  isSelfCompletion?: boolean;
+  onSuccess?: (employee: Employee) => void;
+  hideCancel?: boolean;
+  submitLabel?: string;
+}
+
+function formatFileSize(bytes?: number): string {
+  if (!bytes) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+export function EmployeeForm({
+  employee,
+  isSelfCompletion = false,
+  onSuccess,
+  hideCancel = false,
+  submitLabel,
+}: EmployeeFormProps) {
   const router = useRouter();
   const { hasPermission } = useAuth();
   const isEdit = Boolean(employee);
@@ -108,11 +135,94 @@ export function EmployeeForm({ employee }: { employee?: Employee }) {
   const [values, setValues] = useState<EmployeeFormValues>(
     employee ? fromEmployee(employee) : EMPTY,
   );
+
+  useEffect(() => {
+    if (employee) {
+      setValues(fromEmployee(employee));
+    }
+  }, [employee]);
+
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { options: managers } = useManagerOptions();
+
+  const [documents, setDocuments] = useState<EmployeeDocument[]>(employee?.documents ?? []);
+  const [docTitle, setDocTitle] = useState('');
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [docError, setDocError] = useState<string | null>(null);
+  const [docSuccess, setDocSuccess] = useState<string | null>(null);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (employee?.documents) {
+      setDocuments(employee.documents);
+    }
+  }, [employee]);
+
+  async function handleUploadDocument(e: React.FormEvent) {
+    e.preventDefault();
+    if (!employee?.id) return;
+    if (!docFile) {
+      setDocError('Please select a file to upload');
+      return;
+    }
+
+    const MAX_10MB = 10 * 1024 * 1024;
+    if (docFile.size > MAX_10MB) {
+      setDocError('File size exceeds the 10 MB limit. Please select a smaller file.');
+      return;
+    }
+
+    const allowedTypes = [
+      'application/pdf',
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'image/jpg',
+    ];
+    if (!allowedTypes.includes(docFile.type)) {
+      setDocError('Only PDF and image files (JPG, PNG, WEBP) are allowed.');
+      return;
+    }
+
+    setDocError(null);
+    setDocSuccess(null);
+    setIsUploadingDoc(true);
+
+    try {
+      const updated = await employeesApi.uploadDocument(employee.id, docFile, docTitle.trim() || undefined);
+      setDocuments(updated.documents ?? []);
+      setDocFile(null);
+      setDocTitle('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setDocSuccess('Document uploaded successfully.');
+      setTimeout(() => setDocSuccess(null), 4000);
+    } catch (err) {
+      setDocError(toErrorMessage(err));
+    } finally {
+      setIsUploadingDoc(false);
+    }
+  }
+
+  async function handleDeleteDocument(docId: string) {
+    if (!employee?.id) return;
+    if (!window.confirm('Are you sure you want to delete this document?')) return;
+
+    setDocError(null);
+    setDeletingDocId(docId);
+    try {
+      const updated = await employeesApi.deleteDocument(employee.id, docId);
+      setDocuments(updated.documents ?? []);
+    } catch (err) {
+      setDocError(toErrorMessage(err));
+    } finally {
+      setDeletingDocId(null);
+    }
+  }
 
   // Same rule as the server: only Admin, HR and Finance may set these.
   const canEditSensitive = hasPermission('employees.sensitive');
@@ -128,16 +238,27 @@ export function EmployeeForm({ employee }: { employee?: Employee }) {
     setIsSubmitting(true);
 
     try {
-      const saved = employee
-        ? await employeesApi.update(employee.id, values)
-        : await employeesApi.create(values);
+      let saved: Employee;
+      if (isSelfCompletion) {
+        saved = await employeesApi.updateMine(values);
+      } else if (employee) {
+        saved = await employeesApi.update(employee.id, values);
+      } else {
+        saved = await employeesApi.create(values);
+      }
 
-      router.push(`/employees/${saved.id}`);
-      router.refresh();
+      if (onSuccess) {
+        onSuccess(saved);
+      } else {
+        router.push(`/employees/${saved.id}`);
+        router.refresh();
+      }
     } catch (err) {
       setError(toErrorMessage(err));
       setFieldErrors(err instanceof ApiError ? err.fieldErrors() : {});
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (!isSelfCompletion) {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -164,13 +285,29 @@ export function EmployeeForm({ employee }: { employee?: Employee }) {
           required
         />
         <Field
-          label="Mobile"
+          label="Work location"
+          placeholder="Mumbai"
+          value={values.workLocation}
+          error={fieldErrors.workLocation}
+          onChange={(e) => set('workLocation', e.target.value)}
+          required
+        />
+        <Field
+          label="Office mobile"
           inputMode="numeric"
           placeholder="9876543210"
           value={values.mobile}
           error={fieldErrors.mobile}
           onChange={(e) => set('mobile', e.target.value.replace(/\D/g, '').slice(0, 10))}
           required
+        />
+        <Field
+          label="Personal mobile"
+          inputMode="numeric"
+          placeholder="9876543210"
+          value={values.personalMobile}
+          error={fieldErrors.personalMobile}
+          onChange={(e) => set('personalMobile', e.target.value.replace(/\D/g, '').slice(0, 10))}
         />
         <Field
           label="Work email"
@@ -187,20 +324,13 @@ export function EmployeeForm({ employee }: { employee?: Employee }) {
           error={fieldErrors.personalEmail}
           onChange={(e) => set('personalEmail', e.target.value)}
         />
-        <Field
+        <DatePicker
           label="Date of birth"
-          type="date"
           value={values.dateOfBirth}
           error={fieldErrors.dateOfBirth}
-          onChange={(e) => set('dateOfBirth', e.target.value)}
-        />
-        <Field
-          label="Work location"
-          placeholder="Mumbai"
-          value={values.workLocation}
-          error={fieldErrors.workLocation}
-          onChange={(e) => set('workLocation', e.target.value)}
-          required
+          onChange={(val) => set('dateOfBirth', val)}
+          // Local YYYY-MM-DD; a date of birth can't be in the future.
+          max={new Date().toLocaleDateString('en-CA')}
         />
       </Section>
 
@@ -215,7 +345,6 @@ export function EmployeeForm({ employee }: { employee?: Employee }) {
           value={values.department}
           error={fieldErrors.department}
           onChange={(e) => set('department', e.target.value as EmployeeFormValues['department'])}
-          required
         />
         <Field
           label="Designation"
@@ -223,7 +352,6 @@ export function EmployeeForm({ employee }: { employee?: Employee }) {
           value={values.designation}
           error={fieldErrors.designation}
           onChange={(e) => set('designation', e.target.value)}
-          required
         />
         <SelectField
           label="Employment type"
@@ -241,21 +369,18 @@ export function EmployeeForm({ employee }: { employee?: Employee }) {
           error={fieldErrors.status}
           onChange={(e) => set('status', e.target.value as EmployeeFormValues['status'])}
         />
-        <Field
+        <DatePicker
           label="Date of joining"
-          type="date"
           value={values.dateOfJoining}
           error={fieldErrors.dateOfJoining}
-          onChange={(e) => set('dateOfJoining', e.target.value)}
+          onChange={(val) => set('dateOfJoining', val)}
           required
         />
-        <Field
+        <DatePicker
           label="Date of exit"
-          type="date"
           value={values.dateOfExit}
           error={fieldErrors.dateOfExit}
-          hint="Leave blank for current employees"
-          onChange={(e) => set('dateOfExit', e.target.value)}
+          onChange={(val) => set('dateOfExit', val)}
         />
         <SelectField
           label="Reports to"
@@ -346,14 +471,148 @@ export function EmployeeForm({ employee }: { employee?: Employee }) {
         </div>
       </Section>
 
-      <div className="flex flex-wrap gap-3">
-        <Button type="submit" isLoading={isSubmitting}>
-          {isEdit ? 'Save changes' : 'Create employee'}
+      <Section
+        title="Documents"
+        description="Upload employee documents such as ID proofs, certificates, or contracts. (PDF or image, max 10 MB per file)"
+      >
+        <div className="sm:col-span-2 space-y-4">
+          <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3.5 dark:border-slate-800 dark:bg-slate-900/50 text-xs text-slate-600 dark:text-slate-400">
+            <span className="font-semibold text-slate-800 dark:text-slate-200">Note: </span>
+            Supported formats: PDF and images (PNG, JPG, JPEG, WEBP) of less than 10 MB (&lt; 10 MB per file).
+          </div>
+
+          {docError && <Alert tone="error">{docError}</Alert>}
+          {docSuccess && <Alert tone="success">{docSuccess}</Alert>}
+
+          {documents.length > 0 ? (
+            <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
+              <table className="min-w-full divide-y divide-slate-200 text-left text-xs dark:divide-slate-800">
+                <thead className="bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  <tr>
+                    <th className="px-4 py-2.5 font-semibold">Document Name</th>
+                    <th className="px-4 py-2.5 font-semibold">Size</th>
+                    <th className="px-4 py-2.5 font-semibold">Uploaded</th>
+                    <th className="px-4 py-2.5 text-right font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white dark:divide-slate-800/60 dark:bg-slate-900">
+                  {documents.map((doc) => (
+                    <tr key={doc.id || doc.fileKey} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                      <td className="px-4 py-2.5 font-medium text-slate-800 dark:text-slate-200">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-[#6E1D1D] shrink-0" />
+                          <span className="truncate max-w-[220px] sm:max-w-xs">{doc.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">
+                        {formatFileSize(doc.fileSize)}
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">
+                        {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : '—'}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {doc.fileUrl && (
+                            <a
+                              href={doc.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[#6E1D1D] hover:underline font-medium"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                              View
+                            </a>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteDocument(doc.id)}
+                            disabled={deletingDocId === doc.id}
+                            className="text-rose-600 hover:text-rose-800 p-1 disabled:opacity-50"
+                            title="Delete document"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : isEdit ? (
+            <p className="text-xs text-slate-500 italic">No documents uploaded yet for this employee.</p>
+          ) : null}
+
+          {isEdit && employee?.id ? (
+            <div className="rounded-lg border border-dashed border-slate-300 p-4 dark:border-slate-700 bg-white dark:bg-slate-950">
+              <h3 className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-2">Upload a new document</h3>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field
+                  label="Document Title / Description (optional)"
+                  placeholder="e.g. Aadhaar Card, Offer Letter, Degree"
+                  value={docTitle}
+                  onChange={(e) => setDocTitle(e.target.value)}
+                />
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Select File (PDF or Image &lt; 10 MB) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,image/png,image/jpeg,image/webp,image/jpg"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        if (file.size > 10 * 1024 * 1024) {
+                          setDocError('File size exceeds the 10 MB limit.');
+                          setDocFile(null);
+                          if (fileInputRef.current) fileInputRef.current.value = '';
+                        } else {
+                          setDocError(null);
+                          setDocFile(file);
+                        }
+                      }
+                    }}
+                    className="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[#6E1D1D]/10 file:text-[#6E1D1D] hover:file:bg-[#6E1D1D]/20 cursor-pointer"
+                  />
+                </div>
+              </div>
+              <div className="mt-3 flex justify-end">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={!docFile || isUploadingDoc}
+                  onClick={handleUploadDocument}
+                  className="text-xs flex items-center gap-1.5"
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  {isUploadingDoc ? 'Uploading...' : 'Upload Document'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500">
+              Please save the employee record first. Once created, you will be able to upload documents here.
+            </p>
+          )}
+        </div>
+      </Section>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          type="submit"
+          isLoading={isSubmitting}
+          className="bg-[#6E1D1D] hover:bg-[#882424] text-white"
+        >
+          {submitLabel || (isSelfCompletion ? 'Complete Profile & Continue' : isEdit ? 'Save changes' : 'Create employee')}
         </Button>
-        <Button type="button" variant="secondary" onClick={() => router.back()}>
-          Cancel
-        </Button>
-        {!isEdit && (
+        {!hideCancel && (
+          <Button type="button" variant="secondary" onClick={() => router.back()}>
+            Cancel
+          </Button>
+        )}
+        {!isEdit && !isSelfCompletion && (
           <p className="w-full text-xs text-slate-500 dark:text-slate-400">
             The employee code is generated by the server on save.
           </p>

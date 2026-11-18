@@ -1,131 +1,105 @@
-import type {
-  Vendor,
-  VendorFormData,
-} from "./types";
-
-/* ----------------------------------
-   EMPTY VENDOR FORM
------------------------------------ */
+import type { Vendor, VendorFormData } from "./types";
 
 export function getEmptyVendorForm(): VendorFormData {
   return {
     name: "",
-
-    state: "",
-
-    city: "",
-
-    contactPerson: "",
-
-    mobile: "",
-
-    email: "",
-
-    address: "",
-
-    panNumber: "",
-
-    msmeNumber: "",
+    vendorType: "Company",
+    registrationStatus: "Pending",
 
     gstNumber: "",
+    panNumber: "",
 
-    paymentTerms: "",
+    msmeRegistered: false,
+    msmeNumber: "",
+    udyamRegistration: "",
 
-    bankAccountNumber: "",
+    city: "",
+    state: "",
+    citiesServed: [],
 
-    ifsc: "",
+    primaryContact: {
+      name: "",
+      email: "",
+      phone: "",
+    },
+
+    secondaryContacts: [],
+
+    paymentTerms: "Net 30",
+    manualPaymentTerms: "",
+
+    bankDetails: {
+      accountHolder: "",
+      bankName: "",
+      accountNumber: "",
+      ifsc: "",
+      branch: "",
+    },
+
+    vendorRating: undefined,
+
+    documents: [],
 
     status: "Active",
   };
 }
 
-/* ----------------------------------
-   VENDOR → FORM
------------------------------------ */
-
-export function vendorToForm(
-  vendor: Vendor,
-): VendorFormData {
+export function vendorToForm(vendor: Vendor): VendorFormData {
   return {
     name: vendor.name || "",
+    vendorType: vendor.vendorType || "Company",
+    registrationStatus: vendor.registrationStatus || "Pending",
 
+    gstNumber: vendor.gstNumber || "",
+    panNumber: vendor.panNumber || "",
+
+    msmeRegistered: vendor.msmeRegistered || false,
+    msmeNumber: vendor.msmeNumber || "",
+    udyamRegistration: vendor.udyamRegistration || "",
+
+    city: vendor.city || vendor.citiesServed?.[0] || "",
     state: vendor.state || "",
+    citiesServed: vendor.citiesServed || [],
 
-    city: vendor.city || "",
+    primaryContact: vendor.primaryContact || {
+      name: "",
+      email: "",
+      phone: "",
+    },
 
-    contactPerson:
-      vendor.contactPerson || "",
+    secondaryContacts: vendor.secondaryContacts || [],
 
-    mobile: vendor.mobile || "",
+    paymentTerms: vendor.paymentTerms || "Net 30",
+    manualPaymentTerms: vendor.manualPaymentTerms || "",
 
-    email: vendor.email || "",
+    bankDetails: vendor.bankDetails || {
+      accountHolder: "",
+      bankName: "",
+      accountNumber: "",
+      ifsc: "",
+      branch: "",
+    },
 
-    address: vendor.address || "",
+    vendorRating: vendor.vendorRating,
 
-    panNumber:
-      vendor.panNumber || "",
+    documents: vendor.documents || [],
 
-    msmeNumber:
-      vendor.msmeNumber || "",
-
-    gstNumber:
-      vendor.gstNumber || "",
-
-    paymentTerms:
-      vendor.paymentTerms || "",
-
-    bankAccountNumber:
-      vendor.bankAccountNumber || "",
-
-    ifsc: vendor.ifsc || "",
-
-    status:
-      vendor.status || "Active",
+    status: vendor.status || "Active",
   };
 }
 
-/* ----------------------------------
-   GENERIC VALUE
------------------------------------ */
-
-export function formatValue(
-  value?: string,
-): string {
+export function formatValue(value?: string) {
   return value?.trim() || "—";
 }
 
-/* ----------------------------------
-   GST
------------------------------------ */
-
-export function formatGST(
-  value?: string,
-): string {
-  return (
-    value?.trim().toUpperCase() || "—"
-  );
+export function formatGST(value?: string) {
+  return value?.trim().toUpperCase() || "—";
 }
 
-/* ----------------------------------
-   PAN
------------------------------------ */
-
-export function formatPAN(
-  value?: string,
-): string {
-  return (
-    value?.trim().toUpperCase() || "—"
-  );
+export function formatPAN(value?: string) {
+  return value?.trim().toUpperCase() || "—";
 }
 
-/* ----------------------------------
-   MSME
------------------------------------ */
-
-export function formatMSME(
-  value?: string,
-): string {
-  return (
-    value?.trim().toUpperCase() || "—"
-  );
+export function formatMSME(value?: string) {
+  return value?.trim().toUpperCase() || "—";
 }

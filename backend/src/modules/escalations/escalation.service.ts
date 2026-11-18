@@ -4,7 +4,6 @@ import {
   EscalationModel,
   type EscalationLevel,
 } from "./escalation.model.js";
-import { Task } from "../tasks/task.model.js";
 import { Employee } from "../employees/employees.model.js";
 import { AuthUser } from "../../core/auth/auth-model.js";
 import { notify } from "../../core/notifications/index.js";
@@ -20,6 +19,8 @@ export type EscalationTask = {
   deadline: Date | string;
   status: string;
   assignedTo?: Types.ObjectId | string | null;
+  title?: string;
+  campaignId?: Types.ObjectId | string | null;
 };
 
 /**
@@ -343,13 +344,8 @@ export async function processEscalations() {
   const now = new Date();
 
   try {
-    // 1. Fetch all non-completed tasks that are overdue
-    const allTasks = await Task.find({
-      status: { $ne: "Completed" },
-      deadline: { $lt: now },
-    })
-      .populate("assignedTo", "_id")
-      .lean();
+    // 1. Fetch all non-completed tasks that are overdue (Task module deleted)
+    const allTasks: EscalationTask[] = [];
 
     if (allTasks.length === 0) {
       console.log(

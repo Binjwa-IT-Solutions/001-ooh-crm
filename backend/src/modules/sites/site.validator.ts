@@ -1,137 +1,217 @@
+
 import { z } from "zod";
 
-import {
-  SiteStatus,
-  SiteType,
-} from "./site.model.js";
+const mediaTypes = [
+  "Billboard",
+  "Hoarding",
+  "Transit",
+  "Metro",
+  "Airport",
+  "Mall",
+  "Digital",
+  "Other",
+] as const;
+
+const availabilityTypes = [
+  "Available",
+  "Booked",
+] as const;
+
+const statusTypes = [
+  "Draft",
+  "Pending",
+  "Approved",
+  "Rejected",
+] as const;
 
 /* ----------------------------------
-   GPS VALIDATOR
+   CREATE
 ----------------------------------- */
 
-const gpsSchema = z.object({
-  lat: z
-    .number({
-      message: "Latitude must be a number",
-    })
-    .min(-90, "Invalid latitude")
-    .max(90, "Invalid latitude"),
+export const createSiteSchema =
+  z.object({
+    atrNo: z.string().optional(),
 
-  lng: z
-    .number({
-      message: "Longitude must be a number",
-    })
-    .min(-180, "Invalid longitude")
-    .max(180, "Invalid longitude"),
-});
+    clientName:
+      z.string().min(1),
 
-/* ----------------------------------
-   DATE VALIDATOR
------------------------------------ */
+    salesPersonName:
+      z.string().min(1),
 
-const dateSchema = z.coerce.date({
-  message: "Valid date is required",
-});
+    salesPersonContact:
+      z.string().min(1),
 
-/* ----------------------------------
-   CREATE SITE
------------------------------------ */
+    state:
+      z.string().min(1),
 
-export const createSiteSchema = z.object({
-  city: z
-    .string()
-    .trim()
-    .min(2, "City is required"),
+    city:
+      z.string().min(1),
 
-  type: z.nativeEnum(SiteType),
+    location:
+      z.string().min(1),
 
-  address: z
-    .string()
-    .trim()
-    .optional(),
+    mediaType:
+      z.enum(mediaTypes),
 
-  /*
-   * GPS comes from browser/device location.
-   *
-   * Example:
-   * {
-   *   lat: 22.7196,
-   *   lng: 75.8577
-   * }
-   */
-  gps: gpsSchema,
+    quantity:
+      z.coerce.number().min(1),
 
-  /*
-   * Availability window.
-   *
-   * Frontend can send:
-   * "2026-09-01" to "2026-12-31"
-   */
-  startDate: dateSchema,
-  endDate: dateSchema,
+    startDate:
+      z.string().min(1),
 
-  sizeWidth: z
-    .number()
-    .positive("Width must be greater than 0"),
+    endDate:
+      z.string().min(1),
 
-  sizeHeight: z
-    .number()
-    .positive("Height must be greater than 0"),
+    duration:
+      z.coerce.number().optional(),
 
-  baseCostPerDay: z
-    .number()
-    .int("Cost must be an integer")
-    .nonnegative("Cost cannot be negative"),
+    vendorName:
+      z.string().min(1),
 
-  vendorId: z
-    .string()
-    .nullable()
-    .optional(),
+    availability:
+      z.enum(
+        availabilityTypes
+      ).optional(),
 
-  status: z
-    .nativeEnum(SiteStatus)
-    .optional(),
-
-  photos: z
-    .array(z.string())
-    .optional(),
-});
+    status:
+      z.enum(
+        statusTypes
+      ).optional(),
+  });
 
 /* ----------------------------------
-   UPDATE SITE
+   UPDATE
 ----------------------------------- */
 
 export const updateSiteSchema =
-  createSiteSchema.partial();
+  z
+    .object({
+      atrNo:
+        z.string().optional(),
+
+      clientName:
+        z.string().min(1).optional(),
+
+      salesPersonName:
+        z.string().min(1).optional(),
+
+      salesPersonContact:
+        z.string().min(1).optional(),
+
+      state:
+        z.string().min(1).optional(),
+
+      city:
+        z.string().min(1).optional(),
+
+      location:
+        z.string().min(1).optional(),
+
+      mediaType:
+        z.enum(mediaTypes).optional(),
+
+      quantity:
+        z.coerce.number().min(1).optional(),
+
+      startDate:
+        z.string().optional(),
+
+      endDate:
+        z.string().optional(),
+
+      duration:
+        z.coerce.number().optional(),
+
+      vendorName:
+        z.string().min(1).optional(),
+
+      availability:
+        z.enum(
+          availabilityTypes
+        ).optional(),
+
+      status:
+        z.enum(
+          statusTypes
+        ).optional(),
+    })
+    .refine(
+      (data) => {
+        if (
+          data.startDate &&
+          data.endDate
+        ) {
+          return (
+            new Date(
+              data.endDate
+            ) >=
+            new Date(
+              data.startDate
+            )
+          );
+        }
+
+        return true;
+      },
+      {
+        message:
+          "End date must be on or after start date",
+      }
+    );
 
 /* ----------------------------------
-   SITE QUERY
+   QUERY
 ----------------------------------- */
 
-export const siteQuerySchema = z.object({
-  city: z
-    .string()
-    .optional(),
+export const siteQuerySchema =
+  z.object({
+    search:
+      z.string().optional(),
 
-  type: z
-    .nativeEnum(SiteType)
-    .optional(),
+    state:
+      z.string().optional(),
 
-  status: z
-    .nativeEnum(SiteStatus)
-    .optional(),
+    city:
+      z.string().optional(),
 
-  search: z
-    .string()
-    .optional(),
-});
+    vendorName:
+      z.string().optional(),
+
+    salesPersonName:
+      z.string().optional(),
+
+    mediaType:
+      z.enum(
+        mediaTypes
+      ).optional(),
+
+    availability:
+      z.enum(
+        availabilityTypes
+      ).optional(),
+
+    status:
+      z.enum(
+        statusTypes
+      ).optional(),
+  });
 
 /* ----------------------------------
    TYPES
 ----------------------------------- */
 
 export type CreateSiteInput =
-  z.infer<typeof createSiteSchema>;
+  z.infer<
+    typeof createSiteSchema
+  >;
 
 export type UpdateSiteInput =
-  z.infer<typeof updateSiteSchema>;
+  z.infer<
+    typeof updateSiteSchema
+  >;
+
+export type SiteQueryInput =
+  z.infer<
+    typeof siteQuerySchema
+  >;
+

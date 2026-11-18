@@ -18,7 +18,8 @@ const ROOT = path.resolve(process.cwd(), config.storage.localDir);
 
 function resolveSafe(key: string): string {
   // Reject traversal — a key must stay inside the storage root.
-  const target = path.resolve(ROOT, key);
+  const cleanKey = key.replace(/^[/\\]+/, '');
+  const target = path.resolve(ROOT, cleanKey);
   if (!target.startsWith(ROOT + path.sep) && target !== ROOT) {
     throw new Error(`Refusing to access a path outside the storage root: ${key}`);
   }

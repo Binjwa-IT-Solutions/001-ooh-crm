@@ -10,7 +10,9 @@ export interface IOtpChallenge {
   _id: Types.ObjectId;
   userId: Types.ObjectId;
   email: string;
-  codeHash: string;
+  codeHash?: string;
+  method: 'email' | 'totp' | 'approval';
+  securityEventId?: Types.ObjectId | null;
   purpose: 'login';
   attempts: number;
   maxAttempts: number;
@@ -25,7 +27,9 @@ const otpChallengeSchema = new Schema<IOtpChallenge>(
   {
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     email: { type: String, required: true, lowercase: true, trim: true },
-    codeHash: { type: String, required: true, select: false },
+    codeHash: { type: String, select: false },
+    method: { type: String, enum: ['email', 'totp', 'approval'], required: true, default: 'email' },
+    securityEventId: { type: Schema.Types.ObjectId, ref: 'LoginSecurityEvent', default: null },
     purpose: { type: String, enum: ['login'], required: true, default: 'login' },
     attempts: { type: Number, required: true, default: 0 },
     maxAttempts: { type: Number, required: true },

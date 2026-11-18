@@ -1,7 +1,8 @@
 import mongoose, { Types } from 'mongoose';
 import { RequestContext } from '../../core/context.js';
-import { ConflictError, NotFoundError, ValidationError } from '../../core/errors/index.js';
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../core/errors/index.js';
 import { scopedFind, scopedFindOne, scopedCount } from '../../core/scoping/index.js';
+import { employeeService } from '../employees/employees.service.js';
 import {
   Lead,
   type ILead,
@@ -14,7 +15,7 @@ import { STATUS_TRANSITIONS } from './leads.validator.js';
 import { toObjectId } from '../../core/db/basePlugin.js';
 import { fileService } from '../../core/files/index.js';
 import { AuthUser } from '../../core/auth/auth-model.js';
-import { notifyMany } from '../../core/notifications/index.js';
+import { notify, notifyMany } from '../../core/notifications/index.js';
 import { extractLeadWithGemini } from './leads.ai.js';
 import { Quotation } from '../quotations/quotations.model.js';
 import { Campaign } from '../campaigns/campaign.model.js';
@@ -25,17 +26,109 @@ function escapeRegex(text: string): string {
 
 export class LeadsService {
   /**
+   * Release leads back to Unclaimed pool if claimed for >= 24 hours
+   * without any action/response taken (firstResponseAt is empty, callLogs is empty, and status is still New).
+   */
+  static async releaseBreachedClaimedLeads(): Promise<number> {
+    const now = new Date();
+    const cutoff24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    const candidates = await Lead.find({
+      status: 'New',
+      claimedBy: { $ne: null },
+      deletedAt: null,
+      $or: [
+        { firstResponseAt: null },
+        { firstResponseAt: { $exists: false } },
+      ],
+      $and: [
+        {
+          $or: [
+            { slaTimerEnd: { $ne: null, $lt: now } },
+            { claimedAt: { $ne: null, $lt: cutoff24h } },
+          ],
+        },
+      ],
+    }).exec();
+
+    let releasedCount = 0;
+
+    for (const lead of candidates) {
+      if (lead.callLogs && lead.callLogs.length > 0) {
+        continue;
+      }
+
+      const prevClaimedBy = lead.claimedBy;
+      const prevClaimedById = prevClaimedBy ? prevClaimedBy.toString() : null;
+
+      lead.claimedBy = null as any;
+      lead.assignedTo = null as any;
+      lead.claimedAt = null as any;
+      lead.slaTimerEnd = null as any;
+      lead.status = 'New';
+
+      lead.statusHistory = lead.statusHistory || [];
+      lead.statusHistory.push({
+        from: 'New',
+        to: 'New',
+        changedBy: prevClaimedBy,
+        reason: 'Auto-released to Unclaimed pool: 24h SLA breached without any action/response taken.',
+        changedAt: now,
+      });
+
+      await lead.save();
+      releasedCount++;
+
+      if (prevClaimedById && mongoose.connection.readyState === 1) {
+        void notify({
+          userId: prevClaimedById,
+          type: 'leads.sla_breached_unclaimed',
+          title: 'Lead SLA Breached - Claim Released',
+          body: `Lead "${lead.companyName}" was returned to the Unclaimed pool because no action was logged within 24 hours of claiming.`,
+          link: `/leads/${lead._id}`,
+        });
+      }
+    }
+
+    return releasedCount;
+  }
+
+  /**
    * List leads with filtering, pagination, and scoping rules applied.
    */
   static async listLeads(
     filters: any,
     ctx: RequestContext,
   ): Promise<{ leads: ILead[]; total: number }> {
+    try {
+      await LeadsService.releaseBreachedClaimedLeads();
+    } catch (err) {
+      console.error('[leads] failed to release breached leads on list:', err);
+    }
+
     const query: Record<string, any> = {};
+    const andConditions: Record<string, any>[] = [];
 
     if (filters.search) {
-      const searchRegex = { $regex: filters.search, $options: 'i' };
-      query.$or = [{ companyName: searchRegex }, { mobile: searchRegex }];
+      const cleanSearch = escapeRegex(filters.search.trim());
+      const searchRegex = { $regex: cleanSearch, $options: 'i' };
+      // In $and (not query.$or) so the team-scoping $or below can't silently replace it.
+      andConditions.push({
+        $or: [
+          { companyName: searchRegex },
+          { contactPerson: searchRegex },
+          { mobile: searchRegex },
+          { email: searchRegex },
+          { city: searchRegex },
+        ],
+      });
+    }
+
+    // Contacted = a follow-up was logged (firstResponseAt) or the lead already moved past New.
+    if (filters.contacted === 'yes') {
+      andConditions.push({ $or: [{ firstResponseAt: { $ne: null } }, { status: { $ne: 'New' } }] });
+    } else if (filters.contacted === 'no') {
+      andConditions.push({ status: 'New', firstResponseAt: null });
     }
 
     if (filters.status) query.status = filters.status;
@@ -71,21 +164,34 @@ export class LeadsService {
     } else if (filters.sortBy === 'receivedAt' || filters.sortBy === 'createdAt') {
       const dir = filters.sortDir === 'asc' ? 1 : -1;
       sortObj = { createdAt: dir };
+    } else if (filters.sortBy === 'claimedAt') {
+      const dir = filters.sortDir === 'asc' ? 1 : -1;
+      sortObj = { claimedAt: dir, createdAt: -1 };
     } else if (filters.overdueOnly) {
       sortObj = { nextActionDate: 1, createdAt: -1 };
+    } else if (filters.assignedToMe) {
+      // My Leads: the lead you claimed most recently comes first (assigned-but-unclaimed after, newest first)
+      sortObj = { claimedAt: -1, createdAt: -1 };
     }
+
+    if (andConditions.length) query.$and = andConditions;
+
+    const page = Math.max(1, Number(filters.page) || 1);
+    const limit = Math.max(1, Math.min(100, Number(filters.limit || filters.pageSize) || 20));
+    const skip = (page - 1) * limit;
+
+    const scopedUserIds = await employeeService.getScopedUserIds(ctx);
 
     if (filters.unassigned) {
       query.status = 'New';
       query.assignedTo = null;
       query.claimedBy = null;
 
-      const skip = (filters.page - 1) * filters.limit;
       const [leads, total] = await Promise.all([
         Lead.find(query)
           .sort(sortObj)
           .skip(skip)
-          .limit(filters.limit)
+          .limit(limit)
           .populate('assignedTo claimedBy', 'name email role')
           .exec(),
         Lead.countDocuments(query).exec(),
@@ -95,36 +201,46 @@ export class LeadsService {
 
     if (filters.status === 'Rejected') {
       query.status = 'Rejected';
-      const skip = (filters.page - 1) * filters.limit;
+      if (scopedUserIds) {
+        query.rejectedBy = { $in: scopedUserIds };
+      }
       const [leads, total] = await Promise.all([
-        scopedFind(Lead, query, ctx, { ownerField: 'rejectedBy' })
+        Lead.find(query)
           .sort({ updatedAt: -1, createdAt: -1 })
           .skip(skip)
-          .limit(filters.limit)
+          .limit(limit)
           .populate('assignedTo claimedBy rejectedBy', 'name email role')
           .exec(),
-        scopedCount(Lead, query, ctx, { ownerField: 'rejectedBy' }),
+        Lead.countDocuments(query),
       ]);
       return { leads, total };
     }
 
     // Scoped retrieval for sales agents and managers
-    const skip = (filters.page - 1) * filters.limit;
-
     if (filters.assignedTo) {
-      query.assignedTo = toObjectId(filters.assignedTo);
+      const targetUserId = toObjectId(filters.assignedTo);
+      if (scopedUserIds && !scopedUserIds.some((id) => id.equals(targetUserId))) {
+        return { leads: [], total: 0 };
+      }
+      query.assignedTo = targetUserId;
     } else if (filters.assignedToMe) {
       query.assignedTo = toObjectId(ctx.user.id);
+    } else if (scopedUserIds) {
+      query.$or = [
+        { assignedTo: { $in: scopedUserIds } },
+        { claimedBy: { $in: scopedUserIds } },
+        { createdBy: { $in: scopedUserIds } },
+      ];
     }
 
     const [leads, total] = await Promise.all([
-      scopedFind(Lead, query, ctx, { ownerField: 'assignedTo' })
+      Lead.find(query)
         .sort(sortObj)
         .skip(skip)
-        .limit(filters.limit)
+        .limit(limit)
         .populate('assignedTo claimedBy', 'name email role')
         .exec(),
-      scopedCount(Lead, query, ctx, { ownerField: 'assignedTo' }),
+      Lead.countDocuments(query),
     ]);
 
     return { leads, total };
@@ -156,14 +272,25 @@ export class LeadsService {
       query.source = filters.source;
     }
 
+    const scopedUserIds = await employeeService.getScopedUserIds(ctx);
     if (filters.unassigned) {
       query.status = 'New';
       query.assignedTo = null;
       query.claimedBy = null;
     } else if (filters.assignedTo) {
-      query.assignedTo = toObjectId(filters.assignedTo);
+      const targetUserId = toObjectId(filters.assignedTo);
+      if (scopedUserIds && !scopedUserIds.some((id) => id.equals(targetUserId))) {
+        return '';
+      }
+      query.assignedTo = targetUserId;
     } else if (filters.assignedToMe) {
       query.assignedTo = toObjectId(ctx.user.id);
+    } else if (scopedUserIds) {
+      query.$or = [
+        { assignedTo: { $in: scopedUserIds } },
+        { claimedBy: { $in: scopedUserIds } },
+        { createdBy: { $in: scopedUserIds } },
+      ];
     }
 
     if (filters.overdueOnly) {
@@ -249,24 +376,68 @@ export class LeadsService {
   static async getLead(id: string, ctx: RequestContext): Promise<ILead> {
     if (!Types.ObjectId.isValid(id)) throw new NotFoundError('Lead not found');
 
-    let lead = await scopedFindOne(Lead, { _id: toObjectId(id) }, ctx, {
-      ownerField: 'assignedTo',
-    });
+    const now = new Date();
+    const cutoff24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    if (!lead) {
-      // Fallback for: creator, unassigned New leads, or leads the user personally rejected
-      lead = await Lead.findOne({
-        _id: toObjectId(id),
-        deletedAt: null,
-        $or: [
-          { createdBy: toObjectId(ctx.user.id) },
-          { assignedTo: null, status: 'New' },
-          { rejectedBy: toObjectId(ctx.user.id), status: 'Rejected' },
-        ],
-      }).exec();
+    // Auto-release if this lead was previously claimed but breached 24h SLA with no action
+    const existing = await Lead.findOne({ _id: toObjectId(id), deletedAt: null });
+    if (
+      existing &&
+      existing.status === 'New' &&
+      existing.claimedBy &&
+      !existing.firstResponseAt &&
+      (!existing.callLogs || existing.callLogs.length === 0)
+    ) {
+      const isBreached =
+        (existing.slaTimerEnd && existing.slaTimerEnd.getTime() < now.getTime()) ||
+        (existing.claimedAt && existing.claimedAt.getTime() < cutoff24h.getTime());
+
+      if (isBreached) {
+        const prevClaimedBy = existing.claimedBy;
+        const prevClaimedById = prevClaimedBy ? prevClaimedBy.toString() : null;
+
+        existing.claimedBy = null as any;
+        existing.assignedTo = null as any;
+        existing.claimedAt = null as any;
+        existing.slaTimerEnd = null as any;
+        existing.statusHistory = existing.statusHistory || [];
+        existing.statusHistory.push({
+          from: 'New',
+          to: 'New',
+          changedBy: prevClaimedBy,
+          reason: 'Auto-released to Unclaimed pool: 24h SLA breached without any action/response taken.',
+          changedAt: now,
+        });
+        await existing.save();
+
+        if (prevClaimedById && mongoose.connection.readyState === 1) {
+          void notify({
+            userId: prevClaimedById,
+            type: 'leads.sla_breached_unclaimed',
+            title: 'Lead SLA Breached - Claim Released',
+            body: `Lead "${existing.companyName}" was returned to the Unclaimed pool because no action was logged within 24 hours of claiming.`,
+            link: `/leads/${existing._id}`,
+          });
+        }
+      }
     }
 
+    const scopedUserIds = await employeeService.getScopedUserIds(ctx);
+    let lead = await Lead.findOne({ _id: toObjectId(id), deletedAt: null }).exec();
+
     if (!lead) throw new NotFoundError('Lead not found');
+
+    if (scopedUserIds) {
+      const isAssigned = lead.assignedTo && scopedUserIds.some((uid) => uid.equals(lead.assignedTo as any));
+      const isClaimed = lead.claimedBy && scopedUserIds.some((uid) => uid.equals(lead.claimedBy as any));
+      const isCreator = lead.createdBy && scopedUserIds.some((uid) => uid.equals(lead.createdBy as any));
+      const isRejectedBy = lead.rejectedBy && scopedUserIds.some((uid) => uid.equals(lead.rejectedBy as any));
+      const isUnassignedNew = !lead.assignedTo && lead.status === 'New';
+
+      if (!isAssigned && !isClaimed && !isCreator && !isRejectedBy && !isUnassignedNew) {
+        throw new ForbiddenError('You do not have permission to view this lead');
+      }
+    }
 
     if (lead.populate) {
       await lead.populate('assignedTo claimedBy rejectedBy documents.uploadedBy', 'name email role');
@@ -292,8 +463,20 @@ export class LeadsService {
     const now = new Date();
     const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
+    const rawMobile = String(data.mobile || '').trim();
+    const digitsOnly = rawMobile.replace(/\D/g, '');
+    const cleanMobile = digitsOnly.length >= 10 ? digitsOnly.slice(-10) : (digitsOnly || rawMobile);
+    data.mobile = cleanMobile;
+
+    if (data.secondaryMobile) {
+      const secDigits = String(data.secondaryMobile).replace(/\D/g, '');
+      if (secDigits.length >= 10) {
+        data.secondaryMobile = secDigits.slice(-10);
+      }
+    }
+
     const existing = await Lead.findOne({
-      mobile: data.mobile,
+      mobile: cleanMobile,
       source: data.source,
       createdAt: { $gte: windowStart },
       deletedAt: null,
@@ -479,20 +662,33 @@ export class LeadsService {
       payload.lastName || payload.last_name || payload['Last Name'],
     ].filter(Boolean).join(' ').trim();
 
-    const contactPerson = payload.contactPerson || payload.name || combinedName || emailContactPerson || 'Prospective Client';
-    const companyName = payload.company_name || payload.companyName || payload.company || emailCompanyName || contactPerson || 'Web Lead';
+    const rawContact = payload.contactPerson || payload.name || combinedName || emailContactPerson || 'Prospective Client';
+    const prefix = payload.prefix ? `${payload.prefix.trim()} ` : '';
+    const contactPerson = payload.prefix && !rawContact.startsWith(prefix) ? `${prefix}${rawContact}` : rawContact;
+
+    const companyName = payload.company || payload.company_name || payload.companyName || emailCompanyName || contactPerson || 'Web Lead';
     const email = payload.email ? String(payload.email).trim().toLowerCase() : (emailAddress || undefined);
-    const city = payload.city || payload.area || emailCity || undefined;
+    const city = payload.city || payload.Area || payload.area || payload.brancharea || emailCity || undefined;
 
     // Rich contextual note for Justdial / third-party / website leads
     let notes: string | undefined = emailNotes;
-    if (source === 'JustDial' || payload.leadid || payload.category) {
+    if (source === 'JustDial' || payload.leadid || payload.category || payload.parentid) {
       const noteParts: string[] = [];
       if (payload.leadid) noteParts.push(`JD Lead ID: ${payload.leadid}`);
+      if (payload.parentid) noteParts.push(`Contract ID: ${payload.parentid}`);
       if (payload.category) noteParts.push(`Category: ${payload.category}`);
-      if (payload.area) noteParts.push(`Area: ${payload.area}`);
+      if (payload.leadtype || payload.lead_type) noteParts.push(`Type: ${payload.leadtype || payload.lead_type}`);
+      if (payload.area || payload.Area) noteParts.push(`Area: ${payload.area || payload.Area}`);
+      if (payload.brancharea) noteParts.push(`Branch Area: ${payload.brancharea}`);
       if (payload.pincode) noteParts.push(`Pincode: ${payload.pincode}`);
-      if (payload.lead_type) noteParts.push(`Type: ${payload.lead_type}`);
+      if (payload.branchpin) noteParts.push(`Branch Pin: ${payload.branchpin}`);
+      if (payload.phone) noteParts.push(`Landline: ${payload.phone}`);
+      if (payload.dncmobile !== undefined && payload.dncmobile !== '') {
+        noteParts.push(`DND Mobile: ${String(payload.dncmobile) === '1' ? 'Yes' : 'No'}`);
+      }
+      if (payload.date || payload.time) {
+        noteParts.push(`Lead Time: ${payload.date || ''} ${payload.time || ''}`.trim());
+      }
       if (noteParts.length > 0) {
         notes = `[JustDial Lead Details]\n${noteParts.join(' | ')}`;
       }
@@ -586,6 +782,50 @@ export class LeadsService {
     if (!Types.ObjectId.isValid(id)) throw new NotFoundError('Lead not found');
 
     const now = new Date();
+    const cutoff24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    // If target lead has breached 24h SLA without action, release it before attempting claim
+    const targetLead = await Lead.findOne({ _id: toObjectId(id), deletedAt: null });
+    if (
+      targetLead &&
+      targetLead.status === 'New' &&
+      targetLead.claimedBy &&
+      !targetLead.firstResponseAt &&
+      (!targetLead.callLogs || targetLead.callLogs.length === 0)
+    ) {
+      const isBreached =
+        (targetLead.slaTimerEnd && targetLead.slaTimerEnd.getTime() < now.getTime()) ||
+        (targetLead.claimedAt && targetLead.claimedAt.getTime() < cutoff24h.getTime());
+
+      if (isBreached) {
+        const prevClaimedBy = targetLead.claimedBy;
+        const prevClaimedById = prevClaimedBy ? prevClaimedBy.toString() : null;
+
+        targetLead.claimedBy = null as any;
+        targetLead.assignedTo = null as any;
+        targetLead.claimedAt = null as any;
+        targetLead.slaTimerEnd = null as any;
+        targetLead.statusHistory = targetLead.statusHistory || [];
+        targetLead.statusHistory.push({
+          from: 'New',
+          to: 'New',
+          changedBy: prevClaimedBy,
+          reason: 'Auto-released to Unclaimed pool: 24h SLA breached without any action/response taken.',
+          changedAt: now,
+        });
+        await targetLead.save();
+
+        if (prevClaimedById && mongoose.connection.readyState === 1) {
+          void notify({
+            userId: prevClaimedById,
+            type: 'leads.sla_breached_unclaimed',
+            title: 'Lead SLA Breached - Claim Released',
+            body: `Lead "${targetLead.companyName}" was returned to the Unclaimed pool because no action was logged within 24 hours of claiming.`,
+            link: `/leads/${targetLead._id}`,
+          });
+        }
+      }
+    }
 
     const updated = await Lead.findOneAndUpdate(
       {
@@ -640,7 +880,8 @@ export class LeadsService {
       reason?: string;
       remarks?: string;
       note?: string;
-      nextActionDate?: Date;
+      loggedAt?: Date;
+      nextActionDate?: Date | null;
       delayResponsibility?: string;
       durationSec?: number;
       budget?: number;
@@ -658,6 +899,18 @@ export class LeadsService {
     const lead = await LeadsService.getLead(id, ctx);
     const now = new Date();
 
+    if (payload.loggedAt) {
+      const minDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0);
+      if (payload.loggedAt.getTime() > now.getTime() + 5 * 60 * 1000) {
+        throw new ValidationError('Interaction date/time cannot be in the future.');
+      }
+      if (payload.loggedAt.getTime() < minDate.getTime()) {
+        throw new ValidationError('Action cannot be backdated more than 1 day.');
+      }
+    }
+
+    const interactionTime = payload.loggedAt || now;
+
     const followUpEntry = {
       user: toObjectId(ctx.user.id),
       campaignId: payload.campaignId && Types.ObjectId.isValid(payload.campaignId) ? toObjectId(payload.campaignId) : undefined,
@@ -666,10 +919,14 @@ export class LeadsService {
       reason: payload.reason ?? '',
       remarks: payload.remarks || payload.note || '',
       note: payload.note || payload.remarks || '',
-      nextActionDate: payload.nextActionDate || undefined,
+      nextActionDate: payload.nextActionDate instanceof Date
+        ? payload.nextActionDate
+        : payload.nextActionDate
+          ? new Date(payload.nextActionDate)
+          : null,
       delayResponsibility: payload.delayResponsibility || undefined,
       durationSec: payload.durationSec ?? undefined,
-      createdAt: now,
+      createdAt: interactionTime,
     };
 
     lead.callLogs = lead.callLogs || [];
@@ -699,21 +956,23 @@ export class LeadsService {
       lead.email = payload.email.toLowerCase().trim();
     }
 
-    if (payload.nextActionDate) {
-      lead.nextActionDate = payload.nextActionDate;
-    }
+    lead.nextActionDate = payload.nextActionDate instanceof Date
+      ? payload.nextActionDate
+      : payload.nextActionDate
+        ? new Date(payload.nextActionDate)
+        : null;
 
     if (followUpEntry.followUpType === 'Call' && !lead.firstCallAt) {
-      lead.firstCallAt = now;
+      lead.firstCallAt = interactionTime;
     }
 
     if (!lead.firstResponseAt) {
-      lead.firstResponseAt = now;
+      lead.firstResponseAt = interactionTime;
       if (lead.status === 'New') {
         lead.status = 'Contacted';
         lead.assignedTo = lead.assignedTo || toObjectId(ctx.user.id);
         lead.claimedBy = lead.claimedBy || toObjectId(ctx.user.id);
-        lead.claimedAt = lead.claimedAt || now;
+        lead.claimedAt = lead.claimedAt || interactionTime;
 
         lead.statusHistory = lead.statusHistory || [];
         lead.statusHistory.push({
@@ -721,7 +980,7 @@ export class LeadsService {
           to: 'Contacted',
           changedBy: toObjectId(ctx.user.id),
           reason: `First Follow-up Logged (${followUpEntry.followUpType}): ${followUpEntry.reason || followUpEntry.remarks || 'Client Contacted'}`,
-          changedAt: now,
+          changedAt: interactionTime,
         });
       }
     }
@@ -737,7 +996,7 @@ export class LeadsService {
    */
   static async logCallLead(
     id: string,
-    payload: { note?: string; durationSec?: number; followUpType?: FollowUpType; reason?: string; nextActionDate?: Date; delayResponsibility?: string },
+    payload: { note?: string; durationSec?: number; followUpType?: FollowUpType; reason?: string; loggedAt?: Date; nextActionDate?: Date | null; delayResponsibility?: string },
     ctx: RequestContext,
   ): Promise<ILead> {
     return LeadsService.logFollowUpLead(id, payload, ctx);
@@ -788,10 +1047,29 @@ export class LeadsService {
   ): Promise<ILead> {
     const lead = await LeadsService.getLead(id, ctx);
 
-    lead.qualification = {
-      ...lead.qualification,
+    const currentQual = lead.qualification
+      ? typeof (lead.qualification as any).toObject === 'function'
+        ? (lead.qualification as any).toObject()
+        : lead.qualification
+      : {};
+    const mergedQualification = {
+      ...currentQual,
       ...qualificationData,
     };
+
+    if (
+      mergedQualification.startDate &&
+      mergedQualification.endDate &&
+      !mergedQualification.campaignDuration
+    ) {
+      const diffMs =
+        new Date(mergedQualification.endDate).getTime() -
+        new Date(mergedQualification.startDate).getTime();
+      const days = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+      mergedQualification.campaignDuration = `${days} days`;
+    }
+
+    lead.qualification = mergedQualification;
 
     if (qualificationData.city) {
       lead.city = qualificationData.city;
@@ -839,11 +1117,20 @@ export class LeadsService {
       const q = lead.qualification || {};
       const city = q.city || lead.city;
       const budget = q.budget;
-      const duration = q.campaignDuration;
+      const duration =
+        q.campaignDuration ||
+        (q.startDate && q.endDate
+          ? `${Math.max(1, Math.round((new Date(q.endDate).getTime() - new Date(q.startDate).getTime()) / (1000 * 60 * 60 * 24)))} days`
+          : undefined);
+
+      if (!q.campaignDuration && duration) {
+        lead.qualification = lead.qualification || {};
+        lead.qualification.campaignDuration = duration;
+      }
 
       if (!city || budget === undefined || budget === null || !duration) {
         throw new ValidationError(
-          'Moving to Qualified requires budget, city and duration to be filled.',
+          'Moving to Qualified requires budget, city and duration/dates to be filled.',
         );
       }
       lead.qualifiedAt = new Date();
@@ -855,18 +1142,19 @@ export class LeadsService {
       if (!reason || reason.trim().length === 0) {
         throw new ValidationError('Lost status requires a reason.');
       }
-      if (lead.qualification) {
-        lead.qualification.lostReason = reason.trim();
-      }
+      lead.qualification = lead.qualification || {};
+      lead.qualification.lostReason = reason.trim();
     }
+
+    const now = new Date();
 
     // 4b. Rejected Gate: moving to Rejected records reason and tracks who rejected
     if (toStatus === 'Rejected') {
       const reason = payload.lostReason || lead.qualification?.lostReason || 'Junk / Irrelevant inquiry';
-      if (lead.qualification) {
-        lead.qualification.lostReason = reason.trim();
-      }
+      lead.qualification = lead.qualification || {};
+      lead.qualification.lostReason = reason.trim();
       lead.rejectedBy = toObjectId(ctx.user.id);
+      lead.rejectedAt = now;
     }
 
     // 5. Cycle Increment on Re-activation from Won / Lost to an active stage
@@ -881,12 +1169,23 @@ export class LeadsService {
       if (fromStatus === 'Rejected' && toStatus === 'New') {
         lead.assignedTo = undefined;
         lead.claimedBy = undefined;
+        lead.claimedAt = null as any;
+        lead.slaTimerEnd = null as any;
         lead.rejectedBy = null;
+        lead.rejectedAt = null;
       }
     }
 
-    const now = new Date();
     lead.status = toStatus;
+    if (toStatus === 'Contacted' && !lead.firstResponseAt) {
+      lead.firstResponseAt = now;
+      if (!lead.firstCallAt) {
+        lead.firstCallAt = now;
+      }
+    }
+    if (toStatus === 'Won' || toStatus === 'Lost' || toStatus === 'Rejected') {
+      lead.nextActionDate = null;
+    }
     lead.updatedBy = toObjectId(ctx.user.id);
 
     lead.statusHistory = lead.statusHistory || [];
@@ -940,12 +1239,40 @@ export class LeadsService {
         lead.claimedBy = targetId;
       } else {
         // Move to Unclaimed Pool
+        const prevStatus = lead.status;
         lead.assignedTo = null;
         lead.claimedBy = null;
         lead.claimedAt = null;
+        lead.slaTimerEnd = null;
         lead.status = 'New';
+        const releaseReasonText = data.remarks || data.reason || 'Released by Agent';
+        const formattedReason = releaseReasonText.startsWith('Moved to Unclaimed Pool')
+          ? releaseReasonText
+          : `Moved to Unclaimed Pool: ${releaseReasonText}`;
+
+        lead.statusHistory = lead.statusHistory || [];
+        lead.statusHistory.push({
+          from: prevStatus,
+          to: 'New',
+          changedBy: toObjectId(ctx.user.id),
+          reason: formattedReason,
+          changedAt: new Date(),
+        });
       }
       delete data.assignedTo;
+    }
+
+    if (data.qualification) {
+      const currentQual = lead.qualification
+        ? typeof (lead.qualification as any).toObject === 'function'
+          ? (lead.qualification as any).toObject()
+          : lead.qualification
+        : {};
+      lead.qualification = {
+        ...currentQual,
+        ...data.qualification,
+      };
+      delete data.qualification;
     }
 
     Object.assign(lead, data);
@@ -960,6 +1287,9 @@ export class LeadsService {
    */
   static async getActivity(id: string, ctx: RequestContext): Promise<{ activities: any[] }> {
     const lead = await LeadsService.getLead(id, ctx);
+    if (lead.populate) {
+      await lead.populate('callLogs.user statusHistory.changedBy managerApproval.approvedBy', 'name email role');
+    }
     const leadObjId = toObjectId(id);
 
     // Fetch linked quotations and campaigns in parallel (with safe fallback for disconnected test environments)
@@ -1158,6 +1488,86 @@ export class LeadsService {
       if (clean) cleanSet.add(clean);
     }
     return Array.from(cleanSet).sort((a, b) => a.localeCompare(b));
+  }
+
+  static async getLeadStats(ctx: RequestContext): Promise<{
+    totalActive: number;
+    overdueCount: number;
+    unclaimedCount: number;
+    wonCount: number;
+    wonRevenue: number;
+    stageCounts?: Record<string, number>;
+    todayFollowUpsCount?: number;
+    topCities?: Array<{ city: string; count: number }>;
+    targetRevenue?: number;
+  }> {
+    const matchBase: Record<string, any> = { deletedAt: null };
+    if (!['admin', 'manager', 'finance', 'hr', 'ops'].includes(ctx.user.role)) {
+      matchBase.assignedTo = toObjectId(ctx.user.id);
+    }
+
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+    const [totalActive, overdueCount, unclaimedCount, wonStats, stageAgg, todayFollowUps, cityAgg] = await Promise.all([
+      Lead.countDocuments({
+        ...matchBase,
+        status: { $nin: ['Won', 'Lost', 'Rejected', 'Duplicate', 'duplicate'] },
+        $or: [
+          { assignedTo: { $ne: null } },
+          { claimedBy: { $ne: null } },
+          { status: { $ne: 'New' } },
+        ],
+      }),
+      Lead.countDocuments({
+        ...matchBase,
+        status: { $nin: ['Won', 'Lost', 'Rejected', 'Duplicate', 'duplicate'] },
+        nextActionDate: { $ne: null, $lt: now },
+      }),
+      Lead.countDocuments({ status: 'New', assignedTo: null, claimedBy: null, deletedAt: null }),
+      Lead.aggregate([
+        { $match: { ...matchBase, status: 'Won' } },
+        { $group: { _id: null, count: { $sum: 1 }, totalRevenue: { $sum: '$qualification.budget' } } },
+      ]),
+      Lead.aggregate([
+        { $match: matchBase },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
+      Lead.countDocuments({
+        ...matchBase,
+        status: { $nin: ['Won', 'Lost', 'Rejected', 'Duplicate', 'duplicate'] },
+        nextActionDate: { $gte: startOfToday, $lte: endOfToday },
+      }),
+      Lead.aggregate([
+        { $match: { deletedAt: null, city: { $ne: null, $nin: ['', 'null'] } } },
+        { $group: { _id: '$city', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 5 },
+      ]),
+    ]);
+
+    const stageCounts: Record<string, number> = {};
+    for (const item of stageAgg) {
+      if (item._id) stageCounts[item._id] = item.count;
+    }
+
+    const topCities = cityAgg.map((c) => ({
+      city: String(c._id).replace(/^.*?\]/, '').trim(),
+      count: c.count,
+    })).filter((c) => Boolean(c.city));
+
+    return {
+      totalActive,
+      overdueCount,
+      unclaimedCount,
+      wonCount: wonStats[0]?.count || 0,
+      wonRevenue: wonStats[0]?.totalRevenue || 0,
+      stageCounts,
+      todayFollowUpsCount: todayFollowUps,
+      topCities,
+      targetRevenue: 100000000, // ₹10,00,000 in paise
+    };
   }
 }
 

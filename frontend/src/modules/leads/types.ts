@@ -23,7 +23,7 @@ export type LeadStatus =
 
 export const STATUS_TRANSITIONS: Record<string, LeadStatus[]> = {
   New: ['Contacted', 'Lost', 'Rejected'],
-  Contacted: ['Interested', 'Lost'],
+  Contacted: ['Interested', 'Lost', 'Rejected'],
   Interested: ['Qualified', 'Lost'],
   Qualified: ['Proposal Sent', 'Negotiation', 'Lost'],
   'Proposal Sent': ['Negotiation', 'Won', 'Lost'],
@@ -54,6 +54,10 @@ export interface LeadQualification {
   city?: string;
   locationPreference?: LocationPreference;
   campaignDuration?: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  numberOfSites?: number;
+  preferredLocations?: string;
   budget?: number; // integer paise
   targetAudience?: string;
   campaignObjective?: string;
@@ -155,6 +159,8 @@ export interface Lead {
   notifiedAt?: string | null;
   claimedBy?: any;
   claimedAt?: string | null;
+  rejectedBy?: any;
+  rejectedAt?: string | null;
   firstResponseAt?: string | null;
   firstCallAt?: string | null;
   qualifiedAt?: string | null;
@@ -200,7 +206,9 @@ export interface LeadListQuery {
   overdueOnly?: boolean;
   fromDate?: string;
   toDate?: string;
-  sortBy?: 'receivedAt' | 'createdAt' | 'companyName' | 'source' | 'nextActionDate';
+  sortBy?: 'receivedAt' | 'createdAt' | 'claimedAt' | 'companyName' | 'source' | 'nextActionDate';
+  /** yes = a follow-up has been logged; no = not contacted yet */
+  contacted?: 'yes' | 'no';
   sortDir?: 'asc' | 'desc';
 }
 
@@ -230,7 +238,8 @@ export interface LogCallValues {
   reason?: string;
   remarks?: string;
   note?: string;
-  nextActionDate?: string;
+  loggedAt?: string;
+  nextActionDate?: string | null;
   delayResponsibility?: string;
   durationSec?: number;
   budget?: number;

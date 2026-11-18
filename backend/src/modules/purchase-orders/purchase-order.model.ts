@@ -8,18 +8,39 @@ export type PurchaseOrderStatus =
   | "Cancelled";
 
 export interface IPurchaseOrderLineItem {
-  siteId: mongoose.Types.ObjectId;
-  from: Date;
-  to: Date;
-  negotiatedRatePerDay: number;
-  days: number;
-  amount: number;
+  siteId?: mongoose.Types.ObjectId;
+  city?: string;
+  spaceType?: string;
+  from?: Date;
+  to?: Date;
+  negotiatedRatePerDay?: number;
+  days?: number;
+  amount?: number;
 }
 
 export interface IPurchaseOrder extends BaseDocument {
   poNumber: string;
-  campaignId: mongoose.Types.ObjectId;
+  pricingId?: string;
+  campaignId?: mongoose.Types.ObjectId | null;
   vendorId: mongoose.Types.ObjectId;
+
+  city?: string;
+  spaceType?: string;
+  cardRate?: number;
+  negotiatedRate?: number;
+  discountGiven?: number;
+  discountPercent?: number;
+  companyCostPrice?: number;
+  companySellingPrice?: number;
+  profitPerUnit?: number;
+  profitMarginPercent?: number;
+  durationDays?: number;
+  validityFrom?: Date;
+  validityTo?: Date;
+  negotiationRounds?: number;
+  negotiationNotes?: string;
+  approvedBy?: string;
+
   lineItems: IPurchaseOrderLineItem[];
   totalAmount: number;
   status: PurchaseOrderStatus;
@@ -31,35 +52,43 @@ const lineItemSchema = new Schema<IPurchaseOrderLineItem>(
   {
     siteId: {
       type: Schema.Types.ObjectId,
-      required: true,
       ref: "Site",
+      required: false,
+    },
+
+    city: {
+      type: String,
+      trim: true,
+    },
+
+    spaceType: {
+      type: String,
+      trim: true,
     },
 
     from: {
       type: Date,
-      required: true,
     },
 
     to: {
       type: Date,
-      required: true,
     },
 
     negotiatedRatePerDay: {
       type: Number,
-      required: true,
+      default: 0,
       min: 0,
     },
 
     days: {
       type: Number,
-      required: true,
+      default: 1,
       min: 1,
     },
 
     amount: {
       type: Number,
-      required: true,
+      default: 0,
       min: 0,
     },
   },
@@ -78,11 +107,17 @@ const purchaseOrderSchema = new Schema<IPurchaseOrder>(
       trim: true,
     },
 
+    pricingId: {
+      type: String,
+      index: true,
+      trim: true,
+    },
+
     campaignId: {
       type: Schema.Types.ObjectId,
-      required: true,
       ref: "Campaign",
       index: true,
+      default: null,
     },
 
     vendorId: {
@@ -92,21 +127,103 @@ const purchaseOrderSchema = new Schema<IPurchaseOrder>(
       index: true,
     },
 
+    city: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    spaceType: {
+      type: String,
+      trim: true,
+      default: "Billboard",
+    },
+
+    cardRate: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    negotiatedRate: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    discountGiven: {
+      type: Number,
+      default: 0,
+    },
+
+    discountPercent: {
+      type: Number,
+      default: 0,
+    },
+
+    companyCostPrice: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    companySellingPrice: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    profitPerUnit: {
+      type: Number,
+      default: 0,
+    },
+
+    profitMarginPercent: {
+      type: Number,
+      default: 0,
+    },
+
+    durationDays: {
+      type: Number,
+      default: 30,
+      min: 1,
+    },
+
+    validityFrom: {
+      type: Date,
+    },
+
+    validityTo: {
+      type: Date,
+    },
+
+    negotiationRounds: {
+      type: Number,
+      default: 1,
+      min: 1,
+    },
+
+    negotiationNotes: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    approvedBy: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
     lineItems: {
       type: [lineItemSchema],
-      required: true,
-
-      validate: {
-        validator: (value: IPurchaseOrderLineItem[]) =>
-          Array.isArray(value) && value.length > 0,
-
-        message: "At least one line item is required",
-      },
+      default: [],
     },
 
     totalAmount: {
       type: Number,
       required: true,
+      default: 0,
       min: 0,
     },
 
@@ -130,7 +247,10 @@ const purchaseOrderSchema = new Schema<IPurchaseOrder>(
       type: String,
       trim: true,
     },
-  }
+  },
+  {
+    timestamps: true,
+  },
 );
 
 purchaseOrderSchema.plugin(basePlugin);
@@ -138,4 +258,4 @@ purchaseOrderSchema.plugin(basePlugin);
 export const PurchaseOrder = mongoose.model<IPurchaseOrder>(
   "PurchaseOrder",
   purchaseOrderSchema,
-);
+);

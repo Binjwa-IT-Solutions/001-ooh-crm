@@ -13,3 +13,8 @@ attendanceRoutes.post('/check-out', requirePermission('attendance.self'), contro
 attendanceRoutes.get('/me', requirePermission('attendance.self'), controller.getMine);
 attendanceRoutes.get('/me/summary', requirePermission('attendance.self'), controller.getMineSummary);
 attendanceRoutes.get('/team', requirePermission('attendance.view_team'), controller.getTeam);
+
+// HR / admin corrections for someone else's attendance (role is re-checked in the service)
+attendanceRoutes.post('/employees/:employeeId/check-in', requirePermission('attendance.view_team'), controller.hrCheckIn);
+attendanceRoutes.post('/employees/:employeeId/check-out', requirePermission('attendance.view_team'), controller.hrCheckOut);
+attendanceRoutes.post('/employees/:employeeId/resume', requirePermission('attendance.view_team'), controller.hrResume);

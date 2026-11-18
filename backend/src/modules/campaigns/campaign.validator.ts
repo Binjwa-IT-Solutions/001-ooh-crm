@@ -45,6 +45,7 @@ export const updateCampaignStatusSchema = z.object({
     "Completed",
     "Cancelled",
   ]),
+  reason: z.string().optional(),
 });
 
 export const campaignListQuerySchema = z.object({
@@ -71,6 +72,19 @@ export const campaignListQuerySchema = z.object({
   startDate: z.coerce.date().optional(),
 
   endDate: z.coerce.date().optional(),
+
+  myCampaigns: z
+    .preprocess((val) => {
+      if (typeof val === "string") return val.toLowerCase() === "true";
+      return Boolean(val);
+    }, z.boolean())
+    .optional(),
+
+  agentId: objectId.optional(),
+
+  tab: z
+    .enum(["all", "live", "closed", "renewals"])
+    .optional(),
 
   page: z.coerce
     .number()

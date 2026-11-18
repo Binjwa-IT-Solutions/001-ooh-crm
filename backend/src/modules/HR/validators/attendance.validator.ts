@@ -12,6 +12,19 @@ export const checkInSchema = z.object({
   deviceInfo: z.string().optional(),
 });
 
+export const breakItemSchema = z.object({
+  type: z.enum(['Lunch', 'Tea', 'Other']).default('Lunch'),
+  startTime: z.coerce.date(),
+  endTime: z.coerce.date(),
+  durationMinutes: z.number().nonnegative(),
+});
+
 export const checkOutSchema = z.object({
   gps: gpsSchema,
+  breaks: z.array(breakItemSchema).optional(),
+});
+/** HR / admin correction: check someone in/out, or undo a check-out. */
+export const hrPunchSchema = z.object({
+  time: z.coerce.date().optional(),
+  reason: z.string().trim().max(300).optional(),
 });

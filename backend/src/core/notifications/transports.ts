@@ -25,21 +25,48 @@ export const consoleTransport: EmailTransport = {
 };
 
 /**
- * Real email transport — NOT WIRED UP YET.
- *
- * When the client's email provider account and domain verification land
- * (Resend / SES / Postmark — never VPS SMTP, OTP mail lands in spam and blocks
- * logins), implement `send` here and set `OTP_DELIVERY=email` in the environment.
- * Nothing else in the codebase has to change: the auth service already talks to
- * this interface, and `OTP_EXPOSE_IN_RESPONSE` is force-disabled in production.
+ * Resend email transport. Set EMAIL_PROVIDER=resend and provide a verified
+ * sender plus API key before using email delivery in production.
  */
 export const emailTransport: EmailTransport = {
   name: config.email.provider || 'email',
-  async send() {
-    throw new Error(
-      'Email transport is not implemented yet. Set OTP_DELIVERY=console for local development, ' +
-        'or implement emailTransport in core/notifications/transports.ts.',
-    );
+  async send(message) {
+    if (config.email.provider.toLowerCase() !== 'resend' || !config.email.apiKey) {
+      throw new Error('Email delivery requires EMAIL_PROVIDER=resend and EMAIL_API_KEY.');
+    }
+
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${config.email.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: config.email.from,
+        to: [message.to],
+        subject: message.subject,
+        text: message.text,
+      }),
+    });
+
+    if (!response.ok) {
+      const body: unknown = await response.json().catch(() => null);
+      const detail =
+        typeof body === 'object' &&
+        body !== null &&
+        'message' in body &&
+        typeof body.message === 'string'
+          ? body.message
+          : 'No provider details returned';
+      const code =
+        typeof body === 'object' && body !== null && 'name' in body && typeof body.name === 'string'
+          ? ` ${body.name}`
+          : '';
+
+      throw new Error(
+        `Email provider rejected the message (HTTP ${response.status}${code}): ${detail}`,
+      );
+    }
   },
 };
 

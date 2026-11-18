@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Media Octus CRM — AI Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+  <!-- Marked.js for fast markdown parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  <div class="app-layout">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand-section">
+        <div class="brand-logo">
+          <svg width="32" height="32" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="20,2 35,8 38,23 29,36 11,36 2,23 5,8" stroke="#801D21" stroke-width="2.5" fill="#FDF2F2"/>
+            <path d="M12 26V14L20 22L28 14V26" stroke="#801D21" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <div class="brand-text">
+            <h2>MEDIA OCTUS</h2>
+            <span>Enterprise CRM AI</span>
+          </div>
+        </div>
+        <div class="connection-status">
+          <span class="status-dot"></span>
+          <span class="status-label">MongoDB Live</span>
+        </div>
+      </div>
+
+      <!-- ACTIVE USER / ROLE SELECTOR -->
+      <div class="user-selector-card">
+        <div class="selector-header">
+          <span class="section-tag">LOGGED IN ROLE</span>
+          <span id="role-badge" class="badge-role">Admin</span>
+        </div>
+        <div class="user-info-row">
+          <div id="user-avatar" class="user-avatar">AR</div>
+          <div class="user-details">
+            <h4 id="user-name">Aditi Rao</h4>
+            <p id="user-dept">Management</p>
+          </div>
+        </div>
+        <div class="role-dropdown-wrapper">
+          <label for="user-select">Switch Member & Role:</label>
+          <select id="user-select" class="custom-select">
+            <option value="">Loading members...</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- TOOLS CAPABILITIES INSPECTOR -->
+      <div class="tools-inspector">
+        <div class="tools-header" id="toggle-tools-btn">
+          <div class="tools-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <span>Role Allowed Tools</span>
+          </div>
+          <span id="tools-count-badge" class="badge-count">38</span>
+        </div>
+        <div id="tools-list" class="tools-list">
+          <!-- Populated by JavaScript -->
+        </div>
+      </div>
+
+      <!-- SIDEBAR FOOTER -->
+      <div class="sidebar-footer">
+        <button id="btn-new-chat" class="btn-secondary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          New Conversation
+        </button>
+        <div class="version-meta">
+          <span>Version 3.2 • Enterprise Chassis</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN CHAT CONTAINER -->
+    <main class="chat-main">
+      <!-- TOP NAVIGATION BAR -->
+      <header class="chat-topbar">
+        <div class="chat-context">
+          <div class="context-pill">
+            <span class="pill-label">Active Session</span>
+            <span id="topbar-user" class="pill-value">Aditi Rao</span>
+            <span id="topbar-role" class="pill-role">Admin</span>
+          </div>
+          <div id="current-employee-pill" class="context-pill highlight" style="display: none;">
+            <span class="pill-label">In Focus:</span>
+            <span id="focus-emp-name" class="pill-value">None</span>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <div class="system-badge">
+            <span class="model-tag">Gemini 3.5 Flash-Lite</span>
+            <span class="fallback-tag">Groq Failover</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- MESSAGES THREAD -->
+      <div id="chat-messages" class="chat-messages">
+        <!-- WELCOME HERO STATE -->
+        <div id="welcome-hero" class="welcome-hero">
+          <div class="welcome-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#801D21" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
+          <h2>Welcome to Media Octus AI Assistant</h2>
+          <p>Multi-turn enterprise intelligence with role-filtered CRM tools and zero-hallucination RBAC data scoping.</p>
+          
+          <div class="quick-prompts-container">
+            <p class="quick-title">SUGGESTED QUERIES FOR YOUR ROLE:</p>
+            <div id="quick-prompts" class="quick-prompts">
+              <!-- Dynamically populated per role -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TYPING INDICATOR -->
+      <div id="typing-indicator" class="typing-indicator" style="display: none;">
+        <div class="typing-bubble">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+        </div>
+        <span class="typing-text">AI is retrieving CRM data...</span>
+      </div>
+
+      <!-- BOTTOM INPUT CONTAINER -->
+      <footer class="chat-input-bar">
+        <div class="input-form-container">
+          <textarea
+            id="user-input"
+            class="chat-textarea"
+            placeholder="Ask about employees, leaves, attendance, leads, quotations, or tasks..."
+            rows="1"
+          ></textarea>
+          <button id="send-button" class="btn-send" title="Send Message">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          </button>
+        </div>
+        <div class="input-footer-hints">
+          <span>Press <strong>Enter</strong> to send, <strong>Shift + Enter</strong> for newline</span>
+          <span>• Answers formatted in structured tables</span>
+        </div>
+      </footer>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

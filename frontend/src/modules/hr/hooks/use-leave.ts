@@ -35,13 +35,9 @@ export function useLeaveBalance() {
 
   const fetchData = useCallback(async () => {
     try {
+      setIsLoading(true);
       const employee = await employeesApi.getMine().catch(() => null);
-      if (!employee) {
-        setData([]);
-        setError(null);
-        return;
-      }
-      const res = await leaveApi.getBalance(employee.id);
+      const res = await leaveApi.getBalance(employee?.id);
       setData(res);
       setError(null);
     } catch (err: unknown) {
@@ -58,14 +54,15 @@ export function useLeaveBalance() {
   return { data, isLoading, error, mutate: fetchData };
 }
 
-export function useMyLeaveRequests() {
+export function useMyLeaveRequests(status?: string) {
   const [data, setData] = useState<LeaveRequest[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await leaveApi.getMyRequests();
+      setIsLoading(true);
+      const res = await leaveApi.getMyRequests(status);
       setData(res);
       setError(null);
     } catch (err: unknown) {
@@ -73,7 +70,7 @@ export function useMyLeaveRequests() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [status]);
 
   useEffect(() => {
     void fetchData();
@@ -82,14 +79,15 @@ export function useMyLeaveRequests() {
   return { data, isLoading, error, mutate: fetchData };
 }
 
-export function useTeamLeaveRequests() {
+export function useTeamLeaveRequests(status?: string) {
   const [data, setData] = useState<LeaveRequest[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await leaveApi.getTeamRequests();
+      setIsLoading(true);
+      const res = await leaveApi.getTeamRequests(status);
       setData(res);
       setError(null);
     } catch (err: unknown) {
@@ -97,7 +95,7 @@ export function useTeamLeaveRequests() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [status]);
 
   useEffect(() => {
     void fetchData();

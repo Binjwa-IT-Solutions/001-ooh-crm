@@ -78,6 +78,10 @@ export interface ILeadQualification {
   city?: string;
   locationPreference?: LocationPreference;
   campaignDuration?: string;
+  startDate?: Date | null;
+  endDate?: Date | null;
+  numberOfSites?: number;
+  preferredLocations?: string;
   budget?: number; // Integer paise
   targetAudience?: string;
   campaignObjective?: string;
@@ -131,6 +135,7 @@ export interface ILead extends BaseDocument {
   claimedBy?: Types.ObjectId | null;
   claimedAt?: Date | null;
   rejectedBy?: Types.ObjectId | null;
+  rejectedAt?: Date | null;
   notifiedAt?: Date | null;
   qualifiedAt?: Date | null;
   slaTimerEnd?: Date | null;
@@ -190,6 +195,10 @@ const qualificationSchema = new Schema<ILeadQualification>(
     city: { type: String, trim: true },
     locationPreference: { type: String, enum: LOCATION_PREFERENCES },
     campaignDuration: { type: String, trim: true },
+    startDate: { type: Date, default: null },
+    endDate: { type: Date, default: null },
+    numberOfSites: { type: Number, min: 0 },
+    preferredLocations: { type: String, trim: true },
     budget: { type: Number, min: 0 }, // Integer paise
     targetAudience: { type: String, trim: true },
     campaignObjective: { type: String, trim: true },
@@ -240,6 +249,7 @@ const leadSchema = new Schema<ILead>({
   claimedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
   claimedAt: { type: Date, default: null },
   rejectedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+  rejectedAt: { type: Date, default: null },
   notifiedAt: { type: Date, default: null },
   qualifiedAt: { type: Date, default: null },
   slaTimerEnd: { type: Date, default: null },
@@ -254,6 +264,9 @@ const leadSchema = new Schema<ILead>({
   documents: { type: [leadDocumentSchema], default: [] },
   cycle: { type: Number, default: 1, min: 1 },
 });
+
+// My Leads is sorted by claim time ("most recently claimed first")
+leadSchema.index({ assignedTo: 1, claimedAt: -1 });
 
 leadSchema.plugin(basePlugin);
 

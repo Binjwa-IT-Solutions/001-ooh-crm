@@ -4,17 +4,15 @@ import type {
   NextFunction,
 } from "express";
 
-import * as vendorService from "./vendor.service.js";
+import * as vendorService
+  from "./vendor.service.js";
 
 import {
   createVendorSchema,
   updateVendorSchema,
 } from "./vendor.validator.js";
 
-/* ----------------------------------
-   LIST VENDORS
-   GET /api/vendors
------------------------------------ */
+/* LIST */
 
 export async function list(
   req: Request,
@@ -22,64 +20,58 @@ export async function list(
   next: NextFunction,
 ) {
   try {
-    const search =
-      typeof req.query.search === "string"
-        ? req.query.search.trim()
-        : undefined;
-
-    const state =
-      typeof req.query.state === "string"
-        ? req.query.state.trim()
-        : undefined;
-
-    const city =
-      typeof req.query.city === "string"
-        ? req.query.city.trim()
-        : undefined;
-
-    const status =
-      req.query.status === "Active" ||
-      req.query.status === "Inactive"
-        ? req.query.status
-        : undefined;
-
-    const vendors = await vendorService.getVendors({
-      search,
-      state,
-      city,
-      status,
-    });
-
-    return res.status(200).json({
-      success: true,
-      data: vendors,
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-
-/* ----------------------------------
-   FILTER OPTIONS
-   GET /api/vendors/filters
------------------------------------ */
-
-export async function filters(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
-  try {
-    const state =
-      typeof req.query.state === "string"
-        ? req.query.state.trim()
-        : undefined;
-
     const data =
-      await vendorService.getVendorFilters(state);
+      await vendorService.getVendors({
+        search:
+          typeof req.query.search ===
+          "string"
+            ? req.query.search
+            : undefined,
 
-    return res.status(200).json({
+        city:
+          typeof req.query.city ===
+          "string"
+            ? req.query.city
+            : undefined,
+
+        state:
+          typeof req.query.state ===
+          "string"
+            ? req.query.state
+            : undefined,
+
+        status:
+          req.query.status ===
+            "Active" ||
+          req.query.status ===
+            "Inactive" ||
+          req.query.status ===
+            "Blacklist"
+            ? req.query.status
+            : undefined,
+
+        registrationStatus:
+          req.query
+            .registrationStatus ===
+            "Registered" ||
+          req.query
+            .registrationStatus ===
+            "Unregistered" ||
+          req.query
+            .registrationStatus ===
+            "Pending"
+            ? req.query
+                .registrationStatus
+            : undefined,
+
+        vendorType:
+          typeof req.query.vendorType ===
+          "string"
+            ? req.query.vendorType
+            : undefined,
+      });
+
+    res.json({
       success: true,
       data,
     });
@@ -88,11 +80,28 @@ export async function filters(
   }
 }
 
+/* FILTERS */
 
-/* ----------------------------------
-   GET VENDOR BY ID
-   GET /api/vendors/:id
------------------------------------ */
+export async function filters(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const data =
+      await vendorService
+        .getVendorFilters();
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/* GET BY ID */
 
 export async function getById(
   req: Request,
@@ -100,25 +109,22 @@ export async function getById(
   next: NextFunction,
 ) {
   try {
-    const vendor =
-      await vendorService.getVendorById(
-        String(req.params.id),
-      );
+    const data =
+      await vendorService
+        .getVendorById(
+          String(req.params.id),
+        );
 
-    return res.status(200).json({
+    res.json({
       success: true,
-      data: vendor,
+      data,
     });
   } catch (error) {
     next(error);
   }
 }
 
-
-/* ----------------------------------
-   CREATE VENDOR
-   POST /api/vendors
------------------------------------ */
+/* CREATE */
 
 export async function create(
   req: Request,
@@ -127,26 +133,26 @@ export async function create(
 ) {
   try {
     const input =
-      createVendorSchema.parse(req.body);
+      createVendorSchema.parse(
+        req.body,
+      );
 
-    const vendor =
-      await vendorService.createVendor(input);
+    const data =
+      await vendorService
+        .createVendor(input);
 
-    return res.status(201).json({
+    res.status(201).json({
       success: true,
-      message: "Vendor created successfully",
-      data: vendor,
+      message:
+        "Vendor created successfully",
+      data,
     });
   } catch (error) {
     next(error);
   }
 }
 
-
-/* ----------------------------------
-   UPDATE VENDOR
-   PATCH /api/vendors/:id
------------------------------------ */
+/* UPDATE */
 
 export async function update(
   req: Request,
@@ -155,29 +161,53 @@ export async function update(
 ) {
   try {
     const input =
-      updateVendorSchema.parse(req.body);
-
-    const vendor =
-      await vendorService.updateVendor(
-        String(req.params.id),
-        input,
+      updateVendorSchema.parse(
+        req.body,
       );
 
-    return res.status(200).json({
+    const data =
+      await vendorService
+        .updateVendor(
+          String(req.params.id),
+          input,
+        );
+
+    res.json({
       success: true,
-      message: "Vendor updated successfully",
-      data: vendor,
+      message:
+        "Vendor updated successfully",
+      data,
     });
   } catch (error) {
     next(error);
   }
 }
 
+/* ACTIVATE */
 
-/* ----------------------------------
-   DEACTIVATE VENDOR
-   PATCH /api/vendors/:id/deactivate
------------------------------------ */
+export async function activate(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const data =
+      await vendorService
+        .setVendorStatus(
+          String(req.params.id),
+          "Active",
+        );
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/* DEACTIVATE */
 
 export async function deactivate(
   req: Request,
@@ -185,29 +215,168 @@ export async function deactivate(
   next: NextFunction,
 ) {
   try {
-    const vendor =
-      await vendorService.updateVendor(
-        String(req.params.id),
-        {
-          status: "Inactive",
-        },
-      );
+    const data =
+      await vendorService
+        .setVendorStatus(
+          String(req.params.id),
+          "Inactive",
+        );
 
-    return res.status(200).json({
+    res.json({
       success: true,
-      message: "Vendor deactivated successfully",
-      data: vendor,
+      data,
     });
   } catch (error) {
     next(error);
   }
 }
 
+/* BLACKLIST */
 
-/* ----------------------------------
-   GET SITES BY VENDOR
-   GET /api/vendors/:id/sites
------------------------------------ */
+export async function blacklist(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const data =
+      await vendorService
+        .setVendorStatus(
+          String(req.params.id),
+          "Blacklist",
+        );
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/* REGISTRATION STATUS */
+
+export async function registrationStatus(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const status =
+      req.body.registrationStatus;
+
+    if (
+      ![
+        "Registered",
+        "Unregistered",
+        "Pending",
+      ].includes(status)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid registration status",
+      });
+    }
+
+    const data =
+      await vendorService
+        .setRegistrationStatus(
+          String(req.params.id),
+          status,
+        );
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/* ADD DOCUMENT */
+
+export async function addDocument(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const document = {
+      type: req.body.type,
+      name:
+        req.file?.originalname ||
+        req.body.name,
+      url: req.file
+        ? `/uploads/vendors/${req.file.filename}`
+        : req.body.url,
+      fileKey: req.file?.filename,
+    };
+
+    if (!document.type) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Document type is required",
+      });
+    }
+
+    if (!document.name) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Document name is required",
+      });
+    }
+
+    const data =
+      await vendorService.addDocument(
+        String(req.params.id),
+        document,
+      );
+
+    res.json({
+      success: true,
+      message:
+        "Document uploaded successfully",
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/* REMOVE DOCUMENT */
+
+export async function removeDocument(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const data =
+      await vendorService
+        .removeDocument(
+          String(req.params.id),
+          String(
+            req.params.documentId,
+          ),
+        );
+
+    res.json({
+      success: true,
+      message:
+        "Document removed successfully",
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/* SITES */
 
 export async function getSites(
   req: Request,
@@ -215,14 +384,15 @@ export async function getSites(
   next: NextFunction,
 ) {
   try {
-    const sites =
-      await vendorService.getSitesByVendor(
-        String(req.params.id),
-      );
+    const data =
+      await vendorService
+        .getSitesByVendor(
+          String(req.params.id),
+        );
 
-    return res.status(200).json({
+    res.json({
       success: true,
-      data: sites,
+      data,
     });
   } catch (error) {
     next(error);

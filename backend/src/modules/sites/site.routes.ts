@@ -1,88 +1,68 @@
 import { Router } from "express";
-
-import {
-  requireAuth,
-} from "../../core/auth/auth-middleware.js";
-
-import {
-  requirePermission,
-} from "../../core/rbac/index.js";
+import { requireAuth } from "../../core/auth/auth-middleware.js";
+import { requirePermission } from "../../core/rbac/index.js";
 
 import {
   createSite,
-  getSites,
+  getSitesController,
   getSite,
-  updateSite,
+  updateSiteController,
   importSites,
+  getStates,
+  getCities,
 } from "./site.controller.js";
 
 const router = Router();
 
 router.use(requireAuth);
 
-/* ----------------------------------
-   GET ALL SITES
-
-   GET /api/sites
-
-   Filters:
-   ?city=Mumbai
-   ?type=Airport
-   ?status=Active
------------------------------------ */
-
-router.get(
-  "/",
-  requirePermission("sites.view"),
-  getSites
-);
-
-/* ----------------------------------
-   GET SINGLE SITE
-
-   GET /api/sites/:id
------------------------------------ */
-
-router.get(
-  "/:id",
-  requirePermission("sites.view"),
-  getSite
-);
-
-/* ----------------------------------
-   CREATE SITE
-
-   POST /api/sites
------------------------------------ */
-
+/* CREATE ATR */
 router.post(
   "/",
   requirePermission("sites.manage"),
-  createSite
+  createSite,
 );
 
-/* ----------------------------------
-   UPDATE SITE
-
-   PATCH /api/sites/:id
------------------------------------ */
-
-router.patch(
-  "/:id",
-  requirePermission("sites.manage"),
-  updateSite
+/* GET ALL ATR */
+router.get(
+  "/",
+  requirePermission("sites.view"),
+  getSitesController,
 );
 
-/* ----------------------------------
-   CSV IMPORT
+/* STATE OPTIONS */
+router.get(
+  "/options/states",
+  requirePermission("sites.view"),
+  getStates,
+);
 
-   POST /api/sites/import
------------------------------------ */
+/* CITY OPTIONS */
+router.get(
+  "/options/cities",
+  requirePermission("sites.view"),
+  getCities,
+);
 
+/* CSV IMPORT */
 router.post(
   "/import",
   requirePermission("sites.manage"),
-  importSites
+  importSites,
+);
+
+/* GET ONE ATR */
+router.get(
+  "/:id",
+  requirePermission("sites.view"),
+  getSite,
+);
+
+/* UPDATE ATR */
+router.patch(
+  "/:id",
+  requirePermission("sites.manage"),
+  updateSiteController,
 );
 
 export default router;

@@ -6,11 +6,12 @@ import { useSearchParams } from "next/navigation";
 import CampaignFilters from "./CampaignFilters";
 import CampaignForm from "./CampaignForm";
 import CampaignStatusTimeline from "./CampaignStatusTimeline";
-import CampaignTable from "./CampaignTable";
+import CampaignTable, { isCampaignLocked } from "./CampaignTable";
 
 import {
   useCampaigns,
 } from "../hooks/useCampaigns";
+import { useAuth } from "@/shared/auth/auth-context";
 
 import type {
   Campaign,
@@ -19,12 +20,29 @@ import type {
 } from "../types";
 
 export default function CampaignPage() {
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission("campaigns.manage");
   const searchParams = useSearchParams();
   const urlLeadId = searchParams.get("leadId") || "";
-  const shouldCreate = searchParams.get("create") === "true";
+const shouldCreate = searchParams.get("create") === "true";
+const urlSearch = searchParams.get("search") || "";
 
-  const [filters, setFilters] =
-    useState<CampaignFiltersType>({});
+const [filters, setFilters] = useState<CampaignFiltersType>(() => ({
+  search: urlSearch || undefined,
+}));
+
+useEffect(() => {
+  if (urlSearch) {
+    setFilters((prev) => ({ ...prev, search: urlSearch }));
+  }
+}, [urlSearch]);
+
+  const apiQuery = useMemo(
+    () => ({
+      leadId: urlLeadId || undefined,
+    }),
+    [urlLeadId],
+  );
 
   const {
     campaigns,
@@ -34,7 +52,7 @@ export default function CampaignPage() {
     addCampaign: onCreate,
     editCampaign: onUpdate,
     changeStatus: onUpdateStatus,
-  } = useCampaigns(filters);
+  } = useCampaigns(apiQuery);
 
   const [showForm, setShowForm] =
     useState(false);
@@ -48,8 +66,43 @@ export default function CampaignPage() {
   const [selectedCampaign, setSelectedCampaign] =
     useState<Campaign | null>(null);
 
+  const urlCampaignId = searchParams.get("id") || searchParams.get("campaignId") || "";
+
   const [activeCampaignId, setActiveCampaignId] =
-    useState<string | null>(null);
+    useState<string | null>(() => urlCampaignId || null);
+
+  useEffect(() => {
+    if (urlCampaignId) {
+      setActiveCampaignId(urlCampaignId);
+    }
+  }, [urlCampaignId]);
+
+  const stateOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of campaigns) {
+      const s = c.state?.trim();
+      if (s && !map.has(s.toLowerCase())) {
+        map.set(s.toLowerCase(), s);
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
+  }, [campaigns]);
+
+  const cityOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of campaigns) {
+      if (filters.state) {
+        if ((c.state?.trim() || "").toLowerCase() !== filters.state.trim().toLowerCase()) {
+          continue;
+        }
+      }
+      const city = c.city?.trim();
+      if (city && !map.has(city.toLowerCase())) {
+        map.set(city.toLowerCase(), city);
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
+  }, [campaigns, filters.state]);
 
   const filteredCampaigns = useMemo(() => {
     return campaigns.filter((campaign) => {
@@ -58,6 +111,10 @@ export default function CampaignPage() {
         const nameMatch = (campaign.name || "").toLowerCase().includes(term);
         const codeMatch = (campaign.campaignCode || "").toLowerCase().includes(term);
         const cityMatch2 = (campaign.city || "").toLowerCase().includes(term);
+        const stateMatch2 = (campaign.state || "").toLowerCase().includes(term);
+        const quotationNoMatch = (campaign.quotationNo || "").toLowerCase().includes(term);
+        const quotationNameMatch = (campaign.quotationName || "").toLowerCase().includes(term);
+        const piNoMatch = (campaign.piNo || "").toLowerCase().includes(term);
 
         let leadMatch = false;
         if (campaign.leadId) {
@@ -80,20 +137,45 @@ export default function CampaignPage() {
           }
         }
 
-        return nameMatch || codeMatch || cityMatch2 || leadMatch || managerMatch2;
+        return (
+          nameMatch ||
+          codeMatch ||
+          cityMatch2 ||
+          stateMatch2 ||
+          quotationNoMatch ||
+          quotationNameMatch ||
+          piNoMatch ||
+          leadMatch ||
+          managerMatch2
+        );
       })();
+
+      const stateMatch =
+        !filters.state ||
+        (campaign.state || "").trim().toLowerCase() === filters.state.trim().toLowerCase();
 
       const cityMatch =
         !filters.city ||
-        campaign.city
-          .toLowerCase()
-          .includes(
-            filters.city.toLowerCase(),
-          );
+        (campaign.city || "").trim().toLowerCase() === filters.city.trim().toLowerCase();
 
       const statusMatch =
-        !filters.status ||
-        campaign.status === filters.status;
+        !filters.status || (() => {
+          const fs = filters.status.trim().toLowerCase();
+          const cs = (campaign.status || "").trim().toLowerCase();
+          if (fs === "campaign end") {
+            return cs === "campaign end" || cs === "complete" || cs === "completed";
+          }
+          if (fs === "in progress") {
+            return cs === "in progress" || cs === "inprogress" || cs === "draft" || cs === "approved";
+          }
+          if (fs === "campaign live") {
+            return cs === "campaign live";
+          }
+          if (fs === "rejected") {
+            return cs === "rejected" || cs === "cancelled" || cs === "campaign rejected";
+          }
+          return cs === fs;
+        })();
 
       const managerMatch =
         !filters.manager || (() => {
@@ -108,23 +190,12 @@ export default function CampaignPage() {
           return campaign.assignedManager === filters.manager;
         })();
 
-      const startDateMatch =
-        !filters.startDate ||
-        new Date(campaign.startDate) >=
-          new Date(filters.startDate);
-
-      const endDateMatch =
-        !filters.endDate ||
-        new Date(campaign.endDate) <=
-          new Date(filters.endDate);
-
       return (
         searchMatch &&
+        stateMatch &&
         cityMatch &&
         statusMatch &&
-        managerMatch &&
-        startDateMatch &&
-        endDateMatch
+        managerMatch
       );
     });
   }, [campaigns, filters]);
@@ -146,6 +217,9 @@ export default function CampaignPage() {
   function handleEditCampaign(
     campaign: Campaign,
   ) {
+    if (isCampaignLocked(campaign.status)) {
+      return;
+    }
     setActiveCampaignId(campaign._id);
     setSelectedCampaign(campaign);
     setShowForm(true);
@@ -179,6 +253,7 @@ export default function CampaignPage() {
   async function handleStatusChange(
     campaign: Campaign,
     status: CampaignStatus,
+    reason?: string,
   ) {
     setActiveCampaignId(campaign._id);
     try {
@@ -186,6 +261,7 @@ export default function CampaignPage() {
       await onUpdateStatus(
         campaign._id,
         status,
+        reason,
       );
       await onReload();
     } catch (err) {
@@ -202,7 +278,7 @@ export default function CampaignPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-white">
       <div className="mx-auto max-w-7xl p-6">
         {/* PAGE HEADER */}
         <div className="mb-6 flex items-center justify-between">
@@ -216,19 +292,28 @@ export default function CampaignPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handleAddCampaign}
-            className="rounded-lg bg-[#8B2424] px-5 py-2.5 text-sm font-semibold text-[#F9DADA] shadow-sm transition hover:bg-[#A8383B] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#A8383B] focus:ring-offset-2"
-          >
-            + Create Campaign
-          </button>
+          {canManage ? (
+            <button
+              type="button"
+              onClick={handleAddCampaign}
+              className="rounded-lg bg-[#8B2424] px-5 py-2.5 text-sm font-semibold text-[#F9DADA] shadow-sm transition hover:bg-[#A8383B] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#A8383B] focus:ring-offset-2"
+            >
+              + Create Campaign
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              Read-Only Access
+            </span>
+          )}
         </div>
 
         {/* FILTERS */}
         <div className="mb-6">
           <CampaignFilters
             filters={filters}
+            stateOptions={stateOptions}
+            cityOptions={cityOptions}
             onChange={(nextFilters) =>
               setFilters({
                 ...nextFilters,
@@ -323,6 +408,7 @@ export default function CampaignPage() {
             <CampaignTable
               campaigns={filteredCampaigns}
               selectedCampaignId={activeCampaign?._id}
+              canManage={canManage}
               onSelectCampaign={(campaign) =>
                 setActiveCampaignId(campaign._id)
               }

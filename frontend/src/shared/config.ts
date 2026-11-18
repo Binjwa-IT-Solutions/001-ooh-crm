@@ -7,9 +7,11 @@
  * In production, set NEXT_PUBLIC_API_URL to the deployed backend URL.
  */
 const envApiUrl = process.env.NEXT_PUBLIC_API_URL;
+const envPublicUrl = process.env.NEXT_PUBLIC_PUBLIC_URL;
 
 export const appConfig = {
   apiUrl: (envApiUrl && envApiUrl.trim() !== '' ? envApiUrl : '').replace(/\/$/, ''),
+  publicUrl: (envPublicUrl && envPublicUrl.trim() !== '' ? envPublicUrl : '').replace(/\/$/, ''),
   appName: 'Media Octus CRM',
 } as const;
 

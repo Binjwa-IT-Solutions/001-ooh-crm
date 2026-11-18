@@ -1,0 +1,829 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Search,
+  Megaphone,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  RefreshCw,
+  Plus,
+} from 'lucide-react';
+
+import { useAuth } from '@/shared/auth/auth-context';
+import { Dropdown, DatePicker } from '@/shared/ui';
+import { leadsApi } from '@/modules/leads/api';
+import { useCampaigns } from '../hooks/useCampaigns';
+import CampaignForm from './CampaignForm';
+import type { Campaign, CampaignFilters } from '../types';
+
+const STATUS_STYLES: Record<string, string> = {
+  Draft: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300',
+  Approved: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300',
+  InProgress: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300',
+  Completed: 'border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300',
+  Cancelled: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300',
+};
+
+function formatDate(dateStr?: string | null) {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
+function formatRupees(amount: number): string {
+  return `₹${(amount || 0).toLocaleString('en-IN')}`;
+}
+
+function getDurationCount(startDateStr?: string | null, endDateStr?: string | null): string {
+  if (!startDateStr || !endDateStr) return "—";
+  const start = new Date(startDateStr);
+  const end = new Date(endDateStr);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return "—";
+  }
+
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  const startDay = Math.floor(start.getTime() / oneDayMs);
+  const endDay = Math.floor(end.getTime() / oneDayMs);
+  if (endDay < startDay) return "0 Days";
+  const diffDays = endDay - startDay + 1;
+  return `${diffDays} ${diffDays === 1 ? "Day" : "Days"}`;
+}
+
+function renderStateCity(city?: string | null, state?: string | null) {
+  let c = city?.trim() || "";
+  let s = state?.trim() || "";
+
+  if (c.includes(",")) {
+    const parts = c.split(",").map((p) => p.trim()).filter(Boolean);
+    const uniqueParts = Array.from(new Set(parts.map((p) => p.toLowerCase())))
+      .map((lower) => parts.find((p) => p.toLowerCase() === lower)!);
+    c = uniqueParts.join(", ");
+  }
+
+  if (s.includes(",")) {
+    const parts = s.split(",").map((p) => p.trim()).filter(Boolean);
+    const uniqueParts = Array.from(new Set(parts.map((p) => p.toLowerCase())))
+      .map((lower) => parts.find((p) => p.toLowerCase() === lower)!);
+    s = uniqueParts.join(", ");
+  }
+
+  if (!c && !s) {
+    return <span className="text-slate-400">—</span>;
+  }
+
+  const isDuplicate =
+    Boolean(c && s) &&
+    (c.toLowerCase() === s.toLowerCase() ||
+      c.toLowerCase().includes(s.toLowerCase()) ||
+      s.toLowerCase().includes(c.toLowerCase()));
+
+  if (!s || !c || isDuplicate) {
+    return (
+      <div className="font-medium text-slate-900 dark:text-white">
+        {c || s}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="font-medium text-slate-900 dark:text-white">
+        {c}
+      </div>
+      <div className="text-slate-500 dark:text-slate-400">
+        {s}
+      </div>
+    </div>
+  );
+}
+
+export default function MyCampaignsPage() {
+  const { user, hasPermission } = useAuth();
+  const canManage = hasPermission('campaigns.manage');
+  const isManagerOrAdmin = ['admin', 'manager'].includes(user?.role?.toLowerCase() || '');
+  const isSalesAgent = user?.role?.toLowerCase() === 'sales_agent';
+
+  // Active top tab
+  const [activeTab, setActiveTab] = useState<'all' | 'live' | 'closed' | 'renewals'>('all');
+
+  // Filters
+  const [search, setSearch] = useState('');
+  const [city, setCity] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [selectedAgentId, setSelectedAgentId] = useState('');
+  const [agentOptions, setAgentOptions] = useState<{ _id: string; name: string; email: string; role: string }[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 25;
+
+  // Load sales agents for managers/admins
+  useEffect(() => {
+    if (isManagerOrAdmin) {
+      leadsApi.listAgents()
+        .then((res) => {
+          if (res.agents) setAgentOptions(res.agents);
+        })
+        .catch(() => {});
+    }
+  }, [isManagerOrAdmin]);
+
+  // Filters passed to backend:
+  // - Sales Agent: ALWAYS scoped to their own campaigns (myCampaigns: true)
+  // - Admin / Manager: DEFAULTS to ALL Team Campaigns, or can filter by specific agent
+  const apiFilters = useMemo<CampaignFilters>(() => {
+    let myCampaigns: boolean | undefined = undefined;
+    let agentId: string | undefined = undefined;
+
+    if (isSalesAgent) {
+      myCampaigns = true;
+    } else if (selectedAgentId === 'me') {
+      myCampaigns = true;
+    } else if (selectedAgentId && selectedAgentId !== 'all') {
+      agentId = selectedAgentId;
+    }
+
+    return {
+      search: search.trim() || undefined,
+      city: city.trim() || undefined,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+      myCampaigns,
+      agentId,
+    };
+  }, [search, city, startDate, endDate, isSalesAgent, selectedAgentId]);
+
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const { campaigns, loading, error, reload, addCampaign } = useCampaigns(apiFilters);
+
+  // Compute live KPI summary stats
+  const counts = useMemo(() => {
+    let all = campaigns.length;
+    let live = 0;
+    let closed = 0;
+    let renewals = 0;
+    const now = Date.now();
+
+    for (const c of campaigns) {
+      if (c.status === 'InProgress' || c.status === 'Approved') {
+        live++;
+      } else if (c.status === 'Completed' || c.status === 'Cancelled') {
+        closed++;
+      }
+
+      if (c.status !== 'Completed' && c.status !== 'Cancelled' && c.endDate) {
+        const end = new Date(c.endDate).getTime();
+        if (!isNaN(end)) {
+          const diffDays = Math.ceil((end - now) / (1000 * 60 * 60 * 24));
+          if (diffDays >= 0 && diffDays <= 7) {
+            renewals++;
+          }
+        }
+      }
+    }
+
+    return { all, live, closed, renewals };
+  }, [campaigns]);
+
+  // Filter campaigns by active tab
+  const displayedCampaigns = useMemo(() => {
+    return campaigns.filter((c) => {
+      if (activeTab === 'live') {
+        return c.status === 'InProgress' || c.status === 'Approved';
+      }
+      if (activeTab === 'closed') {
+        return c.status === 'Completed' || c.status === 'Cancelled';
+      }
+      if (activeTab === 'renewals') {
+        if (c.status === 'Completed' || c.status === 'Cancelled' || !c.endDate) return false;
+        const end = new Date(c.endDate).getTime();
+        const diffDays = Math.ceil((end - Date.now()) / (1000 * 60 * 60 * 24));
+        return diffDays >= 0 && diffDays <= 7;
+      }
+      return true;
+    });
+  }, [campaigns, activeTab]);
+
+  const totalPages = Math.max(1, Math.ceil(displayedCampaigns.length / ITEMS_PER_PAGE));
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, city, startDate, endDate, selectedAgentId, activeTab]);
+
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, displayedCampaigns.length);
+  const visibleCampaigns = useMemo(() => {
+    return displayedCampaigns.slice(startIndex, endIndex);
+  }, [displayedCampaigns, startIndex, endIndex]);
+
+  const resetAllFilters = () => {
+    setSearch('');
+    setCity('');
+    setStartDate('');
+    setEndDate('');
+    setSelectedAgentId('');
+    setActiveTab('all');
+  };
+
+  const hasActiveFilters = Boolean(search || city || startDate || endDate || selectedAgentId || activeTab !== 'all');
+
+  return (
+    <div className="space-y-6 pb-8">
+      {/* Page Header - Exactly matching Leads & Quotations */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">
+            {isSalesAgent ? 'My Campaigns' : 'Sales Campaigns'}
+          </h1>
+          <p className="text-sm text-slate-500">
+            Track live campaigns on sites, monitor closed contracts, and manage client renewals.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={reload}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-medium text-slate-700 shadow-xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 disabled:opacity-50 transition"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
+
+          {canManage ? (
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#8B2424] px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-[#6E1D1D] transition"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Create Campaign</span>
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              Read-Only Access
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Tabs - Consistent with Leads and Quotations */}
+      <div className="flex gap-4 border-b border-slate-200 dark:border-slate-800">
+        <button
+          onClick={() => setActiveTab('all')}
+          className={`h-11 px-4 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'all'
+              ? 'border-primary text-primary font-semibold'
+              : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'
+          }`}
+        >
+          All Campaigns ({counts.all})
+        </button>
+
+        <button
+          onClick={() => setActiveTab('live')}
+          className={`h-11 px-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+            activeTab === 'live'
+              ? 'border-primary text-primary font-semibold'
+              : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'
+          }`}
+        >
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse" />
+            <span>Live Campaigns</span>
+          </span>
+          <span className="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-xs font-bold dark:bg-emerald-950 dark:text-emerald-300">
+            {counts.live}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('closed')}
+          className={`h-11 px-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+            activeTab === 'closed'
+              ? 'border-primary text-primary font-semibold'
+              : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'
+          }`}
+        >
+          <span>Closed</span>
+          <span className="rounded-full bg-slate-100 text-slate-700 px-2 py-0.5 text-xs font-bold dark:bg-slate-800 dark:text-slate-300">
+            {counts.closed}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('renewals')}
+          className={`h-11 px-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+            activeTab === 'renewals'
+              ? 'border-primary text-primary font-semibold'
+              : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'
+          }`}
+        >
+          <span>Ending Soon (Renew)</span>
+          {counts.renewals > 0 && (
+            <span className="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-xs font-bold dark:bg-amber-950 dark:text-amber-300">
+              {counts.renewals}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* KPI Summary Cards - Consistent with Leads Executive Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Campaigns */}
+        <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Total Campaigns
+            </p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
+              {counts.all}
+            </p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              {isSalesAgent ? 'Your assigned clients' : 'All campaigns'}
+            </p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 flex items-center justify-center shrink-0">
+            <Megaphone className="w-5 h-5" />
+          </div>
+        </div>
+
+        {/* Live on Sites */}
+        <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Live on Sites
+            </p>
+            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+              {counts.live}
+            </p>
+            <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">
+              Active running display
+            </p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+        </div>
+
+        {/* Closed */}
+        <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Closed Contracts
+            </p>
+            <p className="text-2xl font-bold text-slate-700 dark:text-slate-300 mt-1">
+              {counts.closed}
+            </p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Completed or ended
+            </p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 flex items-center justify-center shrink-0">
+            <Clock className="w-5 h-5" />
+          </div>
+        </div>
+
+        {/* Renewals */}
+        <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Renewals Due
+            </p>
+            <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">
+              {counts.renewals}
+            </p>
+            <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium mt-0.5">
+              Ending within 7 days
+            </p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 flex items-center justify-center shrink-0">
+            <AlertCircle className="w-5 h-5" />
+          </div>
+        </div>
+      </div>
+
+      {/* Filter Card - Consistent with Leads and Quotations */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+          {/* Search */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
+              Search
+            </label>
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Campaign code, client..."
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+              />
+            </div>
+          </div>
+
+          {/* City */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
+              City
+            </label>
+            <input
+              type="text"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="All Cities"
+              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+            />
+          </div>
+
+          {/* From Date */}
+          <div className="space-y-1.5">
+            <DatePicker
+              label="From Date"
+              value={startDate}
+              onChange={setStartDate}
+              triggerClassName="h-10 px-3 text-sm"
+            />
+          </div>
+
+          {/* To Date */}
+          <div className="space-y-1.5">
+            <DatePicker
+              label="To Date"
+              value={endDate}
+              onChange={setEndDate}
+              triggerClassName="h-10 px-3 text-sm"
+            />
+          </div>
+
+          {/* Agent Filter (Admin / Manager) */}
+          {isManagerOrAdmin && agentOptions.length > 0 && (
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
+                Sales Agent
+              </label>
+              <Dropdown
+                showArrow={false}
+                value={selectedAgentId}
+                onChange={setSelectedAgentId}
+                options={[
+                  { value: '', label: 'All Team Campaigns (Default)' },
+                  { value: 'me', label: 'My Campaigns Only' },
+                  ...agentOptions.map((a) => ({
+                    value: a._id,
+                    label: `${a.name} (${a.role})`,
+                  })),
+                ]}
+                triggerClassName="h-10 px-3 text-sm"
+              />
+            </div>
+          )}
+        </div>
+
+        {hasActiveFilters && (
+          <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
+            <span className="text-xs text-slate-500">
+              Showing {displayedCampaigns.length} matching campaigns
+            </span>
+            <button
+              type="button"
+              onClick={resetAllFilters}
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              Reset All Filters
+            </button>
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <div className="rounded-md bg-rose-50 p-4 text-sm text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+          {error}
+        </div>
+      )}
+
+      {/* Table - Consistent with Leads and Quotations */}
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm text-slate-700 dark:text-slate-200">
+            <thead className="bg-slate-50 text-slate-900 dark:bg-slate-800 dark:text-white">
+              <tr>
+                <th className="px-4 py-3 font-medium">Code</th>
+                <th className="px-4 py-3 font-medium">Campaign Name</th>
+                <th className="px-4 py-3 font-medium">Client Name</th>
+                <th className="px-4 py-3 font-medium">Quotation</th>
+                <th className="px-4 py-3 font-medium">State & City</th>
+                <th className="px-4 py-3 font-medium">Duration & Renewals</th>
+                <th className="px-4 py-3 font-medium">Duration Count</th>
+                <th className="px-4 py-3 font-medium">Sites</th>
+                <th className="px-4 py-3 font-medium">Value</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                {isManagerOrAdmin && <th className="px-4 py-3 font-medium">Agent</th>}
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+              {loading ? (
+                <tr>
+                  <td colSpan={isManagerOrAdmin ? 11 : 10} className="px-4 py-12 text-center text-slate-500">
+                    Loading campaigns...
+                  </td>
+                </tr>
+              ) : displayedCampaigns.length === 0 ? (
+                <tr>
+                  <td colSpan={isManagerOrAdmin ? 11 : 10} className="px-4 py-12 text-center text-slate-500">
+                    No campaigns found matching current filters.
+                  </td>
+                </tr>
+              ) : (
+                visibleCampaigns.map((c) => {
+                  const leadObj = typeof c.leadId === 'object' ? c.leadId : null;
+                  const company = leadObj?.companyName || leadObj?.company || 'Valued Client';
+                  const contactPerson = leadObj?.contactPerson || leadObj?.name || null;
+
+                  let agentName = 'Unassigned';
+                  if (leadObj?.assignedTo) {
+                    if (typeof leadObj.assignedTo === 'object' && leadObj.assignedTo?.name) {
+                      agentName = leadObj.assignedTo.name;
+                    }
+                  }
+
+                  const renewal = getRenewalAlert(c);
+                  const durationCount = getDurationCount(c.startDate, c.endDate);
+                  const statusClass = STATUS_STYLES[c.status] || 'border-slate-200 bg-slate-100 text-slate-700';
+
+                  return (
+                    <tr key={c._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      {/* Code */}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="inline-block rounded border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 px-2 py-0.5 font-mono text-[11px] font-semibold text-slate-800 dark:text-slate-200 shadow-2xs">
+                          {c.campaignCode}
+                        </span>
+                      </td>
+
+                      {/* Name */}
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-slate-900 dark:text-white max-w-50 truncate" title={c.name}>
+                          {c.name}
+                        </div>
+                      </td>
+
+                      {/* Client / Contact Person */}
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-slate-900 dark:text-white">
+                          {company}
+                        </div>
+                        {contactPerson && (
+                          <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block shrink-0" />
+                            <span>{contactPerson}</span>
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Quotation */}
+                      <td className="px-4 py-3 max-w-[190px]">
+                        {c.quotationName || c.quotationNo || c.piNo ? (
+                          <div className="space-y-0.5">
+                            {c.quotationName && (
+                              <div className="truncate text-sm font-medium text-slate-900 dark:text-white" title={c.quotationName}>
+                                {c.quotationName}
+                              </div>
+                            )}
+                            {c.quotationNo && (
+                              <div className="text-[11px] font-normal text-slate-500">
+                                Q: {c.quotationNo}
+                              </div>
+                            )}
+                            {c.piNo && (
+                              <div className="text-[11px] font-normal text-slate-500">
+                                PI: {c.piNo}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-slate-400">—</span>
+                        )}
+                      </td>
+
+                      {/* State & City */}
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                        {renderStateCity(c.city, c.state)}
+                      </td>
+
+                      {/* Duration & Renewals Alert */}
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                        <div className="text-slate-700 dark:text-slate-300">
+                          {formatDate(c.startDate)} to {formatDate(c.endDate)}
+                        </div>
+                        {renewal && (
+                          <div className="mt-1">
+                            <span
+                              className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+                                renewal.urgent
+                                  ? 'border border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                  : 'border border-yellow-200 bg-yellow-50 text-yellow-800 dark:border-yellow-800 dark:bg-yellow-950 dark:text-yellow-300'
+                              }`}
+                            >
+                              <span>⏳</span>
+                              <span>{renewal.label}</span>
+                            </span>
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Duration Count */}
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                        <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                          {durationCount}
+                        </span>
+                      </td>
+
+                      {/* Sites */}
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                        <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-800 dark:bg-slate-800 dark:text-slate-300">
+                          {c.siteIds.length} {c.siteIds.length === 1 ? 'site' : 'sites'}
+                        </span>
+                      </td>
+
+                      {/* Contract Value */}
+                      <td className="px-4 py-3 font-semibold text-slate-900 dark:text-white whitespace-nowrap">
+                        {formatRupees(c.contractedValue)}
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {(() => {
+                          const s = (c.status || "").trim().toLowerCase();
+                          if (s === "complete" || s === "completed" || s === "campaign end") {
+                            return (
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-purple-200 bg-purple-50 px-2.5 py-0.5 text-xs font-semibold text-purple-700 dark:border-purple-800 dark:bg-purple-950/50 dark:text-purple-300">
+                                <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                                Campaign End
+                              </span>
+                            );
+                          }
+                          if (s === "campaign live") {
+                            return (
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                Campaign Live
+                              </span>
+                            );
+                          }
+                          if (s === "rejected" || s === "cancelled" || s === "campaign rejected") {
+                            return (
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300">
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                Rejected
+                              </span>
+                            );
+                          }
+                          return (
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                              In Progress
+                            </span>
+                          );
+                        })()}
+                      </td>
+
+                      {/* Agent (for Admin/Manager) */}
+                      {isManagerOrAdmin && (
+                        <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 font-medium">
+                            {agentName}
+                          </span>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination Controls (25 per page) */}
+        <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row dark:border-slate-800 dark:bg-slate-900">
+          <p className="text-xs text-slate-500">
+            Showing <span className="font-semibold text-slate-800 dark:text-slate-200">{displayedCampaigns.length === 0 ? 0 : startIndex + 1}</span> to{' '}
+            <span className="font-semibold text-slate-800 dark:text-slate-200">{endIndex}</span> of{' '}
+            <span className="font-semibold text-slate-800 dark:text-slate-200">{displayedCampaigns.length}</span> campaigns
+            <span className="ml-1 text-[11px] text-slate-400">(25 per page)</span>
+          </p>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-400 dark:border-slate-700 dark:text-slate-300"
+            >
+              <span>‹</span>
+              <span>Previous</span>
+            </button>
+
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.max(1, totalPages) }, (_, idx) => idx + 1)
+                .filter((page) => {
+                  if (page === 1 || page === totalPages) return true;
+                  if (Math.abs(page - currentPage) <= 1) return true;
+                  return false;
+                })
+                .reduce<(number | string)[]>((acc, page, idx, arr) => {
+                  if (idx > 0 && page - (arr[idx - 1] as number) > 1) {
+                    acc.push('...');
+                  }
+                  acc.push(page);
+                  return acc;
+                }, [])
+                .map((item, idx) => {
+                  if (item === '...') {
+                    return (
+                      <span key={`dots-${idx}`} className="px-1 text-xs text-slate-400">
+                        …
+                      </span>
+                    );
+                  }
+                  const pageNum = item as number;
+                  const isActive = pageNum === currentPage;
+                  return (
+                    <button
+                      key={pageNum}
+                      type="button"
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`h-7 min-w-[28px] rounded-lg px-2 text-xs font-semibold transition ${
+                        isActive
+                          ? 'bg-[#8B2424] text-white shadow-xs'
+                          : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+            </div>
+
+            <button
+              type="button"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              className="flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-400 dark:border-slate-700 dark:text-slate-300"
+            >
+              <span>Next</span>
+              <span>›</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {canManage && showCreateModal && (
+        <CampaignForm
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={async (data) => {
+            await addCampaign(data);
+            setShowCreateModal(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function getRenewalAlert(campaign: Campaign): { label: string; urgent: boolean } | null {
+  if (campaign.status === 'Completed' || campaign.status === 'Cancelled' || !campaign.endDate) {
+    return null;
+  }
+  const end = new Date(campaign.endDate).getTime();
+  const now = Date.now();
+  if (isNaN(end)) return null;
+
+  const diffMs = end - now;
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays >= 0 && diffDays <= 7) {
+    const daysText = diffDays === 0 ? 'today' : diffDays === 1 ? 'in 1 day' : `in ${diffDays} days`;
+    return {
+      label: `Ending ${daysText} (Renew)`,
+      urgent: diffDays <= 3,
+    };
+  }
+  if (diffDays < 0) {
+    return {
+      label: `Expired (${Math.abs(diffDays)}d ago)`,
+      urgent: true,
+    };
+  }
+  return null;
+}

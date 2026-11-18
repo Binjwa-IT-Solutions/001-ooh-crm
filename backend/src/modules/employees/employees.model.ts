@@ -39,6 +39,17 @@ export const SENSITIVE_FIELDS = [
   'annualCtc',
 ] as const;
 
+export interface IEmployeeDocument {
+  _id?: Types.ObjectId;
+  name: string;
+  fileKey: string;
+  fileUrl?: string;
+  fileSize?: number;
+  mimeType?: string;
+  uploadedAt?: Date;
+  uploadedBy?: Types.ObjectId | null;
+}
+
 export interface IEmployee extends BaseDocument {
   employeeCode: string;
   userId?: Types.ObjectId | null;
@@ -46,17 +57,24 @@ export interface IEmployee extends BaseDocument {
   fullName: string;
   workEmail: string;
   personalEmail?: string;
-  mobile: string;
+  mobile?: string;
+  personalMobile?: string;
   dateOfBirth?: Date | null;
 
-  department: Department;
-  designation: string;
-  employmentType: EmploymentType;
-  dateOfJoining: Date;
+  department?: Department | null;
+  designation?: string;
+  employmentType?: EmploymentType | null;
+  dateOfJoining?: Date | null;
   dateOfExit?: Date | null;
   reportingManagerId?: Types.ObjectId | null;
-  workLocation: string;
+  teamName?: string;
+  workLocation?: string;
   status: EmployeeStatus;
+  isProfileComplete?: boolean;
+  /** When the employee last saved their own self-service profile form. */
+  selfProfileSubmittedAt?: Date | null;
+  /** When HR was reminded to fill the HR-owned fields (sent at most once). */
+  hrReminderSentAt?: Date | null;
 
   // --- Sensitive. Never returned without employees.sensitive. ---
   panNumber?: string;
@@ -72,6 +90,7 @@ export interface IEmployee extends BaseDocument {
     mobile?: string;
   };
   address?: string;
+  documents?: IEmployeeDocument[];
 }
 
 const employeeSchema = new Schema<IEmployee>({
@@ -85,21 +104,26 @@ const employeeSchema = new Schema<IEmployee>({
   fullName: { type: String, required: true, trim: true },
   workEmail: { type: String, required: true, unique: true, lowercase: true, trim: true },
   personalEmail: { type: String, lowercase: true, trim: true },
-  mobile: { type: String, required: true, trim: true, index: true },
+  mobile: { type: String, trim: true, default: '', index: true },
+  personalMobile: { type: String, trim: true, default: '' },
   dateOfBirth: { type: Date, default: null },
 
-  department: { type: String, enum: DEPARTMENTS, required: true, index: true },
-  designation: { type: String, required: true, trim: true },
-  employmentType: { type: String, enum: EMPLOYMENT_TYPES, required: true, default: 'Full-time' },
-  dateOfJoining: { type: Date, required: true },
+  department: { type: String, enum: [...DEPARTMENTS, null], default: null, index: true },
+  designation: { type: String, trim: true, default: '' },
+  employmentType: { type: String, enum: [...EMPLOYMENT_TYPES, null], default: null },
+  dateOfJoining: { type: Date, default: null },
   dateOfExit: { type: Date, default: null },
 
   // Self-reference. D4 escalation and G4 leave approval both walk this chain,
   // so it has to be a real reference rather than a name string.
   reportingManagerId: { type: Schema.Types.ObjectId, ref: 'Employee', default: null, index: true },
+  teamName: { type: String, trim: true, default: '' },
 
-  workLocation: { type: String, required: true, trim: true },
+  workLocation: { type: String, trim: true, default: '' },
   status: { type: String, enum: EMPLOYEE_STATUSES, required: true, default: 'Active', index: true },
+  isProfileComplete: { type: Boolean, default: false, index: true },
+  selfProfileSubmittedAt: { type: Date, default: null },
+  hrReminderSentAt: { type: Date, default: null },
 
   panNumber: { type: String, uppercase: true, trim: true },
   aadhaarNumber: { type: String, trim: true },
@@ -113,6 +137,17 @@ const employeeSchema = new Schema<IEmployee>({
     mobile: { type: String, trim: true },
   },
   address: { type: String, trim: true },
+  documents: [
+    {
+      name: { type: String, required: true, trim: true },
+      fileKey: { type: String, required: true, trim: true },
+      fileUrl: { type: String, trim: true },
+      fileSize: { type: Number },
+      mimeType: { type: String, trim: true },
+      uploadedAt: { type: Date, default: Date.now },
+      uploadedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    },
+  ],
 });
 
 // createdAt / updatedAt / createdBy / updatedBy / deletedAt

@@ -5,6 +5,7 @@
   "description": "Tooling root — Prettier config and the pre-commit hook. The apps live in backend/ and frontend/.",
   "scripts": {
     "prepare": "husky || true",
+    "dev:all": "start-all.bat",
     "format": "prettier --write \"{backend,frontend}/src/**/*.{ts,tsx,css}\"",
     "format:check": "prettier --check \"{backend,frontend}/src/**/*.{ts,tsx,css}\"",
     "check": "npm --prefix backend run typecheck && npm --prefix backend run lint && npm --prefix backend test && npm --prefix frontend run typecheck && npm --prefix frontend run lint"

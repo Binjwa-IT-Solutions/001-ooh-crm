@@ -6,6 +6,8 @@ import type {
   EmployeeListQuery,
   EmployeeListResponse,
   ManagerOption,
+  MemberCrmSummaryResponse,
+  TeamHierarchyResponse,
 } from './types';
 
 /**
@@ -34,20 +36,22 @@ function buildQuery(query: EmployeeListQuery): string {
  * converted from rupees, ids left as strings.
  */
 function toPayload(values: EmployeeFormValues): Record<string, unknown> {
-  const payload: Record<string, unknown> = {
-    fullName: values.fullName,
-    workEmail: values.workEmail,
-    mobile: values.mobile,
-    department: values.department,
-    designation: values.designation,
-    employmentType: values.employmentType,
-    dateOfJoining: values.dateOfJoining,
-    workLocation: values.workLocation,
-    status: values.status,
-  };
+  const payload: Record<string, unknown> = {};
 
-  const optional: Array<[string, string]> = [
+  if (values.fullName?.trim()) payload.fullName = values.fullName.trim();
+  if (values.workEmail?.trim()) payload.workEmail = values.workEmail.trim();
+  if (values.mobile?.trim()) payload.mobile = values.mobile.trim();
+  if (values.workLocation?.trim()) payload.workLocation = values.workLocation.trim();
+  if (values.status) payload.status = values.status;
+  if (values.department) payload.department = values.department;
+  if (values.designation?.trim()) payload.designation = values.designation.trim();
+  if (values.employmentType) payload.employmentType = values.employmentType;
+  if (values.dateOfJoining?.trim()) payload.dateOfJoining = values.dateOfJoining.trim();
+
+  const optional: Array<[string, string | undefined]> = [
     ['personalEmail', values.personalEmail],
+    ['personalMobile', values.personalMobile],
+    ['personalMobile', values.personalMobile],
     ['dateOfBirth', values.dateOfBirth],
     ['dateOfExit', values.dateOfExit],
     ['reportingManagerId', values.reportingManagerId],
@@ -59,18 +63,70 @@ function toPayload(values: EmployeeFormValues): Record<string, unknown> {
   ];
 
   for (const [key, value] of optional) {
-    if (value.trim() !== '') payload[key] = value.trim();
+    if (value && value.trim() !== '') payload[key] = value.trim();
   }
 
   // The user types rupees; the API's validator converts to integer paise.
-  if (values.annualCtcRupees.trim() !== '') {
+  if (values.annualCtcRupees && values.annualCtcRupees.trim() !== '') {
     payload.annualCtc = Number(values.annualCtcRupees);
   }
 
   const emergency = {
-    name: values.emergencyContactName.trim(),
-    relationship: values.emergencyContactRelationship.trim(),
-    mobile: values.emergencyContactMobile.trim(),
+    name: values.emergencyContactName?.trim() || '',
+    relationship: values.emergencyContactRelationship?.trim() || '',
+    mobile: values.emergencyContactMobile?.trim() || '',
+  };
+  if (emergency.name || emergency.relationship || emergency.mobile) {
+    payload.emergencyContact = emergency;
+  }
+
+  return payload;
+}
+
+/**
+ * Only the fields an employee may set on their own record. The server accepts
+ * nothing else on PATCH /me, so sending HR fields would be silently dropped.
+ */
+export type SelfProfileValues = Pick<
+  EmployeeFormValues,
+  | 'fullName'
+  | 'mobile'
+  | 'personalMobile'
+  | 'personalEmail'
+  | 'dateOfBirth'
+  | 'workLocation'
+  | 'panNumber'
+  | 'aadhaarNumber'
+  | 'bankAccountNumber'
+  | 'ifsc'
+  | 'emergencyContactName'
+  | 'emergencyContactRelationship'
+  | 'emergencyContactMobile'
+  | 'address'
+>;
+
+function toSelfPayload(values: SelfProfileValues): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+  const fields: Array<[string, string | undefined]> = [
+    ['fullName', values.fullName],
+    ['mobile', values.mobile],
+    ['personalEmail', values.personalEmail],
+    ['dateOfBirth', values.dateOfBirth],
+    ['workLocation', values.workLocation],
+    ['panNumber', values.panNumber],
+    ['aadhaarNumber', values.aadhaarNumber],
+    ['bankAccountNumber', values.bankAccountNumber],
+    ['ifsc', values.ifsc],
+    ['address', values.address],
+  ];
+  for (const [key, value] of fields) {
+    if (value && value.trim() !== '') payload[key] = value.trim();
+  }
+
+  const emergency = {
+    name: values.emergencyContactName?.trim() || '',
+    relationship: values.emergencyContactRelationship?.trim() || '',
+    mobile: values.emergencyContactMobile?.trim() || '',
   };
   if (emergency.name || emergency.relationship || emergency.mobile) {
     payload.emergencyContact = emergency;
@@ -94,6 +150,59 @@ export const employeesApi = {
   managerOptions: () =>
     api.get<{ options: ManagerOption[] }>('/api/employees/manager-options').then((r) => r.options),
 
+  teams: (managerId?: string) => {
+    const q = managerId ? `?managerId=${encodeURIComponent(managerId)}` : '';
+    return api.get<TeamHierarchyResponse>(`/api/employees/teams${q}`);
+  },
+
+  createTeam: (payload: { name: string; description?: string; managerId?: string }) =>
+    api.post<{ message: string; team: any }>('/api/employees/teams', payload).then((res) => res.team),
+
+  updateTeam: (teamId: string, payload: { name?: string; description?: string }) =>
+    api.patch<{ message: string; team: any }>(`/api/employees/teams/${teamId}`, payload).then((res) => res.team),
+
+  deleteTeam: (teamId: string) =>
+    api.delete<{ success: boolean; message: string }>(`/api/employees/teams/${teamId}`),
+
+  addMemberToTeam: (teamId: string, employeeId: string) =>
+    api.post<{ message: string; team: any }>(`/api/employees/teams/${teamId}/members`, { employeeId }).then((res) => res.team),
+
+  removeMemberFromTeam: (teamId: string, employeeId: string) =>
+    api.delete<{ message: string; team: any }>(`/api/employees/teams/${teamId}/members/${employeeId}`).then((res) => res.team),
+
+  reassignTeamMember: (payload: { sourceTeamId: string; targetTeamId: string; employeeId: string }) =>
+    api.post<{ message: string }>('/api/employees/teams/reassign', payload),
+
+  updateTeamName: (teamName: string, managerId?: string) =>
+    api.patch<{ message: string; managerId: string; teamName: string }>('/api/employees/teams/name', {
+      teamName,
+      managerId,
+    }),
+
+  assignMember: (employeeId: string, managerId?: string | null) =>
+    api
+      .post<{ message: string; employee: Employee }>('/api/employees/teams/members', {
+        employeeId,
+        managerId,
+      })
+      .then((res) => res.employee),
+
+  removeMember: (employeeId: string) =>
+    api
+      .delete<{ message: string; employee: Employee }>(`/api/employees/teams/members/${employeeId}`)
+      .then((res) => res.employee),
+
+  getMemberCrmSummary: (employeeId: string) =>
+    api.get<MemberCrmSummaryResponse>(`/api/employees/${employeeId}/crm-summary`),
+
+  assignManager: (employeeId: string, reportingManagerId: string | null) =>
+    api
+      .post<{ message: string; employee: Employee }>('/api/employees/teams/members', {
+        employeeId,
+        managerId: reportingManagerId ? reportingManagerId : null,
+      })
+      .then((res) => res.employee),
+
   create: (values: EmployeeFormValues) =>
     api
       .post<{ employee: Employee }>('/api/employees', toPayload(values))
@@ -104,5 +213,25 @@ export const employeesApi = {
       .patch<{ employee: Employee }>(`/api/employees/${id}`, toPayload(values))
       .then((res) => res.employee),
 
+  updateMine: (values: SelfProfileValues) =>
+    api
+      .patch<{ employee: Employee }>('/api/employees/me', toSelfPayload(values))
+      .then((res) => res.employee),
+
   deactivate: (id: string) => api.delete<{ id: string }>(`/api/employees/${id}`),
+
+  uploadDocument: (id: string, file: File, title?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (title) formData.append('title', title);
+    return api
+      .post<{ message: string; employee: Employee }>(`/api/employees/${id}/documents`, formData)
+      .then((res) => res.employee);
+  },
+
+  deleteDocument: (id: string, docId: string) =>
+    api
+      .delete<{ message: string; employee: Employee }>(`/api/employees/${id}/documents/${docId}`)
+      .then((res) => res.employee),
 };
+

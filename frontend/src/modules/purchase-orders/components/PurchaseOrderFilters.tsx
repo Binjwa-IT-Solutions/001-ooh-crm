@@ -62,82 +62,37 @@ export default function PurchaseOrderFilters({
         {/* STATUS */}
 
         <div className="relative">
-          <label className="mb-2 block text-sm font-bold text-[#1F2937]">
+          <label className="mb-1.5 block text-sm font-medium text-gray-900">
             Status
           </label>
 
           <button
             type="button"
             onClick={() => setOpen(!open)}
-            className="
-              flex
-              w-full
-              items-center
-              justify-between
-              rounded-xl
-              border border-gray-300
-              bg-white
-              px-4 py-3
-              text-left
-              text-sm
-              font-medium
-              text-[#1F2937]
-              outline-none
-              transition
-              hover:border-[#A8333B]
-              focus:border-[#A8333B]
-              focus:ring-2
-              focus:ring-[#F9DADA]
-            "
+            className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-left text-sm text-gray-900 outline-none transition hover:border-[#8B2424] focus:border-[#8B2424] focus:ring-2 focus:ring-[#F9DADA]"
           >
             <span>
-              {status || "All Status"}
+              {status || "All Statuses"}
             </span>
 
-            <span
-              className={`text-[#667085] transition ${
-                open ? "rotate-180" : ""
-              }`}
-            >
-              ▾
-            </span>
+            <span className="text-gray-500">▾</span>
           </button>
 
           {open && (
-            <div
-              className="
-                absolute
-                left-0
-                right-0
-                z-30
-                mt-1
-                overflow-hidden
-                rounded-xl
-                border border-[#E8E8EC]
-                bg-white
-                shadow-lg
-              "
-            >
+            <div className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
               <button
                 type="button"
                 onClick={() => {
                   onStatusChange("");
                   setOpen(false);
                 }}
-                className="
-                  block
-                  w-full
-                  px-4 py-3
-                  text-left
-                  text-sm
-                  font-medium
-                  text-[#1F2937]
-                  transition
-                  hover:bg-[#F9DADA]
-                  hover:text-[#A8333B]
-                "
+                className={`block w-full cursor-pointer px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
+                  !status
+                    ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
+                    : "text-gray-900"
+                }`}
               >
-                All Status
+                All Statuses
               </button>
 
               {options.map((option) => (
@@ -148,18 +103,11 @@ export default function PurchaseOrderFilters({
                     onStatusChange(option);
                     setOpen(false);
                   }}
-                  className="
-                    block
-                    w-full
-                    px-4 py-3
-                    text-left
-                    text-sm
-                    font-medium
-                    text-[#1F2937]
-                    transition
-                    hover:bg-[#F9DADA]
-                    hover:text-[#A8333B]
-                  "
+                  className={`block w-full cursor-pointer px-4 py-2.5 text-left text-sm transition hover:bg-[#F9DADA] hover:text-[#8B2424] ${
+                    status === option
+                      ? "bg-[#FFF5F5] font-semibold text-[#8B2424]"
+                      : "text-gray-900"
+                  }`}
                 >
                   {option}
                 </button>

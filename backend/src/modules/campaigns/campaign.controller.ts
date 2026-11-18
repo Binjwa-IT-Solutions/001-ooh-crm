@@ -20,9 +20,10 @@ import {
 import { CampaignStatus } from "./campaign.model.js";
 
 function getContext(req: Request) {
+  const reqAny = req as any;
   return {
-    userId: (req as any).user?.id,
-    role: (req as any).user?.role,
+    userId: reqAny.ctx?.user?.id || reqAny.user?.id,
+    role: reqAny.ctx?.user?.role || reqAny.user?.role,
   };
 }
 
@@ -81,6 +82,12 @@ export async function listCampaignsController(
           startDate: query.startDate,
 
           endDate: query.endDate,
+
+          myCampaigns: query.myCampaigns,
+
+          agentId: query.agentId,
+
+          tab: query.tab,
         },
         getContext(req),
       );
@@ -157,6 +164,7 @@ export async function updateCampaignStatusController(
         req.params.id as string,
         input.status as CampaignStatus,
         getContext(req),
+        input.reason,
       );
 
     return res.status(200).json({

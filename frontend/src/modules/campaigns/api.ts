@@ -25,6 +25,10 @@ function buildQuery(filters: CampaignFilters): string {
     params.set("status", filters.status);
   }
 
+  if (filters.state?.trim()) {
+    params.set("state", filters.state.trim());
+  }
+
   if (filters.city?.trim()) {
     params.set("city", filters.city.trim());
   }
@@ -41,6 +45,18 @@ function buildQuery(filters: CampaignFilters): string {
     params.set("endDate", filters.endDate);
   }
 
+  if (filters.myCampaigns !== undefined) {
+    params.set("myCampaigns", String(filters.myCampaigns));
+  }
+
+  if (filters.agentId?.trim()) {
+    params.set("agentId", filters.agentId.trim());
+  }
+
+  if (filters.tab?.trim()) {
+    params.set("tab", filters.tab.trim());
+  }
+
   const query = params.toString();
 
   return query ? `?${query}` : "";
@@ -51,6 +67,14 @@ export async function getCampaigns(
 ): Promise<CampaignListResponse> {
   return api.get<CampaignListResponse>(
     `/api/campaigns${buildQuery(filters)}`,
+  );
+}
+
+export async function getCampaign(
+  id: string,
+): Promise<CampaignResponse> {
+  return api.get<CampaignResponse>(
+    `/api/campaigns/${id}`,
   );
 }
 
@@ -76,11 +100,13 @@ export async function updateCampaign(
 export async function updateCampaignStatus(
   id: string,
   status: CampaignStatus,
+  reason?: string,
 ): Promise<CampaignResponse> {
   return api.patch<CampaignResponse>(
     `/api/campaigns/${id}/status`,
     {
       status,
+      reason,
     },
   );
 }

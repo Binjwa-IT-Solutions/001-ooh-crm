@@ -3,22 +3,20 @@ import test from 'node:test';
 
 import { Lead } from './leads.model.js';
 import { LeadsService } from './leads.service.js';
+import { LeadsController } from './leads.controller.js';
 import { leadQualificationSchema, listLeadsSchema, uploadLeadDocumentSchema } from './leads.validator.js';
 
 const FAKE_USER_CTX = { user: { id: '64b7f9a1c2d3e4f5a6b7c8d9', role: 'sales' } } as any;
 
-function withPatchedModel(patches: Partial<typeof Lead>, fn: () => Promise<void>) {
-  const originals: Partial<Record<string, any>> = {};
+function withPatchedModel(patches: Record<string, any>, fn: () => Promise<void>) {
+  const originals: Record<string, any> = {};
   for (const k of Object.keys(patches)) {
-    // @ts-expect-error testing mock
     originals[k] = (Lead as any)[k];
-    // @ts-expect-error testing mock
     (Lead as any)[k] = (patches as any)[k];
   }
 
   return fn().finally(() => {
     for (const k of Object.keys(patches)) {
-      // @ts-expect-error testing mock
       (Lead as any)[k] = originals[k];
     }
   });
@@ -182,11 +180,44 @@ test('logFollowUpLead records followUpType, reason, and nextActionDate', async (
       FAKE_USER_CTX,
     );
 
-    assert.equal(updated.callLogs.length, 1);
-    assert.equal(updated.callLogs[0].followUpType, 'Meeting');
-    assert.equal(updated.callLogs[0].reason, 'Quotation Review');
-    assert.equal(updated.callLogs[0].remarks, 'Met with client in Bandra office');
+    assert.equal(updated.callLogs!.length, 1);
+    assert.equal(updated.callLogs![0].followUpType, 'Meeting');
+    assert.equal(updated.callLogs![0].reason, 'Quotation Review');
+    assert.equal(updated.callLogs![0].remarks, 'Met with client in Bandra office');
     assert.equal(updated.nextActionDate, nextDate);
+  } finally {
+    LeadsService.getLead = origGetLead;
+  }
+});
+
+test('logFollowUpLead auto-clears nextActionDate when empty or omitted (Option 1)', async () => {
+  const oldPastDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+  const mockLead: any = {
+    _id: '64b7f9a1c2d3e4f5a6b7c8d9',
+    status: 'Contacted',
+    nextActionDate: oldPastDate,
+    callLogs: [],
+    save: async function () { return this; },
+    populate: async function () { return this; },
+  };
+
+  const origGetLead = LeadsService.getLead;
+  LeadsService.getLead = async () => mockLead;
+  try {
+    const updated = await LeadsService.logFollowUpLead(
+      '64b7f9a1c2d3e4f5a6b7c8d9',
+      {
+        followUpType: 'Call',
+        reason: 'General Follow-up',
+        remarks: 'Client spoke, no immediate next action scheduled',
+        // nextActionDate omitted
+      },
+      FAKE_USER_CTX,
+    );
+
+    assert.equal(updated.callLogs!.length, 1);
+    assert.equal(updated.nextActionDate, null);
+    assert.equal(updated.callLogs![0].nextActionDate, null);
   } finally {
     LeadsService.getLead = origGetLead;
   }
@@ -213,9 +244,9 @@ test('managerApproveLead records approval and remarks', async () => {
       FAKE_USER_CTX,
     );
 
-    assert.equal(updated.managerApproval.approved, true);
-    assert.equal(updated.managerApproval.remarks, 'Approved for proposal discount');
-    assert.ok(updated.managerApproval.approvedAt instanceof Date);
+    assert.equal(updated.managerApproval!.approved, true);
+    assert.equal(updated.managerApproval!.remarks, 'Approved for proposal discount');
+    assert.ok(updated.managerApproval!.approvedAt instanceof Date);
   } finally {
     LeadsService.getLead = origGetLead;
   }
@@ -254,6 +285,100 @@ test('intakeLead parses and sanitizes JustDial payload and starts SLA', async ()
       assert.ok(created.qualification?.notes?.includes('Area: Vijay Nagar'));
       assert.ok(created.slaTimerEnd instanceof Date, '24h SLA timer should be set');
       assert.deepEqual(created.rawPayload, jdPayload);
+    },
+  );
+});
+
+test('intakeLead parses official JustDial email specification payload', async () => {
+  await withPatchedModel(
+    {
+      findOne: () => ({ exec: async () => null }),
+      create: async (payload: any) => payload,
+    },
+    async () => {
+      const officialJdPayload = {
+        leadid: 'JD57154BC2A4E7',
+        leadtype: 'category',
+        prefix: 'Ms',
+        name: 'HIRAL',
+        mobile: '9820097546',
+        phone: '02224100086',
+        email: '',
+        date: '2026-09-23',
+        time: '14:30:00',
+        category: 'Outdoor Hoarding',
+        area: 'Dadar West',
+        city: 'Mumbai',
+        brancharea: 'Andheri East',
+        dncmobile: '1',
+        dncphone: '0',
+        company: 'Hiral Enterprises',
+        pincode: '400028',
+        parentid: 'PX522.X522.240910141830.I2T5',
+      };
+
+      const created: any = await LeadsService.intakeLead('JustDial', officialJdPayload);
+
+      assert.equal(created.status, 'New');
+      assert.equal(created.source, 'JustDial');
+      assert.equal(created.mobile, '9820097546');
+      assert.equal(created.contactPerson, 'Ms HIRAL');
+      assert.equal(created.companyName, 'Hiral Enterprises');
+      assert.equal(created.city, 'Mumbai');
+      assert.ok(created.qualification?.notes?.includes('JD Lead ID: JD57154BC2A4E7'));
+      assert.ok(created.qualification?.notes?.includes('Contract ID: PX522.X522.240910141830.I2T5'));
+      assert.ok(created.qualification?.notes?.includes('Type: category'));
+      assert.ok(created.qualification?.notes?.includes('DND Mobile: Yes'));
+      assert.ok(created.qualification?.notes?.includes('Branch Area: Andheri East'));
+      assert.ok(created.qualification?.notes?.includes('Landline: 02224100086'));
+      assert.ok(created.slaTimerEnd instanceof Date);
+    },
+  );
+});
+
+test('intakeLead parses screenshot 2 sample POST JSON payload with zero pincode and 9XXXXX mobile', async () => {
+  await withPatchedModel(
+    {
+      findOne: () => ({ exec: async () => null }),
+      create: async (payload: any) => payload,
+    },
+    async () => {
+      const screenshot2Payload = {
+        leadid: 'JDF99CB5961B40',
+        leadtype: 'category',
+        prefix: '',
+        name: 'ABHAY SHAH',
+        mobile: '9XXXXX',
+        phone: '',
+        email: '',
+        date: '2020-12-24',
+        category: 'Generator Dealers',
+        area: 'Ghatkopar West',
+        city: 'Mumbai',
+        brancharea: 'Apollo Bunder',
+        dncmobile: 0,
+        dncphone: 0,
+        company: 'Greaves Cotton Ltd',
+        pincode: '0',
+        time: '13:10:11',
+        branchpin: '400001',
+        parentid: 'PXX22.XX22.150705230454.M4B1',
+      };
+
+      const created: any = await LeadsService.intakeLead('JustDial', screenshot2Payload);
+
+      assert.equal(created.status, 'New');
+      assert.equal(created.source, 'JustDial');
+      assert.equal(created.contactPerson, 'ABHAY SHAH');
+      assert.equal(created.companyName, 'Greaves Cotton Ltd');
+      assert.equal(created.city, 'Mumbai');
+      assert.ok(created.qualification?.notes?.includes('JD Lead ID: JDF99CB5961B40'));
+      assert.ok(created.qualification?.notes?.includes('Contract ID: PXX22.XX22.150705230454.M4B1'));
+      assert.ok(created.qualification?.notes?.includes('Category: Generator Dealers'));
+      assert.ok(created.qualification?.notes?.includes('Area: Ghatkopar West'));
+      assert.ok(created.qualification?.notes?.includes('Branch Area: Apollo Bunder'));
+      assert.ok(created.qualification?.notes?.includes('Branch Pin: 400001'));
+      assert.ok(created.qualification?.notes?.includes('DND Mobile: No'));
     },
   );
 });
@@ -398,8 +523,8 @@ test('changeStatus transitions New lead to Rejected and records reason', async (
     );
 
     assert.equal(res.status, 'Rejected');
-    assert.equal(res.statusHistory[0].to, 'Rejected');
-    assert.equal(res.statusHistory[0].reason, 'Spam / Fake Number');
+    assert.equal(res.statusHistory![0].to, 'Rejected');
+    assert.equal(res.statusHistory![0].reason, 'Spam / Fake Number');
   } finally {
     LeadsService.getLead = origGetLead;
   }
@@ -429,11 +554,109 @@ test('changeStatus allows restoring Rejected lead back to New and clears assigne
     assert.equal(res.status, 'New');
     assert.equal(res.assignedTo, undefined);
     assert.equal(res.claimedBy, undefined);
-    assert.equal(res.statusHistory[0].to, 'New');
-    assert.equal(res.statusHistory[0].reason, 'Restored to Unclaimed pool');
+    assert.equal(res.statusHistory![0].to, 'New');
+    assert.equal(res.statusHistory![0].reason, 'Restored to Unclaimed pool');
   } finally {
     LeadsService.getLead = origGetLead;
   }
+});
+
+test('changeStatus auto-clears nextActionDate when transitioning to terminal status (Won, Lost, Rejected)', async () => {
+  const fakeLead: any = {
+    _id: '6a87e4b4c93947ba317108aa',
+    status: 'Negotiation',
+    nextActionDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+    statusHistory: [],
+    save: async () => fakeLead,
+    populate: async () => fakeLead,
+  };
+
+  const origGetLead = LeadsService.getLead;
+  LeadsService.getLead = async () => fakeLead;
+
+  try {
+    const resWon = await LeadsService.changeStatus(
+      '6a87e4b4c93947ba317108aa',
+      { status: 'Won' },
+      { user: { id: '6a87e4b4c93947ba31710801', role: 'admin' } } as any,
+    );
+    assert.equal(resWon.status, 'Won');
+    assert.equal(resWon.nextActionDate, null);
+
+    fakeLead.status = 'Interested';
+    fakeLead.nextActionDate = new Date();
+    const resLost = await LeadsService.changeStatus(
+      '6a87e4b4c93947ba317108aa',
+      { status: 'Lost', lostReason: 'Budget mismatch' },
+      { user: { id: '6a87e4b4c93947ba31710801', role: 'admin' } } as any,
+    );
+    assert.equal(resLost.status, 'Lost');
+    assert.equal(resLost.nextActionDate, null);
+  } finally {
+    LeadsService.getLead = origGetLead;
+  }
+});
+
+test('changeStatus allows Contacted -> Rejected and records firstResponseAt on Contacted', async () => {
+  const fakeLead: any = {
+    _id: '6a87e4b4c93947ba317108aa',
+    status: 'New',
+    firstResponseAt: null,
+    statusHistory: [],
+    save: async () => fakeLead,
+    populate: async () => fakeLead,
+  };
+
+  const origGetLead = LeadsService.getLead;
+  LeadsService.getLead = async () => fakeLead;
+
+  try {
+    const resContacted = await LeadsService.changeStatus(
+      '6a87e4b4c93947ba317108aa',
+      { status: 'Contacted' },
+      { user: { id: '6a87e4b4c93947ba31710801', role: 'sales_agent' } } as any,
+    );
+    assert.equal(resContacted.status, 'Contacted');
+    assert.ok(resContacted.firstResponseAt instanceof Date, 'firstResponseAt should be set on Contacted');
+
+    const resRejected = await LeadsService.changeStatus(
+      '6a87e4b4c93947ba317108aa',
+      { status: 'Rejected', lostReason: 'Wrong number/junk inquiry' },
+      { user: { id: '6a87e4b4c93947ba31710801', role: 'sales_agent' } } as any,
+    );
+    assert.equal(resRejected.status, 'Rejected');
+    assert.equal(resRejected.qualification?.lostReason, 'Wrong number/junk inquiry');
+  } finally {
+    LeadsService.getLead = origGetLead;
+  }
+});
+
+test('createLead normalizes formatted mobile number to clean 10-digits for duplicate detection', async () => {
+  const now = new Date();
+  const previous = { mobile: '9876543210', source: 'Manual', createdAt: new Date(now.getTime() - 2 * 60 * 60 * 1000) };
+
+  await withPatchedModel(
+    {
+      findOne: (query: any) => {
+        if (query.mobile === '9876543210' && query.source === 'Manual') {
+          return { exec: async () => previous };
+        }
+        return { exec: async () => null };
+      },
+      create: async (payload: any) => payload,
+    },
+    async () => {
+      const data = {
+        companyName: 'New Brand',
+        contactPerson: 'Varun',
+        mobile: '+91 98765 43210', // formatted with country code and spaces
+        source: 'Manual',
+      };
+      const created = await LeadsService.createLead(data, FAKE_USER_CTX);
+      assert.equal(created.status, 'Duplicate');
+      assert.equal(data.mobile, '9876543210', 'mobile should be normalized to 10 digits');
+    },
+  );
 });
 
 test('getActivity returns combined chronological activities with follow-up logs', async () => {
@@ -551,6 +774,81 @@ test('logFollowUpLead records contactedPerson and updates lead profile fields du
   }
 });
 
+test('logFollowUpLead validates loggedAt cannot exceed 1 day past or be in future', async () => {
+  const fakeLead: any = {
+    _id: '6a87e4b4c93947ba317108bb',
+    status: 'New',
+    contactPerson: 'Rahul Roy',
+    callLogs: [],
+    save: async () => fakeLead,
+    populate: async () => fakeLead,
+  };
+
+  const origGetLead = LeadsService.getLead;
+  LeadsService.getLead = async () => fakeLead;
+
+  try {
+    // 1. Valid backdate (start of yesterday)
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(14, 0, 0, 0);
+
+    const res = await LeadsService.logFollowUpLead(
+      '6a87e4b4c93947ba317108bb',
+      {
+        followUpType: 'Call',
+        reason: 'Initial Connect',
+        remarks: 'Spoke with Rahul',
+        loggedAt: yesterday,
+      },
+      FAKE_USER_CTX,
+    );
+
+    assert.equal(res.callLogs?.length, 1);
+    assert.equal(res.callLogs?.[0].createdAt.getTime(), yesterday.getTime());
+    assert.equal(res.firstResponseAt?.getTime(), yesterday.getTime());
+
+    // 2. Future date should be rejected
+    const futureDate = new Date(Date.now() + 2 * 60 * 60 * 1000);
+    await assert.rejects(
+      async () => {
+        await LeadsService.logFollowUpLead(
+          '6a87e4b4c93947ba317108bb',
+          {
+            followUpType: 'Call',
+            reason: 'Future test',
+            remarks: 'Should fail',
+            loggedAt: futureDate,
+          },
+          FAKE_USER_CTX,
+        );
+      },
+      /cannot be in the future/i,
+    );
+
+    // 3. Older than 1 day (e.g. 3 days ago) should be rejected
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    await assert.rejects(
+      async () => {
+        await LeadsService.logFollowUpLead(
+          '6a87e4b4c93947ba317108bb',
+          {
+            followUpType: 'Call',
+            reason: 'Old test',
+            remarks: 'Should fail',
+            loggedAt: threeDaysAgo,
+          },
+          FAKE_USER_CTX,
+        );
+      },
+      /cannot be backdated more than 1 day/i,
+    );
+  } finally {
+    LeadsService.getLead = origGetLead;
+  }
+});
+
 test('listLeadsSchema validates overdueOnly, sortBy, and sortDir', () => {
   const parsed = listLeadsSchema.parse({
     overdueOnly: 'true',
@@ -586,6 +884,185 @@ test('uploadLeadDocumentSchema validates documentType, title, and notes', () => 
     });
   });
 });
+
+test('releaseBreachedClaimedLeads auto-releases leads claimed > 24h ago with no action back to unclaimed pool', async () => {
+  const origFind = Lead.find;
+  const now = new Date();
+  const thirtyHoursAgo = new Date(now.getTime() - 30 * 60 * 60 * 1000);
+
+  let savedCount = 0;
+  const mockBreachedLead: any = {
+    _id: '64b7f9a1c2d3e4f5a6b7c8d1',
+    companyName: 'Breached Corp',
+    status: 'New',
+    claimedBy: '64b7f9a1c2d3e4f5a6b7c801',
+    assignedTo: '64b7f9a1c2d3e4f5a6b7c801',
+    claimedAt: thirtyHoursAgo,
+    slaTimerEnd: new Date(thirtyHoursAgo.getTime() + 24 * 60 * 60 * 1000),
+    firstResponseAt: null,
+    callLogs: [],
+    statusHistory: [],
+    save: async function () {
+      savedCount++;
+      return this;
+    },
+  };
+
+  (Lead as any).find = () => ({
+    exec: async () => [mockBreachedLead],
+  });
+
+  try {
+    const released = await LeadsService.releaseBreachedClaimedLeads();
+    assert.equal(released, 1);
+    assert.equal(savedCount, 1);
+    assert.equal(mockBreachedLead.claimedBy, null);
+    assert.equal(mockBreachedLead.assignedTo, null);
+    assert.equal(mockBreachedLead.claimedAt, null);
+    assert.equal(mockBreachedLead.slaTimerEnd, null);
+    assert.equal(mockBreachedLead.status, 'New');
+    assert.equal(mockBreachedLead.statusHistory.length, 1);
+    assert.match(mockBreachedLead.statusHistory[0].reason, /Auto-released to Unclaimed pool/);
+  } finally {
+    Lead.find = origFind;
+  }
+});
+
+test('releaseBreachedClaimedLeads does NOT release leads that have call logs or firstResponseAt', async () => {
+  const origFind = Lead.find;
+  const now = new Date();
+  const thirtyHoursAgo = new Date(now.getTime() - 30 * 60 * 60 * 1000);
+
+  const mockActiveLead: any = {
+    _id: '64b7f9a1c2d3e4f5a6b7c8d2',
+    companyName: 'Active Corp',
+    status: 'New',
+    claimedBy: '64b7f9a1c2d3e4f5a6b7c801',
+    assignedTo: '64b7f9a1c2d3e4f5a6b7c801',
+    claimedAt: thirtyHoursAgo,
+    slaTimerEnd: new Date(thirtyHoursAgo.getTime() + 24 * 60 * 60 * 1000),
+    firstResponseAt: null,
+    callLogs: [{ followUpType: 'Call', createdAt: new Date() }],
+    statusHistory: [],
+    save: async function () { return this; },
+  };
+
+  (Lead as any).find = () => ({
+    exec: async () => [mockActiveLead],
+  });
+
+  try {
+    const released = await LeadsService.releaseBreachedClaimedLeads();
+    assert.equal(released, 0);
+    assert.ok(mockActiveLead.claimedBy !== null);
+  } finally {
+    Lead.find = origFind;
+  }
+});
+
+test('getLeadStats returns active, overdue, unclaimed, and won metrics', async () => {
+  const origCount = Lead.countDocuments;
+  const origAggregate = Lead.aggregate;
+
+  (Lead as any).countDocuments = async (query: any) => {
+    if (query.nextActionDate) return 3;
+    if (query.status === 'New' && query.assignedTo === null) return 2;
+    return 15;
+  };
+
+  (Lead as any).aggregate = async () => [
+    { _id: null, count: 5, totalRevenue: 15000000 },
+  ];
+
+  try {
+    const stats = await LeadsService.getLeadStats(FAKE_USER_CTX);
+    assert.equal(stats.totalActive, 15);
+    assert.equal(stats.overdueCount, 3);
+    assert.equal(stats.unclaimedCount, 2);
+    assert.equal(stats.wonCount, 5);
+    assert.equal(stats.wonRevenue, 15000000);
+  } finally {
+    Lead.countDocuments = origCount;
+    Lead.aggregate = origAggregate;
+  }
+});
+
+test('LeadsController.intake returns plain text RECEIVED for Justdial GET and POST', async () => {
+  const origFindOne = Lead.findOne;
+  const origCreate = Lead.create;
+  (Lead as any).findOne = () => ({ exec: async () => null });
+  (Lead as any).create = async (payload: any) => ({ _id: 'mock_1', ...payload });
+
+  try {
+    let sentStatus = 0;
+    let sentBody: any = null;
+    const mockRes: any = {
+      status: (code: number) => {
+        sentStatus = code;
+        return mockRes;
+      },
+      send: (body: any) => {
+        sentBody = body;
+        return mockRes;
+      },
+      json: (body: any) => {
+        sentBody = body;
+        return mockRes;
+      },
+    };
+
+    // 1. Test GET query from Justdial
+    const mockGetReq: any = {
+      method: 'GET',
+      path: '/justdial',
+      query: {
+        leadid: 'JD6960768A8B81',
+        name: 'User',
+        mobile: '9820097546',
+        city: 'Mumbai',
+        parentid: 'PX522.X522.240910141830.I2T5',
+      },
+      body: {},
+      headers: {},
+    };
+    await LeadsController.intake(mockGetReq, mockRes);
+    assert.equal(sentStatus, 200);
+    assert.equal(sentBody, 'RECEIVED');
+
+    // 2. Test Blank GET Ping (Justdial handshake verification)
+    const mockPingReq: any = {
+      method: 'GET',
+      path: '/justdial',
+      query: {},
+      body: {},
+      headers: {},
+    };
+    await LeadsController.intake(mockPingReq, mockRes);
+    assert.equal(sentStatus, 200);
+    assert.equal(sentBody, 'RECEIVED');
+
+    // 3. Test POST JSON from Justdial
+    const mockPostReq: any = {
+      method: 'POST',
+      path: '/justdial',
+      query: {},
+      body: {
+        leadid: 'JDF99CB5961B40',
+        name: 'ABHAY SHAH',
+        mobile: '9826012345',
+        city: 'Mumbai',
+      },
+      headers: {},
+    };
+    await LeadsController.intake(mockPostReq, mockRes);
+    assert.equal(sentStatus, 200);
+    assert.equal(sentBody, 'RECEIVED');
+  } finally {
+    Lead.findOne = origFindOne;
+    Lead.create = origCreate;
+  }
+});
+
 
 
 

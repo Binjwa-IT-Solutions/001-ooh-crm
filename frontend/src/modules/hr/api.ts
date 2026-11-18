@@ -1,7 +1,9 @@
 import { api } from '@/shared/api/client';
 import {
   Attendance,
+  BreakRecord,
   LeaveType,
+  EmployeeLeaveSummary,
   LeaveRequest,
   LeaveBalance,
   WorkType,
@@ -9,6 +11,9 @@ import {
   Candidate,
   CandidateStatus,
   CandidateListQuery,
+  MonthlyRegisterRow,
+  AbsenceRow,
+  OvertimeRow,
 } from './types';
 
 export const attendanceApi = {
@@ -16,13 +21,14 @@ export const attendanceApi = {
     const res = await api.post<Attendance>('/api/attendance/check-in', data);
     return res;
   },
-  checkOut: async (data: { gps?: { lat: number; lng: number } }) => {
+  checkOut: async (data: { gps?: { lat: number; lng: number }; breaks?: BreakRecord[] }) => {
     const res = await api.post<Attendance>('/api/attendance/check-out', data);
     return res;
   },
 
   getMyAttendance: async (params?: Record<string, string | number | boolean>) => {
-    const res = await api.get<Attendance[]>('/api/attendance/me', { skipAuth: false });
+    const qs = params ? new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString() : '';
+    const res = await api.get<Attendance[]>(`/api/attendance/me${qs ? `?${qs}` : ''}`, { skipAuth: false });
     return res;
   },
   getMyAttendanceSummary: async (month: number, year: number) => {
@@ -32,8 +38,18 @@ export const attendanceApi = {
     }>(`/api/attendance/me/summary?month=${month}&year=${year}`, { skipAuth: false });
     return res;
   },
+  /** HR / admin: punch in for someone whose device isn't working. */
+  hrCheckIn: (employeeId: string, data: { time?: string; reason?: string } = {}) =>
+    api.post<Attendance>(`/api/attendance/employees/${employeeId}/check-in`, data),
+  /** HR / admin: punch out for someone. */
+  hrCheckOut: (employeeId: string, data: { time?: string; reason?: string } = {}) =>
+    api.post<Attendance>(`/api/attendance/employees/${employeeId}/check-out`, data),
+  /** HR / admin: undo a mistaken check-out — the person is still working. */
+  hrResume: (employeeId: string, data: { reason?: string } = {}) =>
+    api.post<Attendance>(`/api/attendance/employees/${employeeId}/resume`, data),
   getTeamAttendance: async (params?: Record<string, string | number | boolean>) => {
-    const res = await api.get<Attendance[]>('/api/attendance/team', { skipAuth: false });
+    const qs = params ? new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString() : '';
+    const res = await api.get<Attendance[]>(`/api/attendance/team${qs ? `?${qs}` : ''}`, { skipAuth: false });
     return res;
   },
 };
@@ -46,10 +62,12 @@ export const leaveApi = {
   createLeaveType: async (data: Partial<LeaveType>) => {
     const res = await api.post<{ leaveType: LeaveType }>('/api/leave-types', {
       name: data.name,
-      code: data.code,
-      annualQuota: data.annualQuota ?? null,
+      ...(data.code ? { code: data.code } : {}), // generated from the name when empty
+      quotaPeriod: data.quotaPeriod ?? 'Yearly',
+      quotaDays: data.quotaDays ?? 0,
       carryForward: data.carryForward ?? false,
       maxCarryForward: data.maxCarryForward ?? 0,
+      carryForwardExpiryMonths: data.carryForwardExpiryMonths ?? null,
       encashable: data.encashable ?? false,
       requiresDocument: data.requiresDocument ?? false,
     });
@@ -63,7 +81,16 @@ export const leaveApi = {
     const res = await api.delete<{ message: string; leaveType: LeaveType }>(`/api/leave-types/${id}`);
     return res.leaveType;
   },
-  getBalance: async (employeeId: string, year = new Date().getFullYear()) => {
+  /** Leave & attendance for one employee (profile → Attendance tab). */
+  getEmployeeSummary: async (employeeId: string, year = new Date().getFullYear()) =>
+    api.get<EmployeeLeaveSummary>(`/api/leave-requests/employee/${employeeId}/summary?year=${year}`),
+
+  getBalance: async (employeeId?: string, year = new Date().getFullYear()) => {
+    if (!employeeId) {
+      const res = await api.get<{ balances: LeaveBalance[] } | LeaveBalance[]>('/api/leave-requests/balance');
+      if (Array.isArray(res)) return res;
+      return res.balances ?? [];
+    }
     const res = await api.get<{ balances: LeaveBalance[] }>(`/api/employees/${employeeId}/leave-balance?year=${year}`);
     return res.balances;
   },
@@ -72,12 +99,26 @@ export const leaveApi = {
     const res = await api.post<LeaveRequest>('/api/leave-requests', data);
     return res;
   },
-  getMyRequests: async () => {
-    const res = await api.get<LeaveRequest[]>('/api/leave-requests/me');
+  getMyRequests: async (status?: string) => {
+    const qs = status && status !== 'All' ? `?status=${encodeURIComponent(status)}` : '';
+    const res = await api.get<LeaveRequest[]>(`/api/leave-requests/me${qs}`);
     return res;
   },
-  getTeamRequests: async () => {
-    const res = await api.get<LeaveRequest[]>('/api/leave-requests/team');
+  getTeamRequests: async (status?: string) => {
+    const qs = status && status !== 'All' ? `?status=${encodeURIComponent(status)}` : '';
+    const res = await api.get<LeaveRequest[]>(`/api/leave-requests/team${qs}`);
+    return res;
+  },
+  getLeaveById: async (id: string) => {
+    const res = await api.get<{ leaveRequest: LeaveRequest }>(`/api/leave-requests/${id}`);
+    return res.leaveRequest;
+  },
+  updateLeave: async (id: string, data: any) => {
+    const res = await api.patch<{ message: string; leaveRequest: LeaveRequest }>(`/api/leave-requests/${id}`, data);
+    return res.leaveRequest;
+  },
+  deleteLeave: async (id: string) => {
+    const res = await api.delete<{ message: string; leaveRequest: LeaveRequest }>(`/api/leave-requests/${id}`);
     return res;
   },
   approveLeave: async (id: string) => {
@@ -86,6 +127,10 @@ export const leaveApi = {
   },
   rejectLeave: async (id: string, rejectionReason: string) => {
     const res = await api.post<LeaveRequest>(`/api/leave-requests/${id}/reject`, { status: 'Rejected', rejectionReason });
+    return res;
+  },
+  cancelLeave: async (id: string) => {
+    const res = await api.patch<LeaveRequest>(`/api/leave-requests/${id}/cancel`);
     return res;
   },
   getCalendarLeaves: async (year?: number, month?: number) => {
@@ -127,12 +172,48 @@ export const reportsApi = {
   getMonthlyRegister: async (fromMonth: number, fromYear: number, toMonth?: number, toYear?: number) => {
     const tm = toMonth ?? fromMonth;
     const ty = toYear ?? fromYear;
-    return await api.get<unknown[]>(
+    return await api.get<MonthlyRegisterRow[]>(
       `/api/reports/attendance/monthly?fromMonth=${fromMonth}&fromYear=${fromYear}&toMonth=${tm}&toYear=${ty}`
     );
   },
   getAbsenceReport: async (fromDate: string, toDate: string) => {
-    return await api.get<unknown[]>(`/api/reports/attendance/absence?fromDate=${fromDate}&toDate=${toDate}`);
+    return await api.get<AbsenceRow[]>(`/api/reports/attendance/absence?fromDate=${fromDate}&toDate=${toDate}`);
+  },
+  getOvertimeReport: async (fromMonth: number, fromYear: number, toMonth?: number, toYear?: number, minHours = 0) => {
+    const tm = toMonth ?? fromMonth;
+    const ty = toYear ?? fromYear;
+    return await api.get<OvertimeRow[]>(
+      `/api/reports/attendance/overtime?fromMonth=${fromMonth}&fromYear=${fromYear}&toMonth=${tm}&toYear=${ty}&minHours=${minHours}`
+    );
+  },
+  exportReportUrl: (params: Record<string, string | number | undefined>) => {
+    const clean: Record<string, string> = {};
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== '') clean[k] = String(v);
+    }
+    const qs = new URLSearchParams(clean).toString();
+    return `/api/reports/attendance/export${qs ? `?${qs}` : ''}`;
+  },
+};
+
+export interface ShiftConfig {
+  _id?: string;
+  department: string;
+  startTime: string;
+  endTime: string;
+  graceMinutes: number;
+  halfDayThresholdHours: number;
+}
+
+export const shiftConfigsApi = {
+  list: async () => {
+    return await api.get<ShiftConfig[]>('/api/shift-configs');
+  },
+  getByDepartment: async (dept: string) => {
+    return await api.get<ShiftConfig>(`/api/shift-configs/${dept}`);
+  },
+  update: async (data: Partial<ShiftConfig> & { department: string }) => {
+    return await api.post<ShiftConfig>('/api/shift-configs', data);
   },
 };
 
@@ -143,6 +224,7 @@ export const candidatesApi = {
       if (query.status) params.set('status', query.status);
       if (query.position) params.set('position', query.position);
       if (query.search) params.set('search', query.search);
+      if (query.resume && query.resume !== 'all') params.set('resume', query.resume);
       if (query.startDate) params.set('startDate', query.startDate);
       if (query.endDate) params.set('endDate', query.endDate);
       if (query.page) params.set('page', String(query.page));
@@ -164,7 +246,40 @@ export const candidatesApi = {
     return await api.post<{ data: Candidate }>('/api/candidates', formData);
   },
 
-  update: async (id: string, data: { status?: CandidateStatus; notes?: string }) => {
+  update: async (id: string, data: Partial<Candidate> | FormData | Record<string, any>) => {
     return await api.patch<{ data: Candidate }>(`/api/candidates/${id}`, data);
+  },
+
+  addRound: async (
+    id: string,
+    round: {
+      roundNumber?: number;
+      roundName?: string;
+      interviewDate: string;
+      interviewedBy: string;
+      notes?: string;
+      status?: string;
+    }
+  ) => {
+    return await api.post<{ data: Candidate }>(`/api/candidates/${id}/rounds`, round);
+  },
+
+  updateRound: async (
+    id: string,
+    roundId: string,
+    round: {
+      roundNumber?: number;
+      roundName?: string;
+      interviewDate?: string;
+      interviewedBy?: string;
+      notes?: string;
+      status?: string;
+    }
+  ) => {
+    return await api.patch<{ data: Candidate }>(`/api/candidates/${id}/rounds/${roundId}`, round);
+  },
+
+  deleteRound: async (id: string, roundId: string) => {
+    return await api.delete<{ data: Candidate }>(`/api/candidates/${id}/rounds/${roundId}`);
   },
 };
