@@ -32,6 +32,7 @@ interface Props {
     status: Campaign["status"],
     reason?: string,
   ) => void;
+  canManageCampaigns?: boolean;
 }
 
 export default function CampaignTable({
@@ -41,7 +42,10 @@ export default function CampaignTable({
   onSelectCampaign,
   onEdit,
   onStatusChange,
+  canManageCampaigns = true,
 }: Props) {
+  // Two props from two branches that mean the same thing — read-only if either says so.
+  const readOnly = !canManage || !canManageCampaigns;
   const [currentPage, setCurrentPage] = useState(1);
   const [detailCampaign, setDetailCampaign] = useState<Campaign | null>(null);
   const [rejectingCampaign, setRejectingCampaign] = useState<Campaign | null>(null);
@@ -360,7 +364,18 @@ export default function CampaignTable({
 
                   <td className="whitespace-nowrap px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1.5">
-                      {(() => {
+                      {readOnly ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDetailCampaign(campaign);
+                          }}
+                          className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-2xs transition hover:border-[#8B2424] hover:bg-[#F9DADA] hover:text-[#8B2424]"
+                        >
+                          View Details
+                        </button>
+                      ) : (() => {
                         const isPowDone =
                           Boolean(campaign.isPowUpdated) ||
                           powUpdatedCampaignIds.has(campaign._id);

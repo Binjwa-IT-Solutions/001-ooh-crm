@@ -14,6 +14,7 @@ import { FinanceDashboard } from '@/modules/dashboard/components/FinanceDashboar
 import { HrDashboard } from '@/modules/dashboard/components/HrDashboard';
 import { OpsDashboard } from '@/modules/dashboard/components/OpsDashboard';
 import { MyDayPanel } from '@/modules/dashboard/components/MyDayPanel';
+import { SalesAgentDashboard } from '@/modules/dashboard/components/SalesAgentDashboard';
 import { SectionTitle } from '@/modules/dashboard/components/dashboard-kit';
 import { RefreshCw, Calendar, AlertCircle } from 'lucide-react';
 
@@ -24,7 +25,8 @@ import { RefreshCw, Calendar, AlertCircle } from 'lucide-react';
  *   hr                         → HR desk            + My day
  *   ops                        → Operations desk    + My day
  *   employee                   → My day (full)
- *   admin / manager / sales    → Business & finance overview (+ My day for manager / sales)
+ *   sales_agent                → Sales workspace (pipeline, follow-ups, quotations) + My day
+ *   admin / manager            → Business & finance overview (+ My day for manager)
  */
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -55,7 +57,14 @@ export default function DashboardPage() {
 
         {user.role === 'employee' && <MyDayPanel />}
 
-        {(user.role === 'admin' || user.role === 'manager' || user.role === 'sales_agent') && (
+        {user.role === 'sales_agent' && (
+          <>
+            <MyDayPanel compact />
+            <SalesAgentDashboard />
+          </>
+        )}
+
+        {(user.role === 'admin' || user.role === 'manager') && (
           <>
             {user.role !== 'admin' && <MyDayPanel compact />}
             <BusinessOverview permissions={user.permissions} />
