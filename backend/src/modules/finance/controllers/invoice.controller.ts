@@ -1,4 +1,6 @@
 import type { Request, Response } from 'express';
+import { getDocumentSignature } from '../../settings/document-signature.js';
+import { getCompanyProfile } from '../../settings/company-profile.js';
 import { invoiceService } from '../services/invoice.service.js';
 import {
   createInvoiceSchema,
@@ -133,10 +135,21 @@ export class InvoiceController {
   static async getPublicInvoice(req: Request, res: Response): Promise<void> {
     const token = req.params.token as string;
     const result = await invoiceService.getPublicInvoiceByToken(token);
+    // The shared page has no login, so send the company signature with the invoice.
+    const sig = await getDocumentSignature();
+    const companySignature = {
+      signatureImage: sig.signatureImage,
+      stampImage: sig.stampImage,
+      signatoryName: sig.signatoryName,
+      signatoryDesignation: sig.signatoryDesignation,
+    };
+    const { defaultOffice } = await getCompanyProfile();
     res.status(200).json({
       success: true,
       data: result,
       invoice: result,
+      companySignature,
+      companyAddressLines: defaultOffice.addressLines,
     });
   }
 

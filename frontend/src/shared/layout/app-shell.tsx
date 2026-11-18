@@ -21,6 +21,7 @@ import {
   TrendingUp,
   Clock,
   CalendarDays,
+  CalendarCheck,
   ShieldCheck,
   AlertTriangle,
   CreditCard,
@@ -35,6 +36,8 @@ import { useAuth } from '../auth/auth-context';
 import { ROLE_LABELS } from '../auth/types';
 import { Button, cx } from '../ui';
 import NotificationBell from './NotificationBell';
+import { ChatbotNavButton } from '../chatbot/ChatbotNavButton';
+import { AttendanceNavButton } from '@/modules/hr/components/attendance-nav-button';
 import ProfileMenu from './ProfileMenu';
 import { PageHeaderProvider } from './page-header-context';
 import { PageHeader } from './page-header';
@@ -54,7 +57,11 @@ interface NavGroup {
 export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Overview',
-    items: [{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }],
+    items: [
+      { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      // Holidays & approved leave — for everyone
+      { href: '/calendar', label: 'Calendar', icon: CalendarCheck },
+    ],
   },
   {
     label: 'SALES',
@@ -70,6 +77,17 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: 'MARKETING',
+    items: [
+      {
+        href: '/marketing',
+        label: 'Marketing Hub',
+        icon: Megaphone,
+        roles: ['admin', 'superadmin', 'managing_director', 'manager'],
+      },
+    ],
+  },
+  {
     label: 'OPERATIONS',
     items: [
       { href: '/vendors', label: 'Vendors', icon: Building2, permission: 'vendors.view' },
@@ -80,19 +98,54 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: ShoppingCart,
         permission: 'purchase_orders.view',
       },
-      { href: '/campaigns', label: 'Campaigns', icon: Megaphone, permission: 'campaigns.view' },
-      { href: '/escalations', label: 'Escalations', icon: ArrowUpRight, permission: 'tasks.view' },
+      {
+        href: '/campaigns',
+        label: 'Campaigns',
+        icon: Megaphone,
+        permission: 'campaigns.view',
+      },
+      {
+        href: '/escalations',
+        label: 'Escalations',
+        icon: ArrowUpRight,
+        permission: 'tasks.view',
+        roles: ['admin', 'superadmin', 'manager', 'ops'],
+      },
       { href: '/proofs', label: 'Proofs', icon: Camera, permission: 'proofs.view' },
     ],
   },
   {
     label: 'FINANCE & ANALYTICS',
     items: [
-      { href: '/finance/sales-dashboard', label: 'Sales Revenue', icon: BarChart3, permission: 'finance.view_reports' },
+      {
+        href: '/finance/sales-dashboard',
+        label: 'Sales Revenue',
+        icon: BarChart3,
+        permission: 'finance.view_reports',
+        roles: ['admin', 'superadmin', 'manager', 'finance'],
+      },
       { href: '/finance/profit-dashboard', label: 'Profit Dashboard', icon: TrendingUp, permission: 'finance.view_leadership_reports' },
-      { href: '/finance/invoices', label: 'Invoices', icon: FileText, permission: 'finance.view_payments' },
-      { href: '/finance/payments-in', label: 'Client Payments', icon: ArrowDownToLine, permission: 'finance.view_payments' },
-      { href: '/finance/payments-out', label: 'Vendor Payments', icon: ArrowUpFromLine, permission: 'finance.view_payments' },
+      {
+        href: '/finance/invoices',
+        label: 'Invoices',
+        icon: FileText,
+        permission: 'finance.view_payments',
+        roles: ['admin', 'superadmin', 'manager', 'finance'],
+      },
+      {
+        href: '/finance/payments-in',
+        label: 'Client Payments',
+        icon: ArrowDownToLine,
+        permission: 'finance.view_payments',
+        roles: ['admin', 'superadmin', 'manager', 'finance'],
+      },
+      {
+        href: '/finance/payments-out',
+        label: 'Vendor Payments',
+        icon: ArrowUpFromLine,
+        permission: 'finance.view_payments',
+        roles: ['admin', 'superadmin', 'manager', 'finance'],
+      },
       { href: '/finance/payroll', label: 'Payroll / Salary Payments', icon: CreditCard, permission: 'payroll.view' },
     ],
   },
@@ -126,6 +179,12 @@ export const NAV_GROUPS: NavGroup[] = [
         href: '/security/approvals',
         label: 'Login approvals',
         icon: ShieldCheck,
+        roles: ['admin', 'hr'],
+      },
+      {
+        href: '/settings/company',
+        label: 'Company settings',
+        icon: Building2,
         roles: ['admin'],
       },
     ],
@@ -186,11 +245,33 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex flex-1 flex-col overflow-y-auto pt-4 pb-12 no-scrollbar">
           <nav className="flex-1 space-y-6">
             {NAV_GROUPS.map((group) => {
-              const visibleItems = group.items.filter(
-                (item) =>
-                  (!item.permission || hasPermission(item.permission)) &&
-                  (!item.roles || item.roles.includes(user?.role ?? '')),
-              );
+              const visibleItems = group.items.filter((item) => {
+                if (item.href === '/marketing') {
+                  const roleStr = (user?.role || '').toLowerCase();
+                  // Admin, superadmin, manager always see Marketing Hub
+                  if (['admin', 'superadmin', 'managing_director', 'manager'].includes(roleStr)) {
+                    return true;
+                  }
+                  // Marketing employees see it (by email or designation)
+                  if (roleStr === 'employee') {
+                    const email = (user?.email || '').toLowerCase();
+                    const desig = (user?.designation || '').toLowerCase();
+                    return (
+                      email.includes('marketing') ||
+                      /marketing|designer|editor|content|creative|reel|video|social|media/.test(desig)
+                    );
+                  }
+                  return false;
+                }
+
+                if (item.roles) {
+                  const userRole = (user?.role || '').toLowerCase();
+                  if (!item.roles.map((r) => r.toLowerCase()).includes(userRole)) {
+                    return false;
+                  }
+                }
+                return !item.permission || hasPermission(item.permission);
+              });
 
               if (visibleItems.length === 0) return null;
 
@@ -287,6 +368,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                     />
                   </div>
                 </form>
+
+                {/* Check in / Check out — always visible */}
+                <AttendanceNavButton />
+
+                {/* Ask Octus AI Navbar Button */}
+                <ChatbotNavButton />
 
                 <div className="flex items-center gap-x-3">
                   {/* Notification Bell */}

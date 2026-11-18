@@ -27,6 +27,24 @@ function getLoginDeviceId(): string | undefined {
  *   2. verifyOtp(challengeId, code) -> enrollment or a session
  */
 export const authApi = {
+  /** Sends a reset link if the account exists. Always resolves with the same message. */
+  forgotPassword: (email: string) =>
+    api.post<{ message: string; devResetUrl?: string }>(
+      '/api/auth/forgot-password',
+      { email },
+      { skipAuth: true },
+    ),
+
+  /** Is this reset link still usable? */
+  checkResetToken: (token: string) =>
+    api.get<{ valid: boolean; email?: string }>(
+      `/api/auth/reset-password/${encodeURIComponent(token)}`,
+      { skipAuth: true },
+    ),
+
+  resetPassword: (token: string, password: string) =>
+    api.post<{ message: string }>('/api/auth/reset-password', { token, password }, { skipAuth: true }),
+
   startLogin: (email: string, password: string, location: LoginLocation | null) =>
     api.post<LoginStartResponse>(
       '/api/auth/login',

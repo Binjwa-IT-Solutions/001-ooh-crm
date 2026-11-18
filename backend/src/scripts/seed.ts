@@ -301,76 +301,6 @@ async function seedHolidays() {
   }
 }
 
-async function seedLeaveTypesAndBalances(): Promise<void> {
-  console.log('\nLeave Types & Balances');
-  const { LeaveType, LeaveBalance } = await import('../modules/HR/models/leave.model.js');
-  const { Employee } = await import('../modules/employees/employees.model.js');
-
-  const defaultTypes = [
-    { name: 'Casual Leave', code: 'CL', annualQuota: 12, carryForward: false, maxCarryForward: 0, encashable: false, requiresDocument: false, status: 'Active' as const },
-    { name: 'Sick Leave', code: 'SL', annualQuota: 12, carryForward: false, maxCarryForward: 0, encashable: false, requiresDocument: false, status: 'Active' as const },
-    { name: 'Privilege Leave', code: 'PL', annualQuota: 15, carryForward: true, maxCarryForward: 30, encashable: true, requiresDocument: false, status: 'Active' as const },
-    { name: 'Maternity Leave', code: 'ML', annualQuota: 182, carryForward: false, maxCarryForward: 0, encashable: false, requiresDocument: false, status: 'Active' as const },
-    { name: 'Paternity Leave', code: 'PTL', annualQuota: 15, carryForward: false, maxCarryForward: 0, encashable: false, requiresDocument: false, status: 'Active' as const },
-    { name: 'Compensatory Off', code: 'COMP', annualQuota: 0, carryForward: false, maxCarryForward: 0, encashable: false, requiresDocument: false, status: 'Active' as const },
-    { name: 'Leave Without Pay', code: 'LWP', annualQuota: null, carryForward: false, maxCarryForward: 0, encashable: false, requiresDocument: false, status: 'Active' as const },
-  ];
-
-  const allowedCodes = defaultTypes.map((t) => t.code);
-  const obsoleteTypes = await LeaveType.find({ code: { $nin: allowedCodes } });
-  if (obsoleteTypes.length > 0) {
-    const obsoleteIds = obsoleteTypes.map((ot) => ot._id);
-    await LeaveBalance.deleteMany({ leaveTypeId: { $in: obsoleteIds } });
-    await LeaveType.deleteMany({ _id: { $in: obsoleteIds } });
-    console.log(`  removed ${obsoleteTypes.length} obsolete leave types and their balances`);
-  }
-
-  const year = new Date().getFullYear();
-  const employeeDocs = await Employee.find({ deletedAt: null });
-
-  for (const t of defaultTypes) {
-    let leaveType = await LeaveType.findOne({ code: t.code, deletedAt: null });
-    if (!leaveType) {
-      leaveType = await LeaveType.create(t);
-      console.log(`  created leave type: ${t.name} (${t.code})`);
-    } else {
-      leaveType.name = t.name;
-      leaveType.annualQuota = t.annualQuota;
-      leaveType.carryForward = t.carryForward;
-      leaveType.maxCarryForward = t.maxCarryForward;
-      leaveType.encashable = t.encashable;
-      leaveType.requiresDocument = t.requiresDocument;
-      leaveType.status = t.status;
-      await leaveType.save();
-      console.log(`  updated/verified leave type: ${t.name} (${t.code})`);
-    }
-
-    if (t.annualQuota !== null) {
-      for (const emp of employeeDocs) {
-        const existingBalance = await LeaveBalance.findOne({
-          employeeId: emp._id,
-          leaveTypeId: leaveType._id,
-          year,
-        });
-
-        if (!existingBalance) {
-          await LeaveBalance.create({
-            employeeId: emp._id,
-            leaveTypeId: leaveType._id,
-            year,
-            allocated: t.annualQuota,
-            used: 0,
-            carriedForward: 0,
-          });
-        } else {
-          existingBalance.allocated = t.annualQuota;
-          await existingBalance.save();
-        }
-      }
-    }
-  }
-}
-
 async function seed() {
   if (config.isProduction) {
     throw new Error('Refusing to run the seed script with NODE_ENV=production');
@@ -383,7 +313,7 @@ async function seed() {
   const userIds = await seedUsers(resetPasswords);
   await seedEmployees(userIds);
   await seedHolidays();
-  await seedLeaveTypesAndBalances();
+  // Leave types are not seeded — HR creates them in the app (Leave → Leave Types).
 
   console.log(`\nDemo password for every seeded account: ${DEMO_PASSWORD}`);
   console.log('Sign in, then read the OTP off the login screen (dev mode) or the API log.\n');

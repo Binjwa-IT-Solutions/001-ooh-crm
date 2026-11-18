@@ -45,6 +45,12 @@ const baseEmployeeShape = {
     .optional()
     .or(z.literal('')),
   mobile: z.string().trim().regex(MOBILE, 'Enter a valid 10-digit Indian mobile number'),
+  personalMobile: z
+    .string()
+    .trim()
+    .regex(MOBILE, 'Enter a valid 10-digit Indian mobile number')
+    .optional()
+    .or(z.literal('')),
   dateOfBirth: optionalDate,
 
   department: z.enum(DEPARTMENTS),
@@ -122,6 +128,7 @@ export const updateMyProfileSchema = z
   .object({
     fullName: baseEmployeeShape.fullName,
     mobile: baseEmployeeShape.mobile,
+    personalMobile: baseEmployeeShape.personalMobile,
     personalEmail: baseEmployeeShape.personalEmail,
     dateOfBirth: baseEmployeeShape.dateOfBirth,
     workLocation: baseEmployeeShape.workLocation,

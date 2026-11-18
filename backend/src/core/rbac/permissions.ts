@@ -237,6 +237,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'employees.sensitive',
     'attendance.view_team',
     'leave.manage',
+    'holiday.manage',
     'reports.view',
     'candidates.view',
     'candidates.manage',

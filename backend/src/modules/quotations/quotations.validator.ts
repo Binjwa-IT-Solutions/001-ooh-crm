@@ -44,6 +44,7 @@ export const createQuotationSchema = z.object({
   signatureImage: z.string().optional(),
   signatoryName: z.string().trim().optional(),
   signatoryDesignation: z.string().trim().optional(),
+  hideSignature: z.boolean().optional(),
   validUntil: z.coerce.date().optional(),
   sites: z.array(quotationLineSchema).min(1, 'At least one site is required'),
 });

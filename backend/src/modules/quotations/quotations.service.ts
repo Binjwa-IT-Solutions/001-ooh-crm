@@ -14,6 +14,30 @@ import { fileService } from '../../core/files/index.js';
 import { notify, sendEmail } from '../../core/notifications/index.js';
 import { config } from '../../config/index.js';
 import { employeeService } from '../employees/employees.service.js';
+import { getDocumentSignature } from '../settings/document-signature.js';
+import { getCompanyBrand } from '../settings/company-profile.js';
+
+/**
+ * The signature printed on a quote: its own upload/name if set, otherwise the
+ * company signature from Settings → Document signature. Nothing when hidden.
+ */
+async function resolveQuotationSignature(q: {
+  hideSignature?: boolean;
+  signatureImage?: string;
+  signatoryName?: string;
+  signatoryDesignation?: string;
+}) {
+  if (q.hideSignature) {
+    return { image: undefined, stamp: undefined, signatoryName: undefined, signatoryDesignation: 'Authorized Signatory' };
+  }
+  const company = await getDocumentSignature();
+  return {
+    image: q.signatureImage || company.signatureImage || undefined,
+    stamp: company.stampImage || undefined,
+    signatoryName: q.signatoryName || company.signatoryName || undefined,
+    signatoryDesignation: q.signatoryDesignation || company.signatoryDesignation,
+  };
+}
 import type {
   CreateQuotationInput,
   ListQuotationsQuery,
@@ -270,6 +294,7 @@ export class QuotationsService {
       signatureImage: data.signatureImage,
       signatoryName: data.signatoryName,
       signatoryDesignation: data.signatoryDesignation,
+      hideSignature: data.hideSignature ?? false,
       sites: lines,
       subtotal,
       taxPercent,
@@ -377,6 +402,7 @@ export class QuotationsService {
     if (data.signatureImage !== undefined) quotation.signatureImage = data.signatureImage;
     if (data.signatoryName !== undefined) quotation.signatoryName = data.signatoryName;
     if (data.signatoryDesignation !== undefined) quotation.signatoryDesignation = data.signatoryDesignation;
+    if (data.hideSignature !== undefined) quotation.hideSignature = data.hideSignature;
     if (data.validUntil) quotation.validUntil = new Date(data.validUntil);
 
     quotation.sites = lines;
@@ -459,8 +485,11 @@ export class QuotationsService {
     }
 
     let pdfBuffer: Buffer;
+    const companyBrand = await getCompanyBrand();
     try {
       pdfBuffer = await renderQuotationBillBookPdf({
+        // Address of the default office (Settings → Company settings)
+        seller: { addressLines: companyBrand.addressLines },
         quotationNumber: quotation.quoteNumber,
         date: quotation.createdAt,
         validUntil: quotation.validUntil,
@@ -493,11 +522,7 @@ export class QuotationsService {
           ifsc: quotation.bankDetails.ifscCode,
           branch: quotation.bankDetails.branch,
         } : undefined,
-        signature: {
-          image: quotation.signatureImage,
-          signatoryName: quotation.signatoryName,
-          signatoryDesignation: quotation.signatoryDesignation,
-        },
+        signature: await resolveQuotationSignature(quotation),
       });
     } catch (renderErr) {
       console.warn('[QuotationPdf] renderQuotationBillBookPdf fallback to standard renderPdf:', renderErr);
@@ -509,6 +534,7 @@ export class QuotationsService {
         formatPaise(it.amount),
       ]);
       pdfBuffer = await renderPdf({
+        brand: companyBrand,
         title: 'PROPOSAL / QUOTATION',
         reference: quotation.quoteNumber,
         meta: [
@@ -778,8 +804,15 @@ export class QuotationsService {
       status: quotation.status,
       terms: quotation.terms || [],
       bankDetails: quotation.bankDetails,
-      signatoryName: quotation.signatoryName,
-      signatoryDesignation: quotation.signatoryDesignation,
+      ...(await (async () => {
+        const sig = await resolveQuotationSignature(quotation);
+        return {
+          signatureImage: sig.image ?? null,
+          stampImage: sig.stamp ?? null,
+          signatoryName: sig.signatoryName,
+          signatoryDesignation: sig.signatoryDesignation,
+        };
+      })()),
       viewedAt: quotation.viewedAt,
       acceptedAt: quotation.acceptedAt,
       rejectedAt: quotation.rejectedAt,

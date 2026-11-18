@@ -14,6 +14,7 @@ import Image from 'next/image';
 import { useAuth } from '../auth/auth-context';
 import { ROLE_LABELS } from '../auth/types';
 import { chatbotApi } from './chatbot-api';
+import { useChatbot } from './chatbot-context';
 import { MarkdownRenderer } from './MarkdownRenderer';
 
 function SendIcon({ className }: { className?: string }) {
@@ -66,7 +67,7 @@ export function ChatbotWidget() {
   const pathname = usePathname();
   const { user, isAuthenticated } = useAuth();
 
-  const [isOpen, setIsOpen] = useState(false);
+  const { isOpen, setIsOpen } = useChatbot();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -239,52 +240,6 @@ export function ChatbotWidget() {
 
   return (
     <>
-      {/* ──────────────────────────────────────────────────────────────────────────
-          1. FLOATING AI LAUNCHER ("Ask Octus AI / Manager" visual redesign)
-          Rounded horizontal pill card matching visual reference
-      ────────────────────────────────────────────────────────────────────────── */}
-      {!isOpen && (
-        <div className="fixed bottom-6 right-6 z-50">
-          <button
-            onClick={() => setIsOpen(true)}
-            className="group flex items-center gap-4 rounded-full bg-white/98 pl-4 pr-8 py-3.5 shadow-[0_12px_36px_rgba(0,0,0,0.08),0_2px_8px_rgba(0,0,0,0.04)] border border-slate-200/90 backdrop-blur-md transition-all duration-300 hover:border-[#6E1D1D]/35 hover:shadow-[0_16px_44px_rgba(110,29,29,0.14)] hover:scale-[1.02] focus:outline-none focus:ring-4 focus:ring-[#6E1D1D]/20 active:scale-[0.98] cursor-pointer select-none"
-            aria-label="Open Octus AI Chat Assistant"
-          >
-            {/* AI Icon Avatar */}
-            <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-[#6E1D1D] shadow-[0_0_18px_rgba(110,29,29,0.45)] shrink-0 overflow-hidden ring-1 ring-[#882424]/40">
-              <Image
-                src="/octus-ai-avatar.png"
-                alt="Ask Octus AI"
-                width={48}
-                height={48}
-                className="h-full w-full object-cover select-none pointer-events-none"
-                draggable={false}
-                priority
-              />
-            </div>
-
-            {/* Conversational Label & Status */}
-            <div className="flex flex-col text-left">
-              <div className="flex items-center gap-3">
-                <span className="text-[17px] font-bold tracking-tight text-[#111827] group-hover:text-[#6E1D1D] transition-colors leading-tight">
-                  Ask Octus AI
-                </span>
-                <span
-                  className="relative flex h-[22px] w-[22px] items-center justify-center rounded-full bg-[#16A36A]/15 shrink-0"
-                  title="Online"
-                  aria-label="Online"
-                >
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#16A36A]" />
-                </span>
-              </div>
-              <span className="text-[14.5px] font-medium text-[#5B6B82] leading-tight mt-1">
-                Manager
-              </span>
-            </div>
-          </button>
-        </div>
-      )}
-
       {/* ──────────────────────────────────────────────────────────────────────────
           2. OPEN CHAT PANEL
           Floating overlay panel, responsive, compact width, Media Octus theme

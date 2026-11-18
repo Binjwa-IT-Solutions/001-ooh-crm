@@ -265,6 +265,9 @@ const leadSchema = new Schema<ILead>({
   cycle: { type: Number, default: 1, min: 1 },
 });
 
+// My Leads is sorted by claim time ("most recently claimed first")
+leadSchema.index({ assignedTo: 1, claimedAt: -1 });
+
 leadSchema.plugin(basePlugin);
 
 export const Lead = mongoose.model<ILead>('Lead', leadSchema);

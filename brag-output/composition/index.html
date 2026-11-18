@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Enterprise OOH CRM - Built for Media Octus by Binjwa IT Solutions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root {
+        --bg-main: #070B14;
+        --card-bg: rgba(15, 23, 42, 0.88);
+        --brand-red: #882424;
+        --brand-accent: #6E1D1D;
+        --accent-cyan: #38BDF8;
+        --text-pure: #FFFFFF;
+        --text-subtle: #E2E8F0;
+        --text-muted: #94A3B8;
+        --font-main: 'Plus Jakarta Sans', system-ui, sans-serif;
+        --font-display: 'Space Grotesk', system-ui, sans-serif;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html, body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--bg-main);
+        font-family: var(--font-main);
+        color: var(--text-pure);
+      }
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        background: radial-gradient(circle at 50% 15%, #152033 0%, #060911 85%);
+      }
+
+      /* Ambient Grid & Background Glows */
+      .ambient-grid {
+        position: absolute;
+        inset: 0;
+        background-image: linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+                          linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+        background-size: 64px 64px;
+        pointer-events: none;
+      }
+      .glow-orb {
+        position: absolute;
+        width: 750px;
+        height: 750px;
+        border-radius: 50%;
+        filter: blur(150px);
+        opacity: 0.28;
+        pointer-events: none;
+      }
+      .orb-1 { top: -200px; left: 8%; background: #882424; }
+      .orb-2 { bottom: -200px; right: 12%; background: #0284C7; }
+
+      /* Persistent Top Branding Bar */
+      .top-nav {
+        position: absolute;
+        top: 32px;
+        left: 64px;
+        right: 64px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        z-index: 100;
+      }
+      .brand-badge {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        background: rgba(15, 23, 42, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        padding: 10px 24px;
+        border-radius: 999px;
+        backdrop-filter: blur(12px);
+      }
+      .brand-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #10B981;
+        box-shadow: 0 0 14px #10B981;
+      }
+      .brand-title {
+        font-size: 17px;
+        font-weight: 700;
+        color: #FFFFFF;
+        letter-spacing: -0.01em;
+      }
+      .client-tag {
+        font-size: 13px;
+        font-weight: 600;
+        color: #FECACA;
+        background: rgba(136, 36, 36, 0.4);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        padding: 3px 12px;
+        border-radius: 999px;
+      }
+      .developer-pill {
+        font-size: 15px;
+        font-weight: 700;
+        color: #BAE6FD;
+        background: rgba(8, 47, 73, 0.85);
+        border: 1px solid #0284C7;
+        padding: 10px 24px;
+        border-radius: 999px;
+        box-shadow: 0 4px 20px rgba(2, 132, 199, 0.25);
+      }
+      .developer-pill span {
+        color: #FFFFFF;
+      }
+
+      /* Base Scene Setup */
+      .scene {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        padding: 110px 64px 40px;
+        z-index: 10;
+      }
+      .scene-header {
+        text-align: center;
+        margin-bottom: 28px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+      .scene-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 18px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        background: rgba(136, 36, 36, 0.35);
+        color: #FECACA;
+        border: 1px solid #882424;
+      }
+      .scene-title {
+        font-family: var(--font-display);
+        font-size: 42px;
+        font-weight: 800;
+        color: #FFFFFF;
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+      }
+      .scene-desc {
+        font-size: 20px;
+        color: var(--text-subtle);
+        max-width: 980px;
+      }
+
+      /* Browser Mockup Window */
+      .browser-window {
+        position: relative;
+        width: 1560px;
+        height: 750px;
+        background: #0B1120;
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        box-shadow: 0 35px 80px -15px rgba(0, 0, 0, 0.8),
+                    0 0 60px rgba(56, 189, 248, 0.15);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        transform-origin: center center;
+      }
+      .browser-bar {
+        height: 48px;
+        background: #111827;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        display: flex;
+        align-items: center;
+        padding: 0 20px;
+        gap: 16px;
+      }
+      .browser-dots {
+        display: flex;
+        gap: 8px;
+      }
+      .b-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+      }
+      .dot-red { background: #EF4444; }
+      .dot-yellow { background: #F59E0B; }
+      .dot-green { background: #10B981; }
+
+      .browser-url-pill {
+        flex: 1;
+        max-width: 580px;
+        margin: 0 auto;
+        height: 30px;
+        background: rgba(0, 0, 0, 0.45);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-size: 13px;
+        font-family: monospace;
+        color: #94A3B8;
+      }
+      .browser-url-pill .ssl-lock {
+        color: #10B981;
+      }
+      .browser-url-pill .url-text {
+        color: #E2E8F0;
+      }
+
+      .browser-viewport {
+        position: relative;
+        flex: 1;
+        overflow: hidden;
+        background: #0F172A;
+      }
+      .platform-screenshot {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: top center;
+        display: block;
+      }
+
+      /* Floating Badges & Callout Overlays */
+      .floating-callout {
+        position: absolute;
+        z-index: 30;
+        background: rgba(15, 23, 42, 0.92);
+        border: 1px solid rgba(56, 189, 248, 0.35);
+        backdrop-filter: blur(16px);
+        border-radius: 16px;
+        padding: 16px 24px;
+        box-shadow: 0 20px 45px rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+      .callout-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: rgba(56, 189, 248, 0.15);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+      }
+      .callout-content {
+        display: flex;
+        flex-direction: column;
+      }
+      .callout-title {
+        font-size: 18px;
+        font-weight: 800;
+        color: #FFFFFF;
+      }
+      .callout-subtitle {
+        font-size: 13px;
+        font-weight: 600;
+        color: #38BDF8;
+      }
+
+      /* Hook Elements in Scene 1 */
+      .hook-headline-box {
+        text-align: center;
+        margin-bottom: 24px;
+      }
+      .hook-old {
+        font-size: 26px;
+        font-weight: 600;
+        color: #94A3B8;
+        position: relative;
+        display: inline-block;
+      }
+      .hook-old-strike {
+        position: absolute;
+        left: 0;
+        top: 50%;
+        height: 3px;
+        width: 0%;
+        background: #EF4444;
+      }
+      .hero-title-main {
+        font-family: var(--font-display);
+        font-size: 48px;
+        font-weight: 800;
+        color: #FFFFFF;
+        letter-spacing: -0.02em;
+        margin-top: 6px;
+      }
+      .hero-sub-meta {
+        font-size: 18px;
+        color: #CBD5E1;
+        margin-top: 4px;
+      }
+      .hero-sub-meta strong {
+        color: #FCA5A5;
+      }
+
+      /* Scene 4 Outro Layout */
+      .outro-wrapper {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .outro-bg-mockup {
+        position: absolute;
+        width: 1600px;
+        height: 800px;
+        opacity: 0.18;
+        filter: blur(10px) brightness(0.7);
+        transform: scale(0.95);
+        border-radius: 28px;
+        overflow: hidden;
+      }
+      .outro-card {
+        position: relative;
+        z-index: 50;
+        background: radial-gradient(circle at 50% 0%, rgba(26, 38, 64, 0.95) 0%, rgba(11, 17, 32, 0.95) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 32px;
+        padding: 56px 80px;
+        text-align: center;
+        box-shadow: 0 40px 100px rgba(0, 0, 0, 0.8),
+                    0 0 50px rgba(2, 132, 199, 0.15);
+        max-width: 1100px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .outro-tag {
+        display: inline-flex;
+        padding: 7px 22px;
+        border-radius: 999px;
+        font-size: 14px;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        background: rgba(8, 47, 73, 0.8);
+        color: #38BDF8;
+        border: 1px solid #0284C7;
+        margin-bottom: 20px;
+      }
+      .outro-heading {
+        font-family: var(--font-display);
+        font-size: 54px;
+        font-weight: 800;
+        color: #FFFFFF;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+        margin-bottom: 12px;
+      }
+      .outro-client-text {
+        font-size: 22px;
+        color: #94A3B8;
+        margin-bottom: 36px;
+      }
+      .outro-client-text span {
+        color: #FCA5A5;
+        font-weight: 700;
+      }
+      .agency-signature-block {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 26px 64px;
+        background: rgba(136, 36, 36, 0.22);
+        border: 1px solid #882424;
+        border-radius: 20px;
+      }
+      .agency-label {
+        font-size: 13px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #FCA5A5;
+        font-weight: 700;
+      }
+      .agency-name-title {
+        font-family: var(--font-display);
+        font-size: 40px;
+        font-weight: 800;
+        color: #FFFFFF;
+        letter-spacing: -0.01em;
+      }
+      .agency-capabilities {
+        font-size: 16px;
+        color: #BAE6FD;
+        font-weight: 600;
+      }
+      .agency-domain {
+        font-size: 15px;
+        color: #38BDF8;
+        font-family: monospace;
+        letter-spacing: 0.05em;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-width="1920" data-height="1080" data-duration="20.0">
+      <!-- Ambient Visual Effects -->
+      <div class="ambient-grid"></div>
+      <div class="glow-orb orb-1"></div>
+      <div class="glow-orb orb-2"></div>
+
+      <!-- Persistent Header -->
+      <header class="top-nav">
+        <div class="brand-badge">
+          <div class="brand-dot"></div>
+          <span class="brand-title">Out-of-Home CRM</span>
+          <span class="client-tag">Media Octus</span>
+        </div>
+        <div class="developer-pill">
+          Engineered by <span>Binjwa IT Solutions</span>
+        </div>
+      </header>
+
+      <!-- ================= SCENE 1 (0.0s - 5.0s): Hook & Live Platform Intro ================= -->
+      <section id="scene-1" class="scene clip" data-start="0.0" data-duration="5.0">
+        <div class="hook-headline-box" id="hook-box">
+          <div class="hook-old">
+            Still managing billboards on spreadsheets?
+            <span class="hook-old-strike" id="hook-strike"></span>
+          </div>
+          <h1 class="hero-title-main" id="hero-title">Meet the Enterprise Out-of-Home CRM</h1>
+          <p class="hero-sub-meta" id="hero-sub">Custom Built for <strong>Media Octus</strong> · Engineered by <strong>Binjwa IT Solutions</strong></p>
+        </div>
+
+        <!-- Real Platform Dashboard Browser Window -->
+        <div class="browser-window" id="browser-scene-1">
+          <div class="browser-bar">
+            <div class="browser-dots">
+              <span class="b-dot dot-red"></span>
+              <span class="b-dot dot-yellow"></span>
+              <span class="b-dot dot-green"></span>
+            </div>
+            <div class="browser-url-pill">
+              <span class="ssl-lock">🔒</span>
+              <span class="url-text">crm.mediaoctus.com/dashboard</span>
+            </div>
+          </div>
+          <div class="browser-viewport">
+            <img src="assets/screens/screen-dashboard.png" class="platform-screenshot" alt="Media Octus Real Dashboard Screenshot" />
+
+            <!-- Floating Badges on Dashboard Screenshot -->
+            <div class="floating-callout" id="callout-dash-left" style="bottom: 40px; left: 40px;" data-layout-ignore>
+              <div class="callout-icon">⚡</div>
+              <div class="callout-content">
+                <span class="callout-title">58 Assigned Role Permissions</span>
+                <span class="callout-subtitle">Strict Enterprise Access & Audit Logging</span>
+              </div>
+            </div>
+
+            <div class="floating-callout" id="callout-dash-right" style="bottom: 40px; right: 40px;" data-layout-ignore>
+              <div class="callout-icon">🤖</div>
+              <div class="callout-content">
+                <span class="callout-title">Ask Octus AI Assistant</span>
+                <span class="callout-subtitle">Real-time Operations & Campaign Intelligence</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= SCENE 2 (5.0s - 10.0s): Live Billboard Inventory & ATR Planning ================= -->
+      <section id="scene-2" class="scene clip" data-start="5.0" data-duration="5.0">
+        <div class="scene-header" id="scene-2-header">
+          <span class="scene-pill" data-layout-ignore>LIVE INVENTORY MANAGEMENT</span>
+          <h2 class="scene-title">Billboard Inventory & ATR Vacancy Tracking</h2>
+          <p class="scene-desc">Real-time availability prevents double-booking across city-wide media assets</p>
+        </div>
+
+        <!-- Real Platform Sites / ATR Screenshot Window -->
+        <div class="browser-window" id="browser-scene-2">
+          <div class="browser-bar">
+            <div class="browser-dots">
+              <span class="b-dot dot-red"></span>
+              <span class="b-dot dot-yellow"></span>
+              <span class="b-dot dot-green"></span>
+            </div>
+            <div class="browser-url-pill">
+              <span class="ssl-lock">🔒</span>
+              <span class="url-text">crm.mediaoctus.com/atr</span>
+            </div>
+          </div>
+          <div class="browser-viewport">
+            <img src="assets/screens/screen-sites.png" class="platform-screenshot" id="sites-img" alt="Media Octus Real ATR Inventory Screenshot" />
+
+            <!-- Floating Callouts on ATR Screenshot -->
+            <div class="floating-callout" id="callout-sites-1" style="top: 140px; right: 50px;" data-layout-ignore>
+              <div class="callout-icon" style="background: rgba(16, 185, 129, 0.2); border-color: #10B981;">📍</div>
+              <div class="callout-content">
+                <span class="callout-title">Active ATR Plans</span>
+                <span class="callout-subtitle">Blinkit · Antara · Multi-Vendor Mapping</span>
+              </div>
+            </div>
+
+            <div class="floating-callout" id="callout-sites-2" style="bottom: 50px; left: 50px;" data-layout-ignore>
+              <div class="callout-icon" style="background: rgba(245, 158, 11, 0.2); border-color: #F59E0B;">🏙️</div>
+              <div class="callout-content">
+                <span class="callout-title">Multi-City Outdoor Assets</span>
+                <span class="callout-subtitle">Indore · Mumbai · Mahabaleshwar Hoardings</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= SCENE 3 (10.0s - 15.0s): Field Proof of Display & Verification ================= -->
+      <section id="scene-3" class="scene clip" data-start="10.0" data-duration="5.0">
+        <div class="scene-header" id="scene-3-header">
+          <span class="scene-pill" data-layout-ignore>PROOF OF DISPLAY SYSTEM</span>
+          <h2 class="scene-title">Verified Field Proof of Display & Execution</h2>
+          <p class="scene-desc">Generate public vendor upload links and audit physical billboard installations</p>
+        </div>
+
+        <!-- Real Platform Proof of Work Screenshot Window -->
+        <div class="browser-window" id="browser-scene-3">
+          <div class="browser-bar">
+            <div class="browser-dots">
+              <span class="b-dot dot-red"></span>
+              <span class="b-dot dot-yellow"></span>
+              <span class="b-dot dot-green"></span>
+            </div>
+            <div class="browser-url-pill">
+              <span class="ssl-lock">🔒</span>
+              <span class="url-text">crm.mediaoctus.com/proofs</span>
+            </div>
+          </div>
+          <div class="browser-viewport">
+            <img src="assets/screens/screen-proofs.png" class="platform-screenshot" id="proofs-img" alt="Media Octus Real Proof of Display Screenshot" />
+
+            <!-- Floating Callouts on Proofs Screenshot -->
+            <div class="floating-callout" id="callout-proofs-1" style="top: 80px; right: 50px;" data-layout-ignore>
+              <div class="callout-icon" style="background: rgba(136, 36, 36, 0.3); border-color: #EF4444;">📸</div>
+              <div class="callout-content">
+                <span class="callout-title">Public Proof Upload Links</span>
+                <span class="callout-subtitle">Instant Vendor Field Submission</span>
+              </div>
+            </div>
+
+            <div class="floating-callout" id="callout-proofs-2" style="bottom: 50px; right: 50px;" data-layout-ignore>
+              <div class="callout-icon" style="background: rgba(16, 185, 129, 0.2); border-color: #10B981;">✓</div>
+              <div class="callout-content">
+                <span class="callout-title">1-Click Ops Approval</span>
+                <span class="callout-subtitle">Geo-tagged Photos · Indore & Mumbai Sites</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= SCENE 4 (15.0s - 20.0s): Case Study & Binjwa IT Solutions Showcase ================= -->
+      <section id="scene-4" class="scene clip" data-start="15.0" data-duration="5.0">
+        <div class="outro-wrapper">
+          <!-- Background Platform Visual -->
+          <div class="outro-bg-mockup" id="outro-bg">
+            <img src="assets/screens/screen-dashboard-bg.png" style="width: 100%; height: 100%; object-fit: cover;" alt="Background Platform" />
+          </div>
+
+          <div class="outro-card" id="outro-card" data-hold>
+            <div class="outro-tag" data-layout-ignore>PORTFOLIO CASE STUDY</div>
+            <h2 class="outro-heading">Custom Enterprise Platforms & Web Systems</h2>
+            <p class="outro-client-text">Engineered for <span>Media Octus</span></p>
+
+            <div class="agency-signature-block" id="agency-sig">
+              <span class="agency-label" data-layout-ignore>Designed & Engineered by</span>
+              <span class="agency-name-title">Binjwa IT Solutions</span>
+              <span class="agency-capabilities" data-layout-ignore>Enterprise Architecture · Modern Web & AI Systems</span>
+              <span class="agency-domain" data-layout-ignore>binjwaitsolutions.com</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Audio Tracks -->
+      <audio id="bgm" data-track-index="1" data-start="0" data-duration="20.0" data-volume="0.14" src="assets/music/track.mp3"></audio>
+      <audio id="vo" data-track-index="2" data-start="0" data-duration="20.0" data-volume="1" src="assets/voiceover.wav"></audio>
+    </div>
+
+    <!-- GSAP Master Animation Timeline -->
+    <script>
+      const tl = gsap.timeline({ paused: true });
+
+      // ================= SCENE 1 ANIMATIONS (0.0s - 5.0s) =================
+      tl.from("#hook-box .hook-old", { y: -20, opacity: 0, duration: 0.5, ease: "power2.out" }, 0.2);
+      tl.to("#hook-strike", { width: "100%", duration: 0.6, ease: "power2.inOut" }, 1.0);
+      tl.from("#hero-title", { y: 25, opacity: 0, duration: 0.6, ease: "power3.out" }, 1.4);
+      tl.from("#hero-sub", { opacity: 0, duration: 0.5, ease: "power2.out" }, 1.8);
+
+      // Browser window enters with sleek 3D perspective scale
+      tl.from("#browser-scene-1", {
+        y: 80,
+        scale: 0.92,
+        opacity: 0,
+        duration: 0.8,
+        ease: "power3.out"
+      }, 1.9);
+
+      // Floating callouts pop out
+      tl.from("#callout-dash-left", {
+        x: -40,
+        opacity: 0,
+        scale: 0.85,
+        duration: 0.6,
+        ease: "back.out(1.5)"
+      }, 2.5);
+
+      tl.from("#callout-dash-right", {
+        x: 40,
+        opacity: 0,
+        scale: 0.85,
+        duration: 0.6,
+        ease: "back.out(1.5)"
+      }, 2.8);
+
+      // Gentle ambient drift during scene 1
+      tl.to("#browser-scene-1", {
+        y: -10,
+        duration: 2.2,
+        ease: "sine.inOut"
+      }, 2.7);
+
+      // ================= SCENE 2 ANIMATIONS (5.0s - 10.0s) =================
+      tl.from("#scene-2-header", {
+        y: -25,
+        opacity: 0,
+        duration: 0.6,
+        ease: "power2.out"
+      }, 5.1);
+
+      tl.from("#browser-scene-2", {
+        y: 70,
+        scale: 0.94,
+        opacity: 0,
+        duration: 0.8,
+        ease: "power3.out"
+      }, 5.3);
+
+      // Subtle zoom on the actual ATR table screenshot to spotlight real data
+      tl.fromTo("#sites-img", 
+        { scale: 1 }, 
+        { scale: 1.08, transformOrigin: "50% 60%", duration: 4.0, ease: "power1.out" }, 
+        5.5
+      );
+
+      tl.from("#callout-sites-1", {
+        x: 40,
+        opacity: 0,
+        scale: 0.85,
+        duration: 0.6,
+        ease: "back.out(1.4)"
+      }, 6.0);
+
+      tl.from("#callout-sites-2", {
+        x: -40,
+        opacity: 0,
+        scale: 0.85,
+        duration: 0.6,
+        ease: "back.out(1.4)"
+      }, 6.5);
+
+      // ================= SCENE 3 ANIMATIONS (10.0s - 15.0s) =================
+      tl.from("#scene-3-header", {
+        y: -25,
+        opacity: 0,
+        duration: 0.6,
+        ease: "power2.out"
+      }, 10.1);
+
+      tl.from("#browser-scene-3", {
+        y: 70,
+        scale: 0.94,
+        opacity: 0,
+        duration: 0.8,
+        ease: "power3.out"
+      }, 10.3);
+
+      // Zoom on the actual Proofs cards
+      tl.fromTo("#proofs-img", 
+        { scale: 1 }, 
+        { scale: 1.07, transformOrigin: "50% 70%", duration: 4.0, ease: "power1.out" }, 
+        10.5
+      );
+
+      tl.from("#callout-proofs-1", {
+        y: -30,
+        opacity: 0,
+        scale: 0.85,
+        duration: 0.6,
+        ease: "back.out(1.4)"
+      }, 11.0);
+
+      tl.from("#callout-proofs-2", {
+        y: 30,
+        opacity: 0,
+        scale: 0.85,
+        duration: 0.6,
+        ease: "back.out(1.4)"
+      }, 11.6);
+
+      // ================= SCENE 4 ANIMATIONS (15.0s - 20.0s) =================
+      tl.from("#outro-bg", {
+        scale: 1.1,
+        opacity: 0,
+        duration: 1.0,
+        ease: "power2.out"
+      }, 15.1);
+
+      tl.from("#outro-card", {
+        scale: 0.85,
+        y: 40,
+        opacity: 0,
+        duration: 0.8,
+        ease: "back.out(1.5)"
+      }, 15.3);
+
+      tl.from("#agency-sig", {
+        y: 30,
+        opacity: 0,
+        duration: 0.6,
+        ease: "power2.out"
+      }, 15.8);
+
+      tl.to("#outro-card", {
+        y: -8,
+        duration: 3.0,
+        ease: "sine.inOut"
+      }, 16.5);
+
+      // Register timeline for Hyperframes renderer
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

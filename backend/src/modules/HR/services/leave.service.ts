@@ -8,6 +8,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../../core/errors/index.js';
+import { ROLE_LABELS } from '../../../core/rbac/permissions.js';
 import { scopeFilter, scopedCount, scopedFind } from '../../../core/scoping/index.js';
 import { Employee } from '../../employees/employees.model.js';
 import { employeeService } from '../../employees/employees.service.js';
@@ -21,6 +22,7 @@ import {
   type ILeaveRequest,
   type ILeaveType,
 } from '../models/leave.model.js';
+import { computeBalance, policyOf, type ComputedBalance } from './leave-balance.js';
 import type {
   AllocateBalanceInput,
   CreateLeaveRequestInput,
@@ -48,6 +50,9 @@ export interface LeaveRequestDto {
   approverId?: string;
   approvedAt: string | null;
   rejectionReason?: string;
+  decidedByName?: string;
+  decidedByRole?: string;
+  decidedAt: string | null;
   createdAt: string;
   updatedAt: string;
   employeeName?: string;
@@ -64,9 +69,12 @@ export interface LeaveTypeDto {
   id: string;
   name: string;
   code: string;
+  quotaPeriod: 'Monthly' | 'Yearly' | 'Unlimited';
+  quotaDays: number;
   annualQuota: number | null;
   carryForward: boolean;
   maxCarryForward: number;
+  carryForwardExpiryMonths: number | null;
   encashable: boolean;
   requiresDocument: boolean;
   status: string;
@@ -80,10 +88,19 @@ export interface LeaveBalanceDto {
   leaveTypeId: string;
   leaveTypeName: string;
   year: number;
+  /** Credited so far + usable carried days (0 when unlimited). */
   allocated: number;
   used: number;
   carriedForward: number;
+  /** Remaining (0 when unlimited — check `unlimited`). */
   balance: number;
+  unlimited: boolean;
+  quotaPeriod: 'Monthly' | 'Yearly' | 'Unlimited';
+  quotaDays: number;
+  /** What the full year adds up to (null when unlimited). */
+  yearEntitlement: number | null;
+  carriedExpiresOn: string | null;
+  carriedExpired: boolean;
 }
 
 export interface PaginatedLeaveTypes {
@@ -127,13 +144,17 @@ function iso(value: Date | null | undefined): string {
 }
 
 function toTypeDto(doc: HydratedDocument<ILeaveType>): LeaveTypeDto {
+  const policy = policyOf(doc);
   return {
     id: String(doc._id),
     name: doc.name,
     code: doc.code,
+    quotaPeriod: policy.quotaPeriod,
+    quotaDays: policy.quotaDays,
     annualQuota: doc.annualQuota,
     carryForward: doc.carryForward,
     maxCarryForward: doc.maxCarryForward,
+    carryForwardExpiryMonths: policy.carryForwardExpiryMonths,
     encashable: doc.encashable,
     requiresDocument: doc.requiresDocument,
     status: doc.status,
@@ -142,21 +163,87 @@ function toTypeDto(doc: HydratedDocument<ILeaveType>): LeaveTypeDto {
   };
 }
 
-function toBalanceDto(
-  doc: HydratedDocument<ILeaveBalance> | ILeaveBalance,
-  leaveTypeName: string
+function balanceDto(
+  employeeId: string,
+  type: HydratedDocument<ILeaveType> | ILeaveType,
+  year: number,
+  b: ComputedBalance,
+  rowId?: unknown
 ): LeaveBalanceDto {
+  const unlimited = b.balance == null;
   return {
-    id: String(doc._id || ''),
-    employeeId: String(doc.employeeId),
-    leaveTypeId: String(doc.leaveTypeId),
-    leaveTypeName,
-    year: doc.year,
-    allocated: doc.allocated,
-    used: doc.used,
-    carriedForward: doc.carriedForward,
-    balance: doc.allocated + doc.carriedForward - doc.used,
+    id: rowId ? String(rowId) : '',
+    employeeId,
+    leaveTypeId: String(type._id),
+    leaveTypeName: type.name,
+    year,
+    allocated: b.allocated ?? 0,
+    used: b.used,
+    carriedForward: b.carriedForward,
+    balance: b.balance ?? 0,
+    unlimited,
+    quotaPeriod: b.quotaPeriod,
+    quotaDays: b.quotaDays,
+    yearEntitlement: b.yearEntitlement,
+    carriedExpiresOn: b.carriedExpiresOn,
+    carriedExpired: b.carriedExpired,
   };
+}
+
+/** Used days per leave type for an employee in a year, from the LeaveBalance ledger. */
+async function usedByType(employeeId: string, year: number, session?: ClientSession) {
+  const rows = await LeaveBalance.find({ employeeId, year }).session(session ?? null);
+  return new Map(rows.map((r) => [String(r.leaveTypeId), r]));
+}
+
+/**
+ * Approved days of this type that started on/before the carry-forward expiry date —
+ * only those can have used carried-over days. undefined when the type has no expiry.
+ */
+async function usedBeforeCarryExpiry(
+  employeeId: string,
+  type: ILeaveType,
+  year: number,
+  session?: ClientSession
+): Promise<number | undefined> {
+  const policy = policyOf(type);
+  if (!policy.carryForward || !policy.carryForwardExpiryMonths) return undefined;
+  const expiry = new Date(Date.UTC(year, policy.carryForwardExpiryMonths, 0, 23, 59, 59));
+  const rows = await LeaveRequest.find({
+    employeeId,
+    leaveTypeId: type._id,
+    status: 'Approved',
+    fromDate: { $gte: new Date(Date.UTC(year, 0, 1)), $lte: expiry },
+    deletedAt: null,
+  })
+    .select('days')
+    .session(session ?? null);
+  return rows.reduce((sum, r) => sum + r.days, 0);
+}
+
+async function computeFor(
+  employeeId: string,
+  type: ILeaveType,
+  year: number,
+  asOf?: Date,
+  session?: ClientSession
+): Promise<{ computed: ComputedBalance; rowId?: unknown }> {
+  const [employee, thisYear, lastYear, beforeExpiry] = await Promise.all([
+    Employee.findById(employeeId).select('dateOfJoining').session(session ?? null),
+    LeaveBalance.findOne({ employeeId, leaveTypeId: type._id, year }).session(session ?? null),
+    LeaveBalance.findOne({ employeeId, leaveTypeId: type._id, year: year - 1 }).session(session ?? null),
+    usedBeforeCarryExpiry(employeeId, type, year, session),
+  ]);
+  const computed = computeBalance({
+    policy: policyOf(type),
+    year,
+    asOf,
+    joinedOn: employee?.dateOfJoining ?? null,
+    usedThisYear: thisYear?.used ?? 0,
+    usedLastYear: lastYear?.used ?? 0,
+    usedBeforeCarryExpiry: beforeExpiry,
+  });
+  return { computed, rowId: thisYear?._id };
 }
 
 function toRequestDto(request: ILeaveRequest): LeaveRequestDto {
@@ -173,6 +260,13 @@ function toRequestDto(request: ILeaveRequest): LeaveRequestDto {
     approverId: request.approverId ? String(request.approverId) : undefined,
     approvedAt: request.approvedAt ? request.approvedAt.toISOString() : null,
     rejectionReason: request.rejectionReason,
+    decidedByName: request.decidedByName,
+    decidedByRole: request.decidedByRole,
+    decidedAt: request.decidedAt
+      ? request.decidedAt.toISOString()
+      : request.approvedAt
+        ? request.approvedAt.toISOString()
+        : null,
     createdAt: (request as ILeaveRequest & { createdAt?: Date }).createdAt?.toISOString() ?? new Date().toISOString(),
     updatedAt: (request as ILeaveRequest & { updatedAt?: Date }).updatedAt?.toISOString() ?? new Date().toISOString(),
   };
@@ -188,6 +282,197 @@ function toAttendanceDto(record: InstanceType<typeof Attendance>): AttendanceDto
     status: record.status,
     workType: record.workType,
   };
+}
+
+function stampDecision(request: ILeaveRequest, ctx: RequestContext): void {
+  request.decidedByUserId = toObjectId(ctx.user.id);
+  request.decidedByName = ctx.user.name;
+  request.decidedByRole = ROLE_LABELS[ctx.user.role] ?? ctx.user.role;
+  request.decidedAt = new Date();
+}
+
+function formatLeaveDate(value: string | Date): string {
+  return new Date(value).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+function leaveRange(dto: LeaveRequestDto): string {
+  const from = formatLeaveDate(dto.fromDate);
+  const to = formatLeaveDate(dto.toDate);
+  const days = `${dto.days} day${dto.days === 1 ? '' : 's'}`;
+  return from === to ? `${from} (${days})` : `${from} to ${to} (${days})`;
+}
+
+/**
+ * Everyone who reviews this leave: all active HR + admins, plus the designated
+ * approver (e.g. the reporting manager). Never includes the actor or the employee.
+ */
+async function leaveReviewerUserIds(
+  request: { approverId?: string; employeeId: string },
+  exclude: Array<string | undefined>
+): Promise<string[]> {
+  const { AuthUser } = await import('../../../core/auth/auth-model.js');
+  const ids = new Set<string>();
+
+  const staff = await AuthUser.find({ role: { $in: ['hr', 'admin'] }, status: 'Active', deletedAt: null }).select('_id');
+  staff.forEach((u) => ids.add(String(u._id)));
+
+  if (request.approverId) {
+    // approverId is usually an Employee id; for admins without a profile it can be the user id itself.
+    const approverEmp = await Employee.findById(request.approverId).select('userId');
+    if (approverEmp?.userId) ids.add(String(approverEmp.userId));
+    else if (await AuthUser.exists({ _id: request.approverId })) ids.add(String(request.approverId));
+  }
+
+  const employee = await Employee.findById(request.employeeId).select('userId');
+  const skip = new Set([...exclude, employee?.userId ? String(employee.userId) : undefined].filter(Boolean));
+  return [...ids].filter((id) => !skip.has(id));
+}
+
+async function describeLeave(dto: LeaveRequestDto) {
+  const [leaveType, employee] = await Promise.all([
+    LeaveType.findById(dto.leaveTypeId).select('name'),
+    Employee.findById(dto.employeeId).select('userId fullName'),
+  ]);
+  return {
+    employee,
+    employeeName: employee?.fullName ?? 'An employee',
+    what: `${leaveType?.name ?? 'leave'} for ${leaveRange(dto)}`,
+  };
+}
+
+function actorLabel(ctx: RequestContext): string {
+  return `${ctx.user.name} (${ROLE_LABELS[ctx.user.role] ?? ctx.user.role})`;
+}
+
+/** Notifications are best-effort: a failure is logged, never fails the leave action. */
+async function safely(label: string, fn: () => Promise<void>): Promise<void> {
+  try {
+    await fn();
+  } catch (err) {
+    console.error(`[leave.service] failed to send ${label} notification`, err);
+  }
+}
+
+/** New request → designated approver (in-app + email) and HR/admins (in-app). */
+async function notifyLeaveRequested(dto: LeaveRequestDto, ctx: RequestContext): Promise<void> {
+  await safely('leave.requested', async () => {
+    const { notify } = await import('../../../core/notifications/index.js');
+    const { employeeName, what } = await describeLeave(dto);
+    const reviewers = await leaveReviewerUserIds(dto, [ctx.user.id]);
+
+    let approverUserId: string | undefined;
+    if (dto.approverId) {
+      const approverEmp = await Employee.findById(dto.approverId).select('userId');
+      approverUserId = approverEmp?.userId ? String(approverEmp.userId) : undefined;
+    }
+
+    await Promise.all(
+      reviewers.map((userId) =>
+        notify({
+          userId,
+          type: 'leave.requested',
+          title: `${employeeName} requested leave`,
+          body: `${employeeName} has applied for ${what}.${dto.reason ? `\n\nReason: ${dto.reason}` : ''}`,
+          link: '/leave?tab=approvals',
+          email: userId === approverUserId, // the person expected to act gets an email too
+        })
+      )
+    );
+  });
+}
+
+/**
+ * Approved / rejected →
+ *   the employee: in-app + email ("approved by Priya (HR)")
+ *   other reviewers: in-app FYI, so nobody acts on it twice
+ */
+async function notifyLeaveDecision(
+  dto: LeaveRequestDto,
+  decision: 'approved' | 'rejected',
+  ctx: RequestContext,
+  reason?: string
+): Promise<void> {
+  await safely(`leave.${decision}`, async () => {
+    const { notify } = await import('../../../core/notifications/index.js');
+    const { employee, employeeName, what } = await describeLeave(dto);
+    const by = actorLabel(ctx);
+
+    if (employee?.userId) {
+      await notify({
+        userId: employee.userId,
+        type: `leave.${decision}`,
+        title: decision === 'approved' ? 'Your leave has been approved' : 'Your leave request was not approved',
+        body:
+          decision === 'approved'
+            ? `Your ${what} has been approved by ${by}. It now shows on the leave calendar.`
+            : `Your ${what} has been rejected by ${by}.${reason ? `\n\nReason: ${reason}` : ''}`,
+        link: '/leave?tab=my',
+        email: true,
+      });
+    }
+
+    const reviewers = await leaveReviewerUserIds(dto, [ctx.user.id]);
+    await Promise.all(
+      reviewers.map((userId) =>
+        notify({
+          userId,
+          type: `leave.${decision}.fyi`,
+          title: `${employeeName}'s leave was ${decision}`,
+          body: `${by} ${decision} ${employeeName}'s ${what}.${reason ? ` Reason: ${reason}` : ''}`,
+          link: '/leave?tab=approvals',
+        })
+      )
+    );
+  });
+}
+
+/**
+ * Cancelled →
+ *   by the employee themselves: tell the reviewers
+ *   by HR/admin: tell the employee (in-app + email) and the other reviewers
+ */
+async function notifyLeaveCancelled(
+  dto: LeaveRequestDto,
+  previousStatus: string,
+  ctx: RequestContext
+): Promise<void> {
+  await safely('leave.cancelled', async () => {
+    const { notify } = await import('../../../core/notifications/index.js');
+    const { employee, employeeName, what } = await describeLeave(dto);
+    const cancelledBySelf = employee?.userId && String(employee.userId) === ctx.user.id;
+    const wasApproved = previousStatus === 'Approved';
+
+    if (!cancelledBySelf && employee?.userId) {
+      await notify({
+        userId: employee.userId,
+        type: 'leave.cancelled',
+        title: 'Your leave was cancelled',
+        body: `Your ${wasApproved ? 'approved ' : ''}${what} was cancelled by ${actorLabel(ctx)}.${wasApproved ? ' The days have been returned to your balance.' : ''}`,
+        link: '/leave?tab=my',
+        email: true,
+      });
+    }
+
+    const reviewers = await leaveReviewerUserIds(dto, [ctx.user.id]);
+    await Promise.all(
+      reviewers.map((userId) =>
+        notify({
+          userId,
+          type: 'leave.cancelled.fyi',
+          title: `${employeeName}'s leave was cancelled`,
+          body: cancelledBySelf
+            ? `${employeeName} cancelled their ${wasApproved ? 'approved ' : 'pending '}${what}.`
+            : `${actorLabel(ctx)} cancelled ${employeeName}'s ${what}.`,
+          link: '/leave?tab=approvals',
+        })
+      )
+    );
+  });
 }
 
 async function approvalRoute(employeeId: string, ctx: RequestContext): Promise<string> {
@@ -361,12 +646,15 @@ export async function createLeaveType(
     throw new ForbiddenError('Only HR and Admin can configure leave types');
   }
 
-  const existing = await LeaveType.findOne({ code: input.code.toUpperCase() });
+  const code = input.code ? input.code.toUpperCase() : await uniqueCodeFor(input.name);
+  const existing = await LeaveType.findOne({ code });
   if (existing) throw new ConflictError('A leave type with this code already exists');
+  const sameName = await LeaveType.findOne({ name: new RegExp(`^${escapeRegex(input.name.trim())}$`, 'i'), deletedAt: null });
+  if (sameName) throw new ConflictError(`A leave type called "${sameName.name}" already exists`);
 
   const created = await LeaveType.create({
     ...input,
-    code: input.code.toUpperCase(),
+    code,
     createdBy: toObjectId(ctx.user.id),
     updatedBy: toObjectId(ctx.user.id),
   });
@@ -391,15 +679,9 @@ export async function updateLeaveType(
     if (existing) throw new ConflictError('A leave type with this code already exists');
   }
 
+  // Balances are computed from the policy on the fly, so changing the quota applies to everyone immediately.
   Object.assign(doc, input, { updatedBy: toObjectId(ctx.user.id) });
   await doc.save();
-
-  if (input.annualQuota !== undefined) {
-    await LeaveBalance.updateMany(
-      { leaveTypeId: id, year: new Date().getUTCFullYear() },
-      { $set: { allocated: input.annualQuota ?? 0, updatedBy: toObjectId(ctx.user.id) } }
-    );
-  }
 
   return toTypeDto(doc);
 }
@@ -412,11 +694,31 @@ export async function deleteLeaveType(id: string, ctx: RequestContext): Promise<
   const doc = await LeaveType.findOne(scopeFilter({ _id: id }, ctx));
   if (!doc) throw new NotFoundError('Leave type not found');
 
+  // Never used → remove it. Already used → keep it for history but stop offering it.
+  const inUse = await LeaveRequest.exists({ leaveTypeId: doc._id });
   doc.status = 'Inactive';
+  if (!inUse) doc.deletedAt = new Date();
   doc.updatedBy = toObjectId(ctx.user.id);
   await doc.save();
 
   return toTypeDto(doc);
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** "Casual Leave" → "CL", "Work From Home" → "WFH"; adds a number if taken. */
+async function uniqueCodeFor(name: string): Promise<string> {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  let base = (words.length > 1 ? words.map((w) => w[0]).join('') : words[0]?.slice(0, 3) ?? 'LV')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 8);
+  if (!base) base = 'LV';
+  let code = base;
+  for (let i = 2; await LeaveType.exists({ code }); i++) code = `${base}${i}`.slice(0, 10);
+  return code;
 }
 
 export async function getLeaveTypes(): Promise<ILeaveType[]> {
@@ -434,116 +736,70 @@ export async function getBalanceForEmployee(
 ): Promise<LeaveBalanceDto[]> {
   await assertCanAccessEmployeeLeave(employeeId, ctx);
 
-  const elevatedCtx = {
-    ...ctx,
-    user: { ...ctx.user, role: 'hr' as const },
-  };
-  const leaveTypes = await scopedFind(LeaveType, { status: 'Active' }, elevatedCtx);
-  const balances = await LeaveBalance.find({ employeeId, year });
+  const [leaveTypes, employee, thisYear, lastYear] = await Promise.all([
+    LeaveType.find({ status: 'Active', deletedAt: null }).sort({ name: 1 }),
+    Employee.findById(employeeId).select('dateOfJoining'),
+    usedByType(employeeId, year),
+    usedByType(employeeId, year - 1),
+  ]);
 
-  const balanceByType = new Map(balances.map((b: HydratedDocument<ILeaveBalance>) => [String(b.leaveTypeId), b]));
-
-  return leaveTypes.map((lt) => {
-    const existing = balanceByType.get(String(lt._id));
-    const row =
-      existing ??
-      ({
-        _id: undefined,
-        employeeId: toObjectId(employeeId),
-        leaveTypeId: lt._id,
+  return Promise.all(
+    leaveTypes.map(async (lt) => {
+      const row = thisYear.get(String(lt._id));
+      const computed = computeBalance({
+        policy: policyOf(lt),
         year,
-        allocated: lt.annualQuota ?? 0,
-        used: 0,
-        carriedForward: 0,
-      } as unknown as ILeaveBalance);
-
-    return toBalanceDto(row, lt.name);
-  });
+        joinedOn: employee?.dateOfJoining ?? null,
+        usedThisYear: row?.used ?? 0,
+        usedLastYear: lastYear.get(String(lt._id))?.used ?? 0,
+        usedBeforeCarryExpiry: await usedBeforeCarryExpiry(employeeId, lt, year),
+      });
+      return balanceDto(employeeId, lt, year, computed, row?._id);
+    })
+  );
 }
 
+/**
+ * Balance of one leave type. `asOf` lets a monthly quota count the months up to
+ * the leave date (applying in March for a day in June sees June's credit).
+ */
 export async function getBalance(
   employeeId: string,
   leaveTypeId: string,
-  year: number
-): Promise<{ allocated: number; used: number; carriedForward: number; balance: number }> {
+  year: number,
+  asOf?: Date
+): Promise<{ allocated: number; used: number; carriedForward: number; balance: number; unlimited: boolean }> {
   const leaveType = await LeaveType.findById(leaveTypeId);
   if (!leaveType) throw new NotFoundError('Leave type not found');
 
-  const row = await LeaveBalance.findOne({ employeeId, leaveTypeId, year });
-  const allocated = row?.allocated ?? leaveType.annualQuota ?? 0;
-  const used = row?.used ?? 0;
-  const carriedForward = row?.carriedForward ?? 0;
-
-  return { allocated, used, carriedForward, balance: allocated + carriedForward - used };
+  const { computed } = await computeFor(employeeId, leaveType, year, asOf);
+  return {
+    allocated: computed.allocated ?? 0,
+    used: computed.used,
+    carriedForward: computed.carriedForward,
+    balance: computed.balance ?? 0,
+    unlimited: computed.balance == null,
+  };
 }
 
+/**
+ * Balances are computed from the leave policy (see leave-balance.ts), so there is
+ * nothing to allocate by hand any more. Kept for API compatibility: returns the
+ * computed balance for that employee, type and year.
+ */
 export async function allocateBalance(
   input: AllocateBalanceInput,
   ctx: RequestContext
 ): Promise<LeaveBalanceDto> {
   if (ctx.user.role !== 'admin' && ctx.user.role !== 'hr') {
-    throw new ForbiddenError('Only HR and Admin can allocate leave balances');
+    throw new ForbiddenError('Only HR and Admin can view leave allocations');
   }
-
   const leaveType = await LeaveType.findById(input.leaveTypeId);
   if (!leaveType) throw new NotFoundError('Leave type not found');
+  if (!(await Employee.exists({ _id: input.employeeId }))) throw new NotFoundError('Employee not found');
 
-  if (leaveType.annualQuota === null) {
-    throw new ValidationError(`${leaveType.name} has no fixed quota and cannot be allocated`);
-  }
-
-  const employee = await Employee.findById(input.employeeId);
-  if (!employee) throw new NotFoundError('Employee not found');
-
-  let allocatedDays = input.proratedDays;
-  if (allocatedDays === undefined) {
-    const joinDate = employee.dateOfJoining ? new Date(employee.dateOfJoining) : new Date(input.year, 0, 1);
-    const joinYear = joinDate.getFullYear();
-
-    if (joinYear === input.year) {
-      const endOfYear = new Date(input.year, 11, 31, 23, 59, 59, 999);
-      const diffTime = endOfYear.getTime() - joinDate.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      const totalDaysInYear =
-        input.year % 4 === 0 && (input.year % 100 !== 0 || input.year % 400 === 0) ? 366 : 365;
-      const daysActive = Math.max(0, Math.min(totalDaysInYear, diffDays));
-      allocatedDays = Math.round((leaveType.annualQuota || 0) * (daysActive / totalDaysInYear));
-    } else if (joinYear > input.year) {
-      allocatedDays = 0;
-    } else {
-      allocatedDays = leaveType.annualQuota || 0;
-    }
-  }
-
-  let carriedForward = 0;
-  if (leaveType.carryForward) {
-    const prevYearRow = await LeaveBalance.findOne({
-      employeeId: input.employeeId,
-      leaveTypeId: input.leaveTypeId,
-      year: input.year - 1,
-    });
-    if (prevYearRow) {
-      const remaining = prevYearRow.allocated + prevYearRow.carriedForward - prevYearRow.used;
-      carriedForward = Math.min(Math.max(0, remaining), leaveType.maxCarryForward);
-    }
-  }
-
-  const row = await LeaveBalance.findOneAndUpdate(
-    { employeeId: input.employeeId, leaveTypeId: input.leaveTypeId, year: input.year },
-    {
-      $setOnInsert: {
-        createdBy: toObjectId(ctx.user.id),
-      },
-      $set: {
-        allocated: allocatedDays,
-        carriedForward,
-        updatedBy: toObjectId(ctx.user.id),
-      },
-    },
-    { returnDocument: 'after', upsert: true }
-  );
-
-  return toBalanceDto(row!, leaveType.name);
+  const { computed, rowId } = await computeFor(input.employeeId, leaveType, input.year);
+  return balanceDto(input.employeeId, leaveType, input.year, computed, rowId);
 }
 
 export async function deductBalance(
@@ -552,35 +808,26 @@ export async function deductBalance(
   year: number,
   days: number,
   ctx: RequestContext,
-  session?: ClientSession
+  session?: ClientSession,
+  asOf?: Date
 ): Promise<void> {
   const leaveType = await LeaveType.findById(leaveTypeId).session(session ?? null);
   if (!leaveType) throw new NotFoundError('Leave type not found');
 
-  if (leaveType.annualQuota === null) return;
-
-  const row = await LeaveBalance.findOneAndUpdate(
-    { employeeId, leaveTypeId, year },
-    {
-      $setOnInsert: {
-        allocated: leaveType.annualQuota ?? 0,
-        used: 0,
-        carriedForward: 0,
-        createdBy: toObjectId(ctx.user.id),
-      },
-    },
-    { returnDocument: 'after', upsert: true, session }
-  );
-  const available = (row?.allocated ?? 0) + (row?.carriedForward ?? 0) - (row?.used ?? 0);
-
-  if (days > available) {
-    throw new ValidationError(`Insufficient balance: requested ${days} day(s), ${available} available`);
+  const { computed } = await computeFor(employeeId, leaveType, year, asOf, session);
+  if (computed.balance != null && days > computed.balance) {
+    throw new ValidationError(`Insufficient balance: requested ${days} day(s), ${computed.balance} available`);
   }
 
+  // The ledger only tracks what was used; entitlement is always computed from the policy.
   await LeaveBalance.updateOne(
     { employeeId, leaveTypeId, year },
-    { $inc: { used: days }, $set: { updatedBy: toObjectId(ctx.user.id) } },
-    { session }
+    {
+      $inc: { used: days },
+      $set: { updatedBy: toObjectId(ctx.user.id) },
+      $setOnInsert: { allocated: 0, carriedForward: 0, createdBy: toObjectId(ctx.user.id) },
+    },
+    { upsert: true, session }
   );
 }
 
@@ -592,11 +839,8 @@ export async function restoreBalance(
   ctx: RequestContext,
   session?: ClientSession
 ): Promise<void> {
-  const leaveType = await LeaveType.findById(leaveTypeId).session(session ?? null);
-  if (!leaveType || leaveType.annualQuota === null) return;
-
   await LeaveBalance.updateOne(
-    { employeeId, leaveTypeId, year },
+    { employeeId, leaveTypeId, year, used: { $gte: days } },
     { $inc: { used: -days }, $set: { updatedBy: toObjectId(ctx.user.id) } },
     { session }
   );
@@ -656,10 +900,10 @@ export async function applyLeave(
     throw new ValidationError('A supporting document is required for this leave type');
   }
 
-  const balance = await getBalance(employee.id, data.leaveTypeId, fromDate.getUTCFullYear());
-  if (leaveType.annualQuota !== null && effectiveDays > balance.balance) {
+  const balance = await getBalance(employee.id, data.leaveTypeId, fromDate.getUTCFullYear(), fromDate);
+  if (!balance.unlimited && effectiveDays > balance.balance) {
     throw new ValidationError(
-      `Insufficient balance: requested ${effectiveDays} day(s), ${balance.balance} available`
+      `Insufficient balance: you asked for ${effectiveDays} day(s) of ${leaveType.name} but only ${balance.balance} will be available on that date`
     );
   }
 
@@ -689,7 +933,9 @@ export async function applyLeave(
     updatedBy: toObjectId(ctx.user.id),
   });
 
-  return toRequestDto(request);
+  const dto = toRequestDto(request);
+  await notifyLeaveRequested(dto, ctx);
+  return dto;
 }
 
 export async function getMyRequests(
@@ -916,11 +1162,14 @@ export async function deleteLeave(id: string, ctx: RequestContext): Promise<Leav
     return cancelLeave(id, ctx);
   }
 
+  const previousStatus = request.status;
   request.status = 'Cancelled';
   request.updatedBy = toObjectId(ctx.user.id);
   await request.save();
 
-  return toRequestDto(request);
+  const dto = toRequestDto(request);
+  await notifyLeaveCancelled(dto, previousStatus, ctx);
+  return dto;
 }
 
 export async function approveLeave(id: string, ctx: RequestContext): Promise<LeaveRequestDto> {
@@ -958,40 +1207,25 @@ export async function approveLeave(id: string, ctx: RequestContext): Promise<Lea
       request.fromDate.getUTCFullYear(),
       request.days,
       ctx,
-      session
+      session,
+      request.fromDate
     );
 
     await markLeaveDates(String(request.employeeId), dates, session, ctx.user.id);
     request.status = 'Approved';
-    request.approverId = approverEmployee
-      ? toObjectId(approverEmployee.id)
-      : toObjectId(ctx.user.id);
+    // approverId stays the designated approver (e.g. reporting manager); who actually decided is in decidedBy*.
     request.approvedAt = new Date();
+    stampDecision(request, ctx);
     request.updatedBy = toObjectId(ctx.user.id);
     await request.save({ session: session ?? null });
 
-    const approved = toRequestDto(request);
-
-    // Notify the employee
-    try {
-      const employeeDoc = await Employee.findById(approved.employeeId);
-      if (employeeDoc && employeeDoc.userId) {
-        const { notify } = await import('../../../core/notifications/index.js');
-        await notify({
-          userId: employeeDoc.userId,
-          type: 'leave.approved',
-          title: 'Leave request approved',
-          body: `Your leave request from ${new Date(approved.fromDate).toLocaleDateString()} to ${new Date(approved.toDate).toLocaleDateString()} has been approved.`,
-          link: '/leave?tab=my',
-        });
-      }
-    } catch (err) {
-      console.error('[leave.service] failed to send approval notification', err);
-    }
-
+    return toRequestDto(request);
+  }).then(async (approved) => {
+    await notifyLeaveDecision(approved, 'approved', ctx);
     return approved;
   });
 }
+
 
 export async function rejectLeave(
   id: string,
@@ -1018,30 +1252,12 @@ export async function rejectLeave(
 
   request.status = 'Rejected';
   request.rejectionReason = reason;
-  request.approverId = approverEmployee
-    ? toObjectId(approverEmployee.id)
-    : toObjectId(ctx.user.id);
+  stampDecision(request, ctx);
   request.updatedBy = toObjectId(ctx.user.id);
   await request.save();
 
   const dto = toRequestDto(request);
-
-  try {
-    const employeeDoc = await Employee.findById(dto.employeeId);
-    if (employeeDoc && employeeDoc.userId) {
-      const { notify } = await import('../../../core/notifications/index.js');
-      await notify({
-        userId: employeeDoc.userId,
-        type: 'leave.rejected',
-        title: 'Leave request rejected',
-        body: `Your leave request from ${new Date(dto.fromDate).toLocaleDateString()} to ${new Date(dto.toDate).toLocaleDateString()} has been rejected. Reason: ${reason}`,
-        link: '/leave?tab=my',
-      });
-    }
-  } catch (err) {
-    console.error('[leave.service] failed to send rejection notification', err);
-  }
-
+  await notifyLeaveDecision(dto, 'rejected', ctx, reason);
   return dto;
 }
 
@@ -1094,22 +1310,7 @@ export async function cancelLeave(id: string, ctx: RequestContext): Promise<Leav
     }
 
     const cancelled = toRequestDto(request);
-
-    try {
-      const employeeDoc = await Employee.findById(cancelled.employeeId);
-      if (employeeDoc && employeeDoc.userId) {
-        const { notify } = await import('../../../core/notifications/index.js');
-        await notify({
-          userId: employeeDoc.userId,
-          type: 'leave.cancelled',
-          title: 'Leave request cancelled',
-          body: `Your leave request from ${new Date(cancelled.fromDate).toLocaleDateString()} to ${new Date(cancelled.toDate).toLocaleDateString()} has been cancelled.`,
-          link: '/leave?tab=my',
-        });
-      }
-    } catch (err) {
-      console.error('[leave.service] failed to send cancellation notification', err);
-    }
+    await notifyLeaveCancelled(cancelled, originalStatus, ctx);
 
     return cancelled;
   });
@@ -1156,3 +1357,146 @@ export const leaveTypeService = {
   deductBalance,
   restoreBalance,
 };
+
+// ---------------------------------------------------------------------------
+// Employee leave & attendance summary (employee profile → Attendance tab)
+// ---------------------------------------------------------------------------
+
+export interface EmployeeLeaveSummary {
+  year: number;
+  balances: LeaveBalanceDto[];
+  stats: {
+    presentDays: number;
+    lateDays: number;
+    halfDays: number;
+    approvedLeaveDays: number;
+    unapprovedAbsenceDays: number;
+    workingDaysSoFar: number;
+  };
+  /** Approved leave this year — taken or coming up */
+  approvedLeaves: Array<{
+    id: string;
+    type: string;
+    fromDate: string;
+    toDate: string;
+    days: number;
+    reason: string;
+    decidedByName?: string;
+    decidedByRole?: string;
+    decidedAt: string | null;
+    upcoming: boolean;
+  }>;
+  pendingLeaves: Array<{ id: string; type: string; fromDate: string; toDate: string; days: number }>;
+  rejectedLeaves: number;
+  /** Working days with no check-in and no approved leave (absent without telling) */
+  unapprovedAbsences: Array<{ date: string; markedAbsent: boolean }>;
+}
+
+function localDayKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+export async function getEmployeeLeaveSummary(
+  employeeId: string,
+  year: number,
+  ctx: RequestContext
+): Promise<EmployeeLeaveSummary> {
+  await assertCanAccessEmployeeLeave(employeeId, ctx);
+
+  const employee = await Employee.findById(employeeId).select('dateOfJoining dateOfExit');
+  if (!employee) throw new NotFoundError('Employee not found');
+
+  const yearStart = new Date(year, 0, 1);
+  const yearEnd = new Date(year, 11, 31, 23, 59, 59, 999);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const [balances, requests, attendance, holidays, leaveTypes, firstRecord] = await Promise.all([
+    getBalanceForEmployee(employeeId, year, ctx),
+    LeaveRequest.find({ employeeId, fromDate: { $lte: yearEnd }, toDate: { $gte: yearStart }, deletedAt: null }).sort({ fromDate: -1 }),
+    Attendance.find({ employeeId, date: { $gte: yearStart, $lte: yearEnd }, deletedAt: null }),
+    Holiday.find({ date: { $gte: yearStart, $lte: yearEnd }, deletedAt: null }),
+    LeaveType.find({}).select('name'),
+    Attendance.findOne({ employeeId, deletedAt: null }).sort({ date: 1 }).select('date'),
+  ]);
+  const typeName = new Map(leaveTypes.map((t) => [String(t._id), t.name]));
+
+  // Days covered by approved leave (leave dates are stored as UTC midnight)
+  const approved = requests.filter((r) => r.status === 'Approved');
+  const leaveDays = new Set<string>();
+  for (const r of approved) {
+    for (let d = new Date(r.fromDate); d <= r.toDate; d.setUTCDate(d.getUTCDate() + 1)) {
+      leaveDays.add(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`);
+    }
+  }
+  const holidayDays = new Set(holidays.map((h) => {
+    const d = new Date(h.date);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  }));
+  const byDay = new Map(attendance.map((a) => [localDayKey(a.date), a]));
+
+  let presentDays = 0;
+  let lateDays = 0;
+  let halfDays = 0;
+  for (const a of attendance) {
+    if (a.status === 'Half-Day') halfDays++;
+    else if (a.checkInTime) presentDays++;
+    if (a.status === 'Late') lateDays++;
+  }
+
+  // Walk past working days (Mon–Sat) from joining/1 Jan up to yesterday
+  const unapprovedAbsences: EmployeeLeaveSummary['unapprovedAbsences'] = [];
+  let workingDaysSoFar = 0;
+  // Start from the latest of: 1 Jan, joining date, and the first day attendance was ever recorded
+  // (days before the company started using attendance shouldn't count as absences).
+  const starts = [yearStart, employee.dateOfJoining, firstRecord?.date].filter((d): d is Date => Boolean(d));
+  const from = new Date(Math.max(...starts.map((d) => d.getTime())));
+  from.setHours(0, 0, 0, 0);
+  const lastDay = employee.dateOfExit && employee.dateOfExit < yearEnd ? employee.dateOfExit : yearEnd;
+  for (let d = new Date(from); d < today && d <= lastDay; d.setDate(d.getDate() + 1)) {
+    const key = localDayKey(d);
+    if (d.getDay() === 0 || holidayDays.has(key)) continue;
+    workingDaysSoFar++;
+    if (leaveDays.has(key)) continue;
+    const rec = byDay.get(key);
+    if (rec?.checkInTime || rec?.status === 'Leave' || rec?.status === 'Half-Day') continue;
+    unapprovedAbsences.push({ date: key, markedAbsent: rec?.status === 'Absent' });
+  }
+  unapprovedAbsences.reverse(); // most recent first
+
+  return {
+    year,
+    balances,
+    stats: {
+      presentDays,
+      lateDays,
+      halfDays,
+      approvedLeaveDays: approved.reduce((sum, r) => sum + r.days, 0),
+      unapprovedAbsenceDays: unapprovedAbsences.length,
+      workingDaysSoFar,
+    },
+    approvedLeaves: approved.map((r) => ({
+      id: String(r._id),
+      type: typeName.get(String(r.leaveTypeId)) ?? 'Leave',
+      fromDate: r.fromDate.toISOString(),
+      toDate: r.toDate.toISOString(),
+      days: r.days,
+      reason: r.reason,
+      decidedByName: r.decidedByName,
+      decidedByRole: r.decidedByRole,
+      decidedAt: (r.decidedAt ?? r.approvedAt)?.toISOString() ?? null,
+      upcoming: r.fromDate > today,
+    })),
+    pendingLeaves: requests
+      .filter((r) => r.status === 'Pending')
+      .map((r) => ({
+        id: String(r._id),
+        type: typeName.get(String(r.leaveTypeId)) ?? 'Leave',
+        fromDate: r.fromDate.toISOString(),
+        toDate: r.toDate.toISOString(),
+        days: r.days,
+      })),
+    rejectedLeaves: requests.filter((r) => r.status === 'Rejected').length,
+    unapprovedAbsences,
+  };
+}

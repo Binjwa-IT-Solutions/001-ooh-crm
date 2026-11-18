@@ -15,7 +15,7 @@ import {
 } from '../errors/index.js';
 import { auditService } from '../audit/index.js';
 import { notifyMany, sendEmail, sendOtpEmail } from '../notifications/index.js';
-import { permissionsForRole, type Role } from '../rbac/permissions.js';
+import { permissionsForRole, ROLE_LABELS, type Role } from '../rbac/permissions.js';
 import { AuthUser, type IUser } from './auth-model.js';
 import { createTotpSetup, verifyTotp } from './mfa.js';
 import { OtpChallenge } from './otp-model.js';
@@ -284,7 +284,7 @@ export class AuthService {
   ): Promise<{ user: IUser; step: number }> {
     const user = await AuthUser.findOne({
       _id: adminId,
-      role: 'admin',
+      role: { $in: ['admin', 'hr'] },
       status: 'Active',
       deletedAt: null,
     }).select('+totpSecretEncrypted +totpLastUsedStep');
@@ -581,21 +581,33 @@ export class AuthService {
       outcome: 'pending',
     });
 
-    // Approval needs another active admin with an authenticator enrolled (see
+    // Admins never require approval.
+    const isAdmin = user.role === 'admin';
+
+    // Approval needs another active admin or HR reviewer with an authenticator enrolled (see
     // decideLoginApproval). With none, the request could never be decided — the
-    // first admin of a fresh install would be locked out — so fall through to the
+    // first user of a fresh install would be locked out — so fall through to the
     // normal OTP step instead, and leave an audit trail.
     const hasEligibleApprover =
+      !isAdmin &&
       risk.riskLevel === 'high' &&
       (await AuthUser.exists({
-        role: 'admin',
+        role: { $in: ['admin', 'hr'] },
         status: 'Active',
         deletedAt: null,
         totpEnabledAt: { $ne: null },
         _id: { $ne: user._id },
       })) !== null;
 
-    if (risk.riskLevel === 'high' && !hasEligibleApprover) {
+    if (risk.riskLevel === 'high' && isAdmin) {
+      void auditService.record({
+        action: 'other',
+        entity: 'LoginApproval',
+        entityId: String(event._id),
+        actorEmail: user.email,
+        changes: [{ field: 'approval', from: 'required', to: 'skipped_admin_user' }],
+      });
+    } else if (risk.riskLevel === 'high' && !hasEligibleApprover) {
       void auditService.record({
         action: 'other',
         entity: 'LoginApproval',
@@ -627,16 +639,16 @@ export class AuthService {
         status: 'pending',
         expiresAt,
       });
-      const admins = await AuthUser.find({
-        role: 'admin',
+      const reviewers = await AuthUser.find({
+        role: { $in: ['admin', 'hr'] },
         status: 'Active',
         deletedAt: null,
         _id: { $ne: user._id },
       }).select('_id');
 
-      if (admins.length) {
+      if (reviewers.length) {
         void notifyMany(
-          admins.map((admin) => admin._id),
+          reviewers.map((reviewer) => reviewer._id),
           {
             type: 'security.login_approval',
             title: 'High-risk login needs approval',
@@ -656,15 +668,15 @@ export class AuthService {
     }
 
     if (risk.reasons.length > 0) {
-      const admins = await AuthUser.find({
-        role: 'admin',
+      const reviewers = await AuthUser.find({
+        role: { $in: ['admin', 'hr'] },
         status: 'Active',
         deletedAt: null,
         _id: { $ne: user._id },
       }).select('_id');
-      if (admins.length) {
+      if (reviewers.length) {
         void notifyMany(
-          admins.map((admin) => admin._id),
+          reviewers.map((reviewer) => reviewer._id),
           {
             type: 'security.login_signal',
             title: 'Low-risk login signal',
@@ -812,7 +824,7 @@ export class AuthService {
     });
     if (!approval) throw new ConflictError('This login approval is no longer pending.');
     if (String(approval.userId) === adminId) {
-      throw new ForbiddenError('An admin cannot approve their own login request.');
+      throw new ForbiddenError('You cannot approve your own login request.');
     }
 
     // The admin already has a live session; a fresh authenticator code is the step-up.
@@ -846,7 +858,7 @@ export class AuthService {
       },
       { new: true },
     );
-    if (!claimed) throw new ConflictError('Another admin already handled this login request.');
+    if (!claimed) throw new ConflictError('Another reviewer already handled this login request.');
 
     try {
       await AuthService.consumeAdminTotpStep(adminProof.user._id, adminProof.step);
@@ -888,6 +900,41 @@ export class AuthService {
       { _id: approval.eventId },
       { $set: { outcome: decision === 'approve' ? 'approved' : 'denied' } },
     );
+
+    // Tell the person who tried to sign in, and let the other reviewers know it's handled.
+    const reviewer = adminProof.user;
+    const reviewerLabel = `${reviewer.name} (${ROLE_LABELS[reviewer.role] ?? reviewer.role})`;
+    const approved = decision === 'approve';
+    void notifyMany([target._id], {
+      type: approved ? 'security.login_approved' : 'security.login_denied',
+      title: approved ? 'Your sign-in from a new device was approved' : 'Your sign-in was blocked',
+      body: approved
+        ? `${reviewerLabel} approved your sign-in. If this wasn't you, contact your administrator immediately.`
+        : `${reviewerLabel} denied a sign-in to your account${note.trim() ? ` (${note.trim()})` : ''}. If this was you, contact HR or your administrator.`,
+      link: '/dashboard',
+      email: true,
+    });
+    void AuthUser.find({
+      role: { $in: ['admin', 'hr'] },
+      status: 'Active',
+      deletedAt: null,
+      _id: { $nin: [reviewer._id, target._id] },
+    })
+      .select('_id')
+      .then((others) =>
+        others.length
+          ? notifyMany(
+              others.map((u) => u._id),
+              {
+                type: 'security.login_decided',
+                title: `Login request ${approved ? 'approved' : 'denied'}`,
+                body: `${reviewerLabel} ${approved ? 'approved' : 'denied'} the sign-in for ${target.name} (${target.email}). No action needed.`,
+                link: '/security/approvals',
+              },
+            )
+          : undefined,
+      )
+      .catch((err) => console.error('[login-approval] failed to notify reviewers', err));
 
     void auditService.record({
       action: 'update',

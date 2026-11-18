@@ -952,7 +952,7 @@ export function AttendanceReportsView() {
                         <table className="w-full text-left text-sm whitespace-nowrap">
                           <thead className="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-600 uppercase tracking-wider">
                             <tr>
-                              <th className="px-5 py-3.5">Employee</th>
+                              <th className="sticky left-0 z-20 bg-slate-50 px-5 py-3.5 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)] min-w-[220px]">Employee</th>
                               <th className="px-5 py-3.5">Employee Code</th>
                               <th className="px-5 py-3.5">Department</th>
                               <th className="px-5 py-3.5 text-center">Monthly Summary</th>
@@ -990,7 +990,7 @@ export function AttendanceReportsView() {
 
                                 return (
                                   <tr key={rowKey} className="hover:bg-slate-50/70 transition-colors group">
-                                    <td className="px-5 py-3.5">
+                                    <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50 transition-colors px-5 py-3.5 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)] min-w-[220px]">
                                       <div className="flex items-center gap-2.5">
                                         <div className="w-8 h-8 rounded-full bg-[#F8E6E6] text-[#6E1D1D] flex items-center justify-center font-bold text-xs border border-[#6E1D1D]/20 shrink-0">
                                           {getInitials(empName)}
@@ -1142,7 +1142,7 @@ export function AttendanceReportsView() {
                       <table className="w-full text-left text-sm whitespace-nowrap">
                         <thead className="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-600 uppercase tracking-wider">
                           <tr>
-                            <th className="px-5 py-3.5">Employee</th>
+                            <th className="sticky left-0 z-20 bg-slate-50 px-5 py-3.5 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)] min-w-[200px]">Employee</th>
                             <th className="px-5 py-3.5">Code</th>
                             <th className="px-5 py-3.5">Department</th>
                             <th className="px-5 py-3.5">Status</th>
@@ -1168,8 +1168,8 @@ export function AttendanceReportsView() {
                               const recKey = `daily-row-${record.id || record._id || 'rec'}-${emp?.id || emp?._id || empCode || 'emp'}-${index}`;
 
                               return (
-                                <tr key={recKey} className="hover:bg-slate-50/70 transition-colors">
-                                  <td className="px-5 py-3.5 font-semibold text-slate-800">{empName}</td>
+                                <tr key={recKey} className="hover:bg-slate-50/70 transition-colors group">
+                                  <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50 transition-colors px-5 py-3.5 font-semibold text-slate-800 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)] min-w-[200px]">{empName}</td>
                                   <td className="px-5 py-3.5 font-mono text-slate-600">{empCode}</td>
                                   <td className="px-5 py-3.5 text-slate-600">{dept}</td>
                                   <td className="px-5 py-3.5">
@@ -1308,7 +1308,7 @@ export function AttendanceReportsView() {
                             <table className="w-full text-left text-sm whitespace-nowrap">
                               <thead className="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-600 uppercase tracking-wider">
                                 <tr>
-                                  <th className="px-5 py-3.5">Employee</th>
+                                  <th className="sticky left-0 z-20 bg-slate-50 px-5 py-3.5 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)] min-w-[200px]">Employee</th>
                                   <th className="px-5 py-3.5">Code</th>
                                   <th className="px-5 py-3.5">Department</th>
                                   <th className="px-5 py-3.5 text-center">Late Count</th>
@@ -1326,8 +1326,8 @@ export function AttendanceReportsView() {
                                   lateList.map((item, idx) => {
                                     const lateKey = `late-row-${item.employee?.id || item.employee?._id || item.employee?.employeeCode || 'emp'}-${idx}`;
                                     return (
-                                      <tr key={lateKey} className="hover:bg-slate-50/70 transition-colors">
-                                        <td className="px-5 py-3.5 font-semibold text-slate-800">
+                                      <tr key={lateKey} className="hover:bg-slate-50/70 transition-colors group">
+                                        <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50 transition-colors px-5 py-3.5 font-semibold text-slate-800 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)] min-w-[200px]">
                                           {item.employee?.fullName || item.employee?.name || 'Employee'}
                                         </td>
                                         <td className="px-5 py-3.5 font-mono text-slate-600">
@@ -1454,7 +1454,7 @@ export function AttendanceReportsView() {
                             <table className="w-full text-left text-sm whitespace-nowrap">
                               <thead className="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-600 uppercase tracking-wider">
                                 <tr>
-                                  <th className="px-5 py-3.5">Employee</th>
+                                  <th className="sticky left-0 z-20 bg-slate-50 px-5 py-3.5 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)] min-w-[200px]">Employee</th>
                                   <th className="px-5 py-3.5">Code</th>
                                   <th className="px-5 py-3.5">Department</th>
                                   <th className="px-5 py-3.5 text-center">Absence Count</th>
@@ -1472,8 +1472,8 @@ export function AttendanceReportsView() {
                                   absList.map((item, idx) => {
                                     const absKey = `abs-row-${item.employee?.id || item.employee?._id || item.employee?.employeeCode || 'emp'}-${idx}`;
                                     return (
-                                      <tr key={absKey} className="hover:bg-slate-50/70 transition-colors">
-                                        <td className="px-5 py-3.5 font-semibold text-slate-800">
+                                      <tr key={absKey} className="hover:bg-slate-50/70 transition-colors group">
+                                        <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50 transition-colors px-5 py-3.5 font-semibold text-slate-800 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)] min-w-[200px]">
                                           {item.employee?.fullName || item.employee?.name || 'Employee'}
                                         </td>
                                         <td className="px-5 py-3.5 font-mono text-slate-600">
@@ -1590,7 +1590,7 @@ export function AttendanceReportsView() {
                             <table className="w-full text-left text-sm whitespace-nowrap">
                               <thead className="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-600 uppercase tracking-wider">
                                 <tr>
-                                  <th className="px-5 py-3.5">Employee</th>
+                                  <th className="sticky left-0 z-20 bg-slate-50 px-5 py-3.5 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)] min-w-[200px]">Employee</th>
                                   <th className="px-5 py-3.5">Code</th>
                                   <th className="px-5 py-3.5">Department</th>
                                   <th className="px-5 py-3.5 text-center">Days with OT</th>
@@ -1609,8 +1609,8 @@ export function AttendanceReportsView() {
                                   filteredOvertime.map((item, idx) => {
                                     const otKey = `ot-row-${item.employee?.id || item.employee?._id || item.employee?.employeeCode || 'emp'}-${idx}`;
                                     return (
-                                      <tr key={otKey} className="hover:bg-slate-50/70 transition-colors">
-                                        <td className="px-5 py-3.5 font-semibold text-slate-800">
+                                      <tr key={otKey} className="hover:bg-slate-50/70 transition-colors group">
+                                        <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50 transition-colors px-5 py-3.5 font-semibold text-slate-800 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)] min-w-[200px]">
                                           {item.employee?.fullName || item.employee?.name || 'Employee'}
                                         </td>
                                         <td className="px-5 py-3.5 font-mono text-slate-600">

@@ -1,7 +1,7 @@
 // src/modules/attendance/attendance.controller.ts
 import { Request, Response, NextFunction } from 'express';
 import * as service from '../services/attendance.service.js';
-import { checkInSchema, checkOutSchema } from '../validators/attendance.validator.js';
+import { checkInSchema, checkOutSchema, hrPunchSchema } from '../validators/attendance.validator.js';
 
 export async function checkIn(req: Request, res: Response, next: NextFunction) {
   try {
@@ -54,3 +54,20 @@ export async function getTeam(req: Request, res: Response, next: NextFunction) {
     next(err);
   }
 }
+function hrAction(
+  action: (employeeId: string, input: ReturnType<typeof hrPunchSchema.parse>, ctx: NonNullable<Request['ctx']>) => Promise<unknown>,
+) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const parsed = hrPunchSchema.parse(req.body ?? {});
+      const record = await action(String(req.params.employeeId), parsed, req.ctx!);
+      res.status(200).json(record);
+    } catch (err) {
+      next(err);
+    }
+  };
+}
+
+export const hrCheckIn = hrAction(service.hrCheckIn);
+export const hrCheckOut = hrAction(service.hrCheckOut);
+export const hrResume = hrAction(service.hrResume);

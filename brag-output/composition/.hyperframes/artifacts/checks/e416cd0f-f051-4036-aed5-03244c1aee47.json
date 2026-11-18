@@ -1,0 +1,483 @@
+{
+  "ok": true,
+  "strict": false,
+  "browserSkipped": false,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 4,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "nested_structure_needs_subcomposition",
+        "severity": "warning",
+        "message": "<section id=\"scene-1\"> is a timeline element that contains nested <div id=\"scene-1-content\">. The timeline shows one row per top-level element, and the root composition is built only from sub-compositions.",
+        "selector": "#scene-1",
+        "dataAttributes": {},
+        "sourceFile": "C:\\Users\\Tarun\\Documents\\binjwa\\001\\code\\brag-output\\composition\\index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Move <section id=\"scene-1\"> and its contents into a sub-composition file and mount it with data-composition-src."
+      },
+      {
+        "code": "nested_structure_needs_subcomposition",
+        "severity": "warning",
+        "message": "<section id=\"scene-2\"> is a timeline element that contains nested <div id=\"scene-2-content\">. The timeline shows one row per top-level element, and the root composition is built only from sub-compositions.",
+        "selector": "#scene-2",
+        "dataAttributes": {},
+        "sourceFile": "C:\\Users\\Tarun\\Documents\\binjwa\\001\\code\\brag-output\\composition\\index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Move <section id=\"scene-2\"> and its contents into a sub-composition file and mount it with data-composition-src."
+      },
+      {
+        "code": "nested_structure_needs_subcomposition",
+        "severity": "warning",
+        "message": "<section id=\"scene-3\"> is a timeline element that contains nested <div id=\"scene-3-content\">. The timeline shows one row per top-level element, and the root composition is built only from sub-compositions.",
+        "selector": "#scene-3",
+        "dataAttributes": {},
+        "sourceFile": "C:\\Users\\Tarun\\Documents\\binjwa\\001\\code\\brag-output\\composition\\index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Move <section id=\"scene-3\"> and its contents into a sub-composition file and mount it with data-composition-src."
+      },
+      {
+        "code": "nested_structure_needs_subcomposition",
+        "severity": "warning",
+        "message": "<section id=\"scene-4\"> is a timeline element that contains nested <div id=\"scene-4-content\">. The timeline shows one row per top-level element, and the root composition is built only from sub-compositions.",
+        "selector": "#scene-4",
+        "dataAttributes": {},
+        "sourceFile": "C:\\Users\\Tarun\\Documents\\binjwa\\001\\code\\brag-output\\composition\\index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Move <section id=\"scene-4\"> and its contents into a sub-composition file and mount it with data-composition-src."
+      }
+    ],
+    "filesScanned": 1
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "layout": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "duration": 20,
+    "samples": [
+      1.111,
+      3.333,
+      5.556,
+      7.778,
+      10,
+      12.222,
+      14.444,
+      16.667,
+      18.889
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 0,
+    "truncated": false
+  },
+  "motion": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": false,
+    "samples": 0
+  },
+  "contrast": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "samples": [
+      1.111,
+      5.556,
+      10,
+      14.444,
+      18.889
+    ],
+    "checked": 26,
+    "passed": 26
+  },
+  "craft": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 3,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "first_frame_empty",
+        "severity": "warning",
+        "message": "Frame 0 shows only the background, and the first frame is the thumbnail on social players: have the title or key image already on screen at 0 s instead of entering from nothing; see references/review.md.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0
+      },
+      {
+        "code": "text_below_floor",
+        "severity": "warning",
+        "message": "Type floor is 28 px (2.6% of the 1080 px short side, what a phone can read) and 33 text elements stay under it for 0.5 s or more, the smallest \"Active Sites Managed\" at 15 px: set reading text to at least 28 px, or put data-layout-ignore on text that is texture rather than reading; see references/look.md.",
+        "text": "Active Sites Managed",
+        "selector": "#stat-left > div:nth-of-type(2)",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 329.03,
+          "y": 707.76,
+          "width": 156.41,
+          "height": 19.05
+        },
+        "time": 2.75,
+        "times": [
+          2.375,
+          2.375,
+          2.375,
+          2.75,
+          3,
+          5.5,
+          5.625,
+          5.625,
+          5.625,
+          5.625,
+          5.875,
+          5.875,
+          5.875,
+          5.875,
+          6,
+          6,
+          6,
+          6,
+          10.5,
+          10.75,
+          10.75,
+          10.75,
+          10.75,
+          10.75,
+          10.75,
+          10.75,
+          10.75,
+          10.75,
+          10.875,
+          10.875,
+          10.875,
+          15.375,
+          15.375
+        ],
+        "fontPx": 15,
+        "floorPx": 28,
+        "seconds": 2.25,
+        "elements": [
+          {
+            "selector": "#stat-left > div:nth-of-type(2)",
+            "text": "Active Sites Managed",
+            "fontPx": 15,
+            "time": 2.75,
+            "seconds": 2.25
+          },
+          {
+            "selector": "#stat-right > div:nth-of-type(2)",
+            "text": "Booking Accuracy",
+            "fontPx": 15,
+            "time": 3,
+            "seconds": 2
+          },
+          {
+            "selector": "div.banner-client",
+            "text": "Custom Enterprise Software for Media Octus",
+            "fontPx": 15.76,
+            "time": 2.375,
+            "seconds": 2.625
+          },
+          {
+            "selector": "#quote-panel > div:nth-of-type(1) > span:nth-of-type(1)",
+            "text": "3× Premium Billboard Sites (30 Days)",
+            "fontPx": 16,
+            "time": 10.75,
+            "seconds": 4.25
+          },
+          {
+            "selector": "#quote-panel > div:nth-of-type(1) > span:nth-of-type(2)",
+            "text": "₹5,20,000",
+            "fontPx": 16,
+            "time": 10.75,
+            "seconds": 4.25
+          },
+          {
+            "selector": "#quote-panel > div:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "Flex Printing & Night Illumination",
+            "fontPx": 16,
+            "time": 10.75,
+            "seconds": 4.25
+          },
+          {
+            "selector": "#quote-panel > div:nth-of-type(2) > span:nth-of-type(2)",
+            "text": "₹45,000",
+            "fontPx": 16,
+            "time": 10.75,
+            "seconds": 4.25
+          },
+          {
+            "selector": "#quote-panel > div:nth-of-type(3) > span:nth-of-type(1)",
+            "text": "Applicable GST (18%)",
+            "fontPx": 16,
+            "time": 10.75,
+            "seconds": 4.25
+          },
+          {
+            "selector": "#quote-panel > div:nth-of-type(3) > span:nth-of-type(2)",
+            "text": "₹1,01,700",
+            "fontPx": 16,
+            "time": 10.75,
+            "seconds": 4.25
+          },
+          {
+            "selector": "#pod-panel > div:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "Timestamp: 28 Oct 2026, 09:14 AM",
+            "fontPx": 16,
+            "time": 10.875,
+            "seconds": 4.125
+          },
+          {
+            "selector": "#pod-panel > div:nth-of-type(2) > span:nth-of-type(2)",
+            "text": "Ops Verified",
+            "fontPx": 16,
+            "time": 10.875,
+            "seconds": 4.125
+          },
+          {
+            "selector": "#inv-card-1 > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(2)",
+            "text": "40 × 20 ft",
+            "fontPx": 17,
+            "time": 5.625,
+            "seconds": 4.375
+          },
+          {
+            "selector": "#inv-card-1 > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2)",
+            "text": "190,000+",
+            "fontPx": 17,
+            "time": 5.625,
+            "seconds": 4.375
+          },
+          {
+            "selector": "#inv-card-2 > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(2)",
+            "text": "60 × 15 ft",
+            "fontPx": 17,
+            "time": 5.875,
+            "seconds": 4.125
+          },
+          {
+            "selector": "#inv-card-2 > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2)",
+            "text": "340,000+",
+            "fontPx": 17,
+            "time": 5.875,
+            "seconds": 4.125
+          },
+          {
+            "selector": "#inv-card-3 > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(2)",
+            "text": "4-Sided Pillar",
+            "fontPx": 17,
+            "time": 6,
+            "seconds": 4
+          },
+          {
+            "selector": "#inv-card-3 > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2)",
+            "text": "260,000+",
+            "fontPx": 17,
+            "time": 6,
+            "seconds": 4
+          },
+          {
+            "selector": "div.banner-by",
+            "text": "Engineered with Precision by",
+            "fontPx": 19.7,
+            "time": 2.375,
+            "seconds": 2.625
+          },
+          {
+            "selector": "div.banner-by > strong:nth-of-type(1)",
+            "text": "Binjwa IT Solutions",
+            "fontPx": 19.7,
+            "time": 2.375,
+            "seconds": 2.625
+          },
+          {
+            "selector": "#scene-2-content > p:nth-of-type(1)",
+            "text": "Real-time availability prevents double-booking across city-wide media assets",
+            "fontPx": 22,
+            "time": 5.5,
+            "seconds": 4.5
+          },
+          {
+            "selector": "#scene-3-content > p:nth-of-type(1)",
+            "text": "Generate deal quotations in seconds and verify physical site installations",
+            "fontPx": 22,
+            "time": 10.5,
+            "seconds": 4.5
+          },
+          {
+            "selector": "p.client-delivered",
+            "text": "Engineered for",
+            "fontPx": 23.14,
+            "time": 15.375,
+            "seconds": 4.625
+          },
+          {
+            "selector": "p.client-delivered > span:nth-of-type(1)",
+            "text": "Media Octus",
+            "fontPx": 23.14,
+            "time": 15.375,
+            "seconds": 4.625
+          },
+          {
+            "selector": "#inv-card-1 > h3:nth-of-type(1)",
+            "text": "Prime Highway Unipole — North Sector",
+            "fontPx": 24,
+            "time": 5.625,
+            "seconds": 4.375
+          },
+          {
+            "selector": "#inv-card-1 > div:nth-of-type(3) > span:nth-of-type(2)",
+            "text": "₹1,80,000",
+            "fontPx": 24,
+            "time": 5.625,
+            "seconds": 4.375
+          },
+          {
+            "selector": "#inv-card-2 > h3:nth-of-type(1)",
+            "text": "Airport Expressway Double Gantry",
+            "fontPx": 24,
+            "time": 5.875,
+            "seconds": 4.125
+          },
+          {
+            "selector": "#inv-card-2 > div:nth-of-type(3) > span:nth-of-type(2)",
+            "text": "₹3,40,000",
+            "fontPx": 24,
+            "time": 5.875,
+            "seconds": 4.125
+          },
+          {
+            "selector": "#inv-card-3 > h3:nth-of-type(1)",
+            "text": "Central Metro Interchange Pillars",
+            "fontPx": 24,
+            "time": 6,
+            "seconds": 4
+          },
+          {
+            "selector": "#inv-card-3 > div:nth-of-type(3) > span:nth-of-type(2)",
+            "text": "₹95,000",
+            "fontPx": 24,
+            "time": 6,
+            "seconds": 4
+          },
+          {
+            "selector": "div.calc-total > span:nth-of-type(1)",
+            "text": "Total Campaign Value",
+            "fontPx": 24,
+            "time": 10.75,
+            "seconds": 4.25
+          },
+          {
+            "selector": "div.calc-total > span:nth-of-type(2)",
+            "text": "₹6,66,700",
+            "fontPx": 24,
+            "time": 10.75,
+            "seconds": 4.25
+          },
+          {
+            "selector": "#quote-panel > h3:nth-of-type(1)",
+            "text": "Client Campaign: Festive 2026",
+            "fontPx": 26,
+            "time": 10.75,
+            "seconds": 4.25
+          },
+          {
+            "selector": "#pod-panel > h3:nth-of-type(1)",
+            "text": "On-Site Mounting Audit",
+            "fontPx": 26,
+            "time": 10.875,
+            "seconds": 4.125
+          }
+        ]
+      },
+      {
+        "code": "dead_stretch",
+        "severity": "warning",
+        "message": "Nothing on screen changes for 3.38 s (6.50–9.88 s): start the next move within 3 s, or put data-hold on the element whose stillness is deliberate; see references/motion.md.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 6.5,
+        "seconds": 3.375,
+        "floorSeconds": 3,
+        "until": 9.875
+      }
+    ],
+    "enabled": true,
+    "step": 0.125,
+    "samples": 160
+  },
+  "audio": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "hdr": {
+    "autoPromotion": null,
+    "inspection": "available"
+  },
+  "snapshots": {
+    "enabled": false,
+    "files": [],
+    "times": [],
+    "findingFiles": []
+  }
+}

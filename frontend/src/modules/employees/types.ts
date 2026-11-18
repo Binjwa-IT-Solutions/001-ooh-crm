@@ -23,6 +23,16 @@ export type Department = (typeof DEPARTMENTS)[number];
 export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
 export type EmployeeStatus = (typeof EMPLOYEE_STATUSES)[number];
 
+export interface EmployeeDocument {
+  id: string;
+  name: string;
+  fileKey: string;
+  fileUrl?: string;
+  fileSize?: number;
+  mimeType?: string;
+  uploadedAt?: string;
+}
+
 export interface Employee {
   id: string;
   employeeCode: string;
@@ -30,6 +40,7 @@ export interface Employee {
   workEmail: string;
   personalEmail?: string;
   mobile: string;
+  personalMobile?: string;
   dateOfBirth: string | null;
   department: Department | string;
   designation: string;
@@ -43,6 +54,7 @@ export interface Employee {
   isProfileComplete?: boolean;
   emergencyContact?: { name?: string; relationship?: string; mobile?: string };
   address?: string;
+  documents?: EmployeeDocument[];
   createdAt: string;
   updatedAt: string;
 
@@ -202,6 +214,7 @@ export interface EmployeeFormValues {
   workEmail: string;
   personalEmail: string;
   mobile: string;
+  personalMobile: string;
   dateOfBirth: string;
   department: Department | '';
   designation: string;

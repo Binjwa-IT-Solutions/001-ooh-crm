@@ -27,22 +27,71 @@ export const employeeIdParamSchema = z.object({
 // Leave Type CRUD
 // ---------------------------------------------------------------------------
 
-export const createLeaveTypeSchema = z.object({
+const halfDays = (label: string) =>
+  z
+    .number()
+    .min(0, `${label} can't be negative`)
+    .max(366)
+    .refine((n) => Number.isInteger(n * 2), `${label} must be in whole or half days`);
+
+const leaveTypeFields = {
   name: z.string().trim().min(2, 'Name must be at least 2 characters').max(100),
-  code: z.string().trim().min(1, 'Code is required').max(10).toUpperCase(),
-  annualQuota: z.number().int().min(0, 'Quota must be at least 0').nullable(),
+  /** Optional — generated from the name when left out. */
+  code: z.string().trim().min(1).max(10).toUpperCase().optional(),
+  /** Monthly: days credited every month · Yearly: days for the year · Unlimited: no limit */
+  quotaPeriod: z.enum(['Monthly', 'Yearly', 'Unlimited']),
+  quotaDays: halfDays('Days'),
   carryForward: z.boolean().default(false),
+  /** 0 = no limit */
   maxCarryForward: z.number().int().min(0).default(0),
+  /** Carried days must be used within N months of the new year (null = whole year). */
+  carryForwardExpiryMonths: z.number().int().min(1).max(12).nullable().default(null),
   encashable: z.boolean().default(false),
   requiresDocument: z.boolean().default(false),
   status: z.enum(['Active', 'Inactive']).default('Active'),
-});
+  /** Derived on save from quotaPeriod/quotaDays; accepted for older clients. */
+  annualQuota: z.number().int().min(0).nullable().optional(),
+};
+
+/** Accepts the older `annualQuota` shape too (number = yearly, null = unlimited). */
+function fromLegacy(input: unknown): unknown {
+  if (input && typeof input === 'object' && !('quotaPeriod' in input) && 'annualQuota' in input) {
+    const { annualQuota } = input as { annualQuota: number | null };
+    return annualQuota == null
+      ? { ...input, quotaPeriod: 'Unlimited', quotaDays: 0 }
+      : { ...input, quotaPeriod: 'Yearly', quotaDays: annualQuota };
+  }
+  return input;
+}
+
+const quotaRule = (v: { quotaPeriod?: string; quotaDays?: number }) =>
+  v.quotaPeriod === 'Unlimited' || v.quotaPeriod === undefined || (v.quotaDays ?? 0) > 0;
+const quotaMessage = { message: 'Enter how many days this leave gives', path: ['quotaDays'] };
+
+export const createLeaveTypeSchema = z.preprocess(
+  fromLegacy,
+  z.object(leaveTypeFields).refine(quotaRule, quotaMessage)
+);
 
 export type CreateLeaveTypeInput = z.infer<typeof createLeaveTypeSchema>;
 
-export const updateLeaveTypeSchema = createLeaveTypeSchema.partial().extend({
-  status: z.enum(['Active', 'Inactive']).optional(),
-});
+export const updateLeaveTypeSchema = z.preprocess(
+  fromLegacy,
+  z
+    .object({
+      name: leaveTypeFields.name.optional(),
+      code: leaveTypeFields.code,
+      quotaPeriod: leaveTypeFields.quotaPeriod.optional(),
+      quotaDays: halfDays('Days').optional(),
+      carryForward: z.boolean().optional(),
+      maxCarryForward: z.number().int().min(0).optional(),
+      carryForwardExpiryMonths: z.number().int().min(1).max(12).nullable().optional(),
+      encashable: z.boolean().optional(),
+      requiresDocument: z.boolean().optional(),
+      status: z.enum(['Active', 'Inactive']).optional(),
+    })
+    .refine(quotaRule, quotaMessage)
+);
 
 export type UpdateLeaveTypeInput = z.infer<typeof updateLeaveTypeSchema>;
 
@@ -75,6 +124,11 @@ export const getBalanceQuerySchema = z.object({
 });
 
 export type GetBalanceQuery = z.infer<typeof getBalanceQuerySchema>;
+
+/** Same as above, but the year defaults to the current one. */
+export const summaryQuerySchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2100).default(() => new Date().getFullYear()),
+});
 
 // ---------------------------------------------------------------------------
 // Leave Request CRUD

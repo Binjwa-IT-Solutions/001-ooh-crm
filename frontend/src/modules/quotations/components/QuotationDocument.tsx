@@ -15,6 +15,8 @@ import {
 import type { Quotation } from "../types";
 import { quotationsApi } from "../api";
 import ShareProposalModal from "./ShareProposalModal";
+import { useCompanySignature } from "@/shared/document-signature";
+import { useCompanyAddressLines } from '@/shared/company-profile';
 
 function PrinterIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
   return (
@@ -97,6 +99,8 @@ function numberToWordsINR(amountInPaise: number): string {
 }
 
 export default function QuotationDocument({ quotation, onBack, onNext, onRefresh }: Props) {
+  const companySignature = useCompanySignature();
+  const companyAddressLines = useCompanyAddressLines();
   const [downloading, setDownloading] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -213,7 +217,7 @@ export default function QuotationDocument({ quotation, onBack, onNext, onRefresh
               </span>
             </div>
             <div className="mt-1 text-xs text-gray-500">
-              Media Octus Private Limited &bull; Indore, Madhya Pradesh
+              Media Octus Private Limited &bull; {companyAddressLines.join(', ')}
             </div>
             <div className="text-[11px] text-gray-400">
               Web: www.mediaoctus.com &bull; Email: sales@mediaoctus.com
@@ -412,14 +416,26 @@ export default function QuotationDocument({ quotation, onBack, onNext, onRefresh
 
           <div className="text-right">
             <div className="text-gray-400 text-[10px] uppercase font-bold tracking-wider">For Media Octus Pvt. Ltd.:</div>
-            {quotation.signatureImage ? (
-              <img src={quotation.signatureImage} alt="Signature" className="h-12 ml-auto my-1 object-contain" />
-            ) : (
-              <div className="h-10"></div>
-            )}
-            <div className="border-t border-gray-300 dark:border-slate-700 w-48 pt-1 text-[11px] text-gray-700 dark:text-gray-300 font-semibold text-center ml-auto">
-              {quotation.signatoryName || "Authorized Signatory"}
-            </div>
+            {(() => {
+              // Quote's own signature first, then the company one (Settings → Document signature)
+              const hidden = quotation.hideSignature;
+              const sigImg = hidden ? null : quotation.signatureImage || companySignature?.signatureImage;
+              const stamp = hidden ? null : quotation.stampImage ?? companySignature?.stampImage;
+              const name = hidden ? null : quotation.signatoryName || companySignature?.signatoryName;
+              const designation = quotation.signatoryDesignation || companySignature?.signatoryDesignation || "Authorized Signatory";
+              return (
+                <>
+                  <div className="h-14 my-1 flex items-end justify-end gap-2">
+                    {stamp && <img src={stamp} alt="Company stamp" className="h-14 w-14 object-contain opacity-90" />}
+                    {sigImg && <img src={sigImg} alt="Signature" className="h-12 max-w-[160px] object-contain" />}
+                  </div>
+                  <div className="border-t border-gray-300 dark:border-slate-700 w-48 pt-1 text-[11px] text-gray-700 dark:text-gray-300 font-semibold text-center ml-auto">
+                    {name || "Authorized Signatory"}
+                    {name && <div className="text-[10px] font-normal text-gray-500">{designation}</div>}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       </div>

@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { requireAuth } from '../../core/auth/auth-middleware.js';
 import { asyncHandler } from '../../core/http/asyncHandler.js';
 import { requirePermission } from '../../core/rbac/index.js';
+import { uploadSingle } from '../../core/files/index.js';
 import { EmployeesController } from './employees.controller.js';
 import { PayrollController } from '../payroll/payroll.controller.js';
 
@@ -138,6 +139,25 @@ router.delete(
   '/:id',
   requirePermission('employees.manage'),
   asyncHandler(EmployeesController.deactivate),
+);
+
+router.post(
+  '/:id/documents',
+  requirePermission('employees.manage'),
+  uploadSingle('file', [
+    'application/pdf',
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/jpg',
+  ]),
+  asyncHandler(EmployeesController.uploadDocument),
+);
+
+router.delete(
+  '/:id/documents/:docId',
+  requirePermission('employees.manage'),
+  asyncHandler(EmployeesController.deleteDocument),
 );
 
 export default router;

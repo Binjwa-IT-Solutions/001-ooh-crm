@@ -1,6 +1,11 @@
 import type { Request, Response } from 'express';
 import { candidateService } from './candidates.service.js';
-import { createCandidateSchema, updateCandidateSchema, listCandidatesSchema } from './candidates.validator.js';
+import {
+  createCandidateSchema,
+  updateCandidateSchema,
+  listCandidatesSchema,
+  interviewRoundInputSchema,
+} from './candidates.validator.js';
 
 export const candidatesController = {
   async create(req: Request, res: Response) {
@@ -24,7 +29,29 @@ export const candidatesController = {
   async update(req: Request, res: Response) {
     const id = req.params.id as string;
     const input = updateCandidateSchema.parse(req.body);
-    const candidate = await candidateService.update(id, input, req.ctx!);
+    const candidate = await candidateService.update(id, input, req.file, req.ctx!);
+    res.json({ data: candidate });
+  },
+
+  async addRound(req: Request, res: Response) {
+    const id = req.params.id as string;
+    const input = interviewRoundInputSchema.parse(req.body);
+    const candidate = await candidateService.addRound(id, input, req.ctx!);
+    res.status(201).json({ data: candidate });
+  },
+
+  async updateRound(req: Request, res: Response) {
+    const id = req.params.id as string;
+    const roundId = req.params.roundId as string;
+    const input = interviewRoundInputSchema.partial().parse(req.body);
+    const candidate = await candidateService.updateRound(id, roundId, input, req.ctx!);
+    res.json({ data: candidate });
+  },
+
+  async deleteRound(req: Request, res: Response) {
+    const id = req.params.id as string;
+    const roundId = req.params.roundId as string;
+    const candidate = await candidateService.deleteRound(id, roundId, req.ctx!);
     res.json({ data: candidate });
   },
 };

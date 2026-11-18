@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/shared/auth/auth-context';
 import { useLeads } from '@/modules/leads/hooks/use-leads';
 import { leadsApi } from '@/modules/leads/api';
@@ -282,20 +283,58 @@ function SearchableCitySelect({
   );
 }
 
-export default function LeadsPage() {
+function LeadsContent() {
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const isManagerOrAdmin = ['admin', 'manager'].includes(user?.role?.toLowerCase() || '');
-  const [activeTab, setActiveTab] = useState<'my-leads' | 'unclaimed' | 'all' | 'rejected'>('my-leads');
+
+  const urlStatus = searchParams?.get('status') as LeadStatus | null;
+  const urlTab = searchParams?.get('tab') as 'my-leads' | 'unclaimed' | 'all' | 'rejected' | null;
+  const urlSearch = searchParams?.get('search');
+  const urlOverdue = searchParams?.get('overdue') === 'true';
+
+  const [activeTab, setActiveTab] = useState<'my-leads' | 'unclaimed' | 'all' | 'rejected'>(() => {
+    if (urlTab && ['my-leads', 'unclaimed', 'all', 'rejected'].includes(urlTab)) {
+      return urlTab;
+    }
+    return 'my-leads';
+  });
 
   // Filters
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<LeadStatus | ''>('');
+  const [search, setSearch] = useState(() => urlSearch || '');
+  const [status, setStatus] = useState<LeadStatus | ''>(() => urlStatus || '');
   const [city, setCity] = useState('');
   const [source, setSource] = useState<LeadSource | ''>('');
-  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [overdueOnly, setOverdueOnly] = useState(() => urlOverdue);
+  const [contacted, setContacted] = useState<'' | 'yes' | 'no'>('');
   const [sortBy, setSortBy] = useState<'nextActionDate' | 'createdAt' | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
+
+  // Sync state when URL params change
+  useEffect(() => {
+    const s = searchParams?.get('status') as LeadStatus | null;
+    const t = searchParams?.get('tab') as 'my-leads' | 'unclaimed' | 'all' | 'rejected' | null;
+    const q = searchParams?.get('search');
+    const o = searchParams?.get('overdue');
+
+    if (s !== null) {
+      setStatus(s || '');
+      setPage(1);
+    }
+    if (t && ['my-leads', 'unclaimed', 'all', 'rejected'].includes(t)) {
+      setActiveTab(t);
+      setPage(1);
+    }
+    if (q !== null) {
+      setSearch(q || '');
+      setPage(1);
+    }
+    if (o !== null) {
+      setOverdueOnly(o === 'true');
+      setPage(1);
+    }
+  }, [searchParams]);
 
   const [claimedIds, setClaimedIds] = useState<string[]>([]);
   const [toastList, setToastList] = useState<Array<{ id: number; message: string; type?: 'success' | 'error' }>>([]);
@@ -340,6 +379,7 @@ export default function LeadsPage() {
     ...(selectedAgentId && activeTab === 'all' ? { assignedTo: selectedAgentId } : {}),
     ...(overdueOnly && activeTab !== 'unclaimed' && activeTab !== 'rejected' ? { overdueOnly: true } : {}),
     ...(sortBy ? { sortBy, sortDir } : {}),
+    ...(contacted && activeTab !== 'unclaimed' && activeTab !== 'rejected' ? { contacted } : {}),
   };
 
   const pollInterval = activeTab === 'unclaimed' ? 15000 : undefined;
@@ -525,6 +565,7 @@ export default function LeadsPage() {
       const queryParams = new URLSearchParams();
       if (activeTab === 'unclaimed') queryParams.set('unassigned', 'true');
       if (activeTab === 'my-leads') queryParams.set('assignedToMe', 'true');
+      if (contacted && activeTab !== 'unclaimed' && activeTab !== 'rejected') queryParams.set('contacted', contacted);
       if (activeTab === 'rejected') queryParams.set('status', 'Rejected');
       else if (status) queryParams.set('status', status);
       if (city) queryParams.set('city', city);
@@ -783,6 +824,46 @@ export default function LeadsPage() {
               )}
             </button>
 
+            {/* Contacted / not contacted */}
+            <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-0.5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+              {([
+                { value: '', label: 'All' },
+                { value: 'no', label: 'Not contacted' },
+                { value: 'yes', label: 'Contacted' },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value || 'all'}
+                  type="button"
+                  onClick={() => {
+                    setContacted(opt.value);
+                    setPage(1);
+                  }}
+                  title={
+                    opt.value === 'no'
+                      ? 'Still New — no call or follow-up logged yet'
+                      : opt.value === 'yes'
+                        ? 'At least one call / follow-up logged'
+                        : undefined
+                  }
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+                    contacted === opt.value
+                      ? opt.value === 'no'
+                        ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
+                        : opt.value === 'yes'
+                          ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+                          : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100'
+                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {activeTab === 'my-leads' && !sortBy && (
+              <span className="text-[11px] text-slate-400 dark:text-slate-500">Sorted: most recently claimed first</span>
+            )}
+
             {sortBy === 'nextActionDate' && (
               <button
                 type="button"
@@ -796,11 +877,12 @@ export default function LeadsPage() {
             )}
           </div>
 
-          {(overdueOnly || sortBy || search || status || city || source) && (
+          {(overdueOnly || sortBy || search || status || city || source || contacted) && (
             <button
               type="button"
               onClick={() => {
                 setOverdueOnly(false);
+                setContacted('');
                 setSortBy('');
                 setSortDir('asc');
                 setSearch('');
@@ -1450,5 +1532,19 @@ export default function LeadsPage() {
         ))}
       </div>
     </div>
+  );
+}
+
+export default function LeadsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-48 items-center justify-center">
+          <Spinner label="Loading Leads..." />
+        </div>
+      }
+    >
+      <LeadsContent />
+    </Suspense>
   );
 }

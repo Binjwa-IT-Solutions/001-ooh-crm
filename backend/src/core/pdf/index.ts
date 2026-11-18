@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import PDFDocument from 'pdfkit';
+import { COMPANY } from '../../config/company.js';
 
 /**
  * PDF GENERATION SCAFFOLD.
@@ -28,12 +29,26 @@ export interface PdfBrand {
   gstin?: string;
 }
 
-/** Replace with the client's real details once branding is signed off. */
+/** Default letterhead for generated PDFs — address comes from config/company.ts. */
 export const DEFAULT_BRAND: PdfBrand = {
-  companyName: 'Media Octus',
-  addressLines: ['Mumbai, Maharashtra', 'India'],
+  companyName: COMPANY.name,
+  addressLines: [...COMPANY.addressLines],
   email: 'hello@mediaoctus.com',
 };
+
+/** Decodes a `data:image/...;base64,` URL (or reads a file path) into a buffer PDFKit can draw. */
+export function imageBuffer(source?: string | null): Buffer | null {
+  if (!source) return null;
+  try {
+    if (source.startsWith('data:image/')) {
+      return Buffer.from(source.replace(/^data:image\/[\w+.-]+;base64,/, ''), 'base64');
+    }
+    if (fs.existsSync(source)) return fs.readFileSync(source);
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
 
 const PAGE_MARGIN = 48;
 const INK = '#0f172a';
@@ -344,6 +359,8 @@ export interface QuotationBillBookPdfOptions {
     image?: string;
     signatoryName?: string;
     signatoryDesignation?: string;
+    /** Company stamp/seal, drawn beside the signature. */
+    stamp?: string;
   };
 }
 
@@ -429,10 +446,7 @@ export function renderQuotationBillBookPdf(options: QuotationBillBookPdfOptions)
 
   const seller = {
     companyName: options.seller?.companyName || 'Media Octus',
-    addressLines: options.seller?.addressLines || [
-      '4th floor Gargi Aura Building near Scheme no114',
-      'Indore, Madhya Pradesh 452010',
-    ],
+    addressLines: options.seller?.addressLines || [...COMPANY.addressLines],
     gstin: options.seller?.gstin || '23DRHPS3516P1ZZ',
     pan: options.seller?.pan || 'DRHPS3516P',
     email: options.seller?.email || 'mediaoctus005@gmail.com',
@@ -806,24 +820,23 @@ export function renderQuotationBillBookPdf(options: QuotationBillBookPdfOptions)
       );
 
       let imageRendered = false;
-      if (options.signature?.image) {
+      const stampBuf = imageBuffer(options.signature?.stamp);
+      if (stampBuf) {
         try {
-          let sigBuf: Buffer | null = null;
-          const sigStr = options.signature.image;
-          if (sigStr.startsWith('data:image/')) {
-            const base64Data = sigStr.replace(/^data:image\/\w+;base64,/, '');
-            sigBuf = Buffer.from(base64Data, 'base64');
-          } else if (fs.existsSync(sigStr)) {
-            sigBuf = fs.readFileSync(sigStr);
-          }
-          if (sigBuf) {
-            const imgWidth = 72;
-            const imgHeight = 24;
-            const imgX = signBoxX + (signBoxWidth - imgWidth) / 2;
-            const imgY = signY + 14;
-            doc.image(sigBuf, imgX, imgY, { fit: [imgWidth, imgHeight], align: 'center' });
-            imageRendered = true;
-          }
+          doc.image(stampBuf, signBoxX + 4, signY + 12, { fit: [30, 30] });
+        } catch {
+          // ignore a broken stamp image
+        }
+      }
+      const sigBuf = imageBuffer(options.signature?.image);
+      if (sigBuf) {
+        try {
+          const imgWidth = 72;
+          const imgHeight = 24;
+          const imgX = signBoxX + (signBoxWidth - imgWidth) / 2;
+          const imgY = signY + 14;
+          doc.image(sigBuf, imgX, imgY, { fit: [imgWidth, imgHeight], align: 'center' });
+          imageRendered = true;
         } catch {
           // ignore error and render text fallback
         }

@@ -42,6 +42,8 @@ export interface IQuotation extends BaseDocument {
   signatureImage?: string;
   signatoryName?: string;
   signatoryDesignation?: string;
+  /** true = print no signature on this quote (the "show signature" switch was off). */
+  hideSignature?: boolean;
   sites: IQuotationLine[];
   subtotal: number; // paise
   taxPercent: number;
@@ -99,6 +101,7 @@ const quotationSchema = new Schema<IQuotation>(
     signatureImage: { type: String },
     signatoryName: { type: String, trim: true },
     signatoryDesignation: { type: String, trim: true },
+    hideSignature: { type: Boolean, default: false },
     sites: { type: [quotationLineSchema], default: [] },
     subtotal: { type: Number, required: true, default: 0 },
     taxPercent: { type: Number, required: true, default: 18 },

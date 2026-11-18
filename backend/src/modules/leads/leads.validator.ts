@@ -203,7 +203,9 @@ export const listLeadsSchema = z.object({
   assignedToMe: z.coerce.boolean().optional(),
   unassigned: z.coerce.boolean().optional(),
   overdueOnly: z.coerce.boolean().optional(),
-  sortBy: z.enum(['receivedAt', 'createdAt', 'companyName', 'source', 'nextActionDate']).optional(),
+  sortBy: z.enum(['receivedAt', 'createdAt', 'claimedAt', 'companyName', 'source', 'nextActionDate']).optional(),
+  /** yes = a follow-up has been logged (or the lead moved past New); no = still untouched */
+  contacted: z.enum(['yes', 'no']).optional(),
   sortDir: z.enum(['asc', 'desc']).optional(),
   fromDate: z.coerce.date().optional(),
   toDate: z.coerce.date().optional(),

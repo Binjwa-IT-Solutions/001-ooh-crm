@@ -3,7 +3,6 @@
 import React, { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/shared/auth/auth-context';
-import { AttendanceWidget } from '@/modules/hr/components/attendance-widget';
 import { useAdminDashboard } from '@/modules/dashboard/hooks/use-dashboard';
 import type {
   MoneyMovementItem,
@@ -41,7 +40,6 @@ import {
   ShoppingCart,
   Megaphone,
   RefreshCw,
-  ShieldCheck,
   Calendar,
   Lock,
   CheckCircle2,
@@ -236,89 +234,6 @@ export function FinanceDashboard() {
           </button>
         </div>
       )}
-
-      {/* 2. Attendance & Role Authority Snapshot */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        <div className="lg:col-span-1">
-          <div className="space-y-2">
-            <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider px-1">
-              My Attendance & Punch
-            </h2>
-            <AttendanceWidget />
-          </div>
-        </div>
-
-        <div className="lg:col-span-2">
-          <div className="space-y-2">
-            <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider px-1">
-              Finance Authority & Scoped Access
-            </h2>
-            <div className="bg-white rounded-xl border border-gray-200/80 p-5 shadow-xs space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3.5">
-                <div>
-                  <h3 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-[#6E1D1D]" />
-                    <span>Authorized Finance Operations ({user.permissions.length} Permissions)</span>
-                  </h3>
-                  <p className="text-xs text-gray-500 font-medium mt-0.5">
-                    Authorized actions are enforced server-side. Operational mutations are strictly blocked.
-                  </p>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">
-                    {user.email}
-                  </span>
-                </div>
-              </div>
-
-              {/* Fast Jump Links */}
-              <div className="flex flex-wrap items-center gap-3 text-xs font-semibold">
-                <span className="text-gray-400">Quick Navigation:</span>
-                <Link
-                  href="/finance/invoices"
-                  className="px-2.5 py-1 rounded-lg bg-[#F8E6E6] text-[#6E1D1D] hover:bg-[#F0D0D0] transition-colors"
-                >
-                  Invoices & Bills
-                </Link>
-                <Link
-                  href="/finance/payments-in"
-                  className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 hover:bg-emerald-100 transition-colors"
-                >
-                  Client Payments
-                </Link>
-                <Link
-                  href="/finance/payments-out"
-                  className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-800 hover:bg-rose-100 transition-colors"
-                >
-                  Vendor Payouts
-                </Link>
-                <Link
-                  href="/purchase-orders"
-                  className="px-2.5 py-1 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
-                >
-                  Purchase Orders
-                </Link>
-                {canViewProfit && (
-                  <Link
-                    href="/finance/profit-dashboard"
-                    className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-800 hover:bg-indigo-100 transition-colors"
-                  >
-                    Profit Analytics
-                  </Link>
-                )}
-                {canViewPayroll && (
-                  <Link
-                    href="/finance/payroll"
-                    className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-800 hover:bg-purple-100 transition-colors"
-                  >
-                    Payroll
-                  </Link>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* SECTION A: Financial Summary */}
       <section className="space-y-4">

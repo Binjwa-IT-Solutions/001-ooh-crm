@@ -3,19 +3,18 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Card, Badge, Spinner, Button, Alert, Field, SelectField, TextAreaField, EmptyState, Dropdown, DatePicker } from '@/shared/ui';
+import { Card, Badge, Spinner, Button, Alert, Field, SelectField, EmptyState, DatePicker } from '@/shared/ui';
 import {
   useLeaveBalance,
   useMyLeaveRequests,
   useTeamLeaveRequests,
-  useHolidays,
   useLeaveTypes,
-  useCalendarLeaves,
 } from '@/modules/hr/hooks/use-leave';
-import { leaveApi, holidayApi } from '@/modules/hr/api';
+import { leaveApi } from '@/modules/hr/api';
 import { useAuth } from '@/shared/auth/auth-context';
-import type { LeaveType } from '@/modules/hr/types';
+import type { LeaveType, QuotaPeriod } from '@/modules/hr/types';
 import { toErrorMessage } from '@/shared/api/errors';
+import { DecisionNote, HolidayCalendar } from '@/modules/hr/components/holiday-calendar';
 
 function LeaveTabsContent() {
   const { user, hasPermission } = useAuth();
@@ -95,7 +94,7 @@ function LeaveTabsContent() {
           <MyLeavesTab showApplyForm={showApplyForm} setShowApplyForm={setShowApplyForm} />
         )}
         {activeTab === 'approvals' && canManageLeave && <LeaveApprovalsTab />}
-        {activeTab === 'calendar' && <HolidayCalendarTab />}
+        {activeTab === 'calendar' && <HolidayCalendar />}
         {activeTab === 'types' && (hasPermission('leave.self') || canManageLeave) && <LeaveTypesTab />}
       </div>
     </div>
@@ -356,34 +355,70 @@ function MyLeavesTab({ showApplyForm, setShowApplyForm }: MyLeavesTabProps) {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {balance?.map((b) => (
-            <Card key={b.leaveTypeId} className="p-6">
-              <h3 className="font-semibold text-slate-800 text-lg mb-4">{b.leaveTypeName}</h3>
-              <div className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">Allocated:</span>
-                  <span className="font-medium text-slate-700">{b.allocated} days</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">Used:</span>
-                  <span className="font-medium text-slate-700">{b.used} days</span>
-                </div>
-                {b.carriedForward > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-500">Carried Forward:</span>
-                    <span className="font-medium text-slate-700">{b.carriedForward} days</span>
+          {balance?.map((b) => {
+            const credit =
+              b.unlimited || b.quotaPeriod === 'Unlimited'
+                ? 'No limit'
+                : b.quotaPeriod === 'Monthly'
+                  ? `${b.quotaDays} day${b.quotaDays === 1 ? '' : 's'} added every month`
+                  : `${b.yearEntitlement ?? b.allocated} days this year`;
+            return (
+              <Card key={b.leaveTypeId} className="p-6">
+                <h3 className="font-semibold text-slate-800 text-lg">{b.leaveTypeName}</h3>
+                <p className="text-xs text-slate-500 mb-4">{credit}</p>
+                {b.unlimited ? (
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">Used this year:</span>
+                      <span className="font-medium text-slate-700">{b.used} days</span>
+                    </div>
+                    <div className="pt-3 border-t border-slate-100 flex justify-between text-base font-semibold">
+                      <span className="text-slate-800">Available:</span>
+                      <span className="text-slate-700">Unlimited</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">{b.quotaPeriod === 'Monthly' ? 'Credited so far:' : 'Allocated:'}</span>
+                      <span className="font-medium text-slate-700">
+                        {b.allocated - (b.carriedExpired ? 0 : b.carriedForward)} days
+                        {b.quotaPeriod === 'Monthly' && b.yearEntitlement != null && (
+                          <span className="text-slate-400"> of {b.yearEntitlement}</span>
+                        )}
+                      </span>
+                    </div>
+                    {b.carriedForward > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-500">Carried from last year:</span>
+                        <span className={`font-medium ${b.carriedExpired ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                          {b.carriedForward} days
+                        </span>
+                      </div>
+                    )}
+                    {b.carriedForward > 0 && b.carriedExpiresOn && (
+                      <p className={`text-[11px] ${b.carriedExpired ? 'text-slate-400' : 'text-amber-700'}`}>
+                        {b.carriedExpired
+                          ? `Carried days expired on ${new Date(b.carriedExpiresOn).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
+                          : `Use carried days by ${new Date(b.carriedExpiresOn).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`}
+                      </p>
+                    )}
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">Used:</span>
+                      <span className="font-medium text-slate-700">{b.used} days</span>
+                    </div>
+                    <div className="pt-3 border-t border-slate-100 flex justify-between text-base font-semibold">
+                      <span className="text-slate-800">Remaining:</span>
+                      <span className={b.balance > 0 ? 'text-green-600' : 'text-red-500'}>{b.balance} days</span>
+                    </div>
                   </div>
                 )}
-                <div className="pt-3 border-t border-slate-100 flex justify-between text-base font-semibold">
-                  <span className="text-slate-800">Remaining:</span>
-                  <span className={b.balance > 0 ? 'text-green-600' : 'text-red-500'}>{b.balance} days</span>
-                </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
           {(!balance || balance.length === 0) && (
             <div className="col-span-full text-slate-500 bg-slate-50 p-6 rounded-xl text-center">
-              No leave balances found.
+              No leave types have been set up yet. HR can add them under Leave Types.
             </div>
           )}
         </div>
@@ -434,6 +469,7 @@ function MyLeavesTab({ showApplyForm, setShowApplyForm }: MyLeavesTabProps) {
                     <td className="px-4 py-3 font-medium text-slate-800">{req.days}</td>
                     <td className="px-4 py-3">
                       <LeaveStatusBadge status={req.status} />
+                      <DecisionNote req={req} className="mt-1" />
                       {req.status === 'Rejected' && req.rejectionReason && (
                         <div className="mt-1 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded p-1.5 max-w-[200px] break-words">
                           <span className="font-semibold">Reason:</span> {req.rejectionReason}
@@ -631,6 +667,7 @@ function LeaveApprovalsTab() {
                   </td>
                   <td className="px-4 py-3">
                     <LeaveStatusBadge status={req.status} />
+                    <DecisionNote req={req} className="mt-1" />
                     {req.status === 'Rejected' && req.rejectionReason && (
                       <div className="mt-1 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded p-1.5 max-w-[200px] break-words">
                         <span className="font-semibold">Reason:</span> {req.rejectionReason}
@@ -688,10 +725,8 @@ function LeaveApprovalsTab() {
                           </Button>
                         </div>
                       )
-                    ) : req.status === 'Approved' ? (
-                      <span className="text-xs font-medium text-emerald-700">Approved</span>
-                    ) : req.status === 'Rejected' ? (
-                      <span className="text-xs font-medium text-rose-700">Rejected</span>
+                    ) : req.status === 'Approved' || req.status === 'Rejected' ? (
+                      <span className="text-xs text-slate-400">Done</span>
                     ) : (
                       <span className="text-xs text-slate-400 italic">Cancelled</span>
                     )}
@@ -796,527 +831,54 @@ function LeaveApprovalsTab() {
   );
 }
 
-// ------------------------------------------------------------- Holiday Calendar Tab
-function HolidayCalendarTab() {
-  const { hasPermission } = useAuth();
-  const canManageHolidays = hasPermission('holiday.manage');
+// ----------------------------------------------------------------- Leave Types Tab
+const MONTH_END = ['31 January', '28/29 February', '31 March', '30 April', '31 May', '30 June', '31 July', '31 August', '30 September', '31 October', '30 November', '31 December'];
 
-  const { data: holidays, isLoading: isHolidaysLoading, error: fetchError, mutate: mutateHolidays } = useHolidays();
+type PolicyForm = {
+  name: string;
+  quotaPeriod: QuotaPeriod;
+  quotaDays: string;
+  carryForward: boolean;
+  maxCarryForward: string;
+  carryForwardExpiryMonths: number | null;
+  encashable: boolean;
+  requiresDocument: boolean;
+};
 
-  const now = new Date();
-  const [currentYear, setCurrentYear] = useState(() => now.getUTCFullYear());
-  const [currentMonth, setCurrentMonth] = useState(() => now.getUTCMonth());
+const EMPTY_POLICY: PolicyForm = {
+  name: '',
+  quotaPeriod: 'Monthly',
+  quotaDays: '1',
+  carryForward: false,
+  maxCarryForward: '',
+  carryForwardExpiryMonths: null,
+  encashable: false,
+  requiresDocument: false,
+};
 
-  const { data: calendarLeaves, isLoading: isLeavesLoading, mutate: mutateLeaves } = useCalendarLeaves(currentYear, currentMonth);
-
-  const isLoading = isHolidaysLoading || isLeavesLoading;
-
-  const mutate = async () => {
-    await Promise.all([mutateHolidays(), mutateLeaves()]);
-  };
-
-  const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [formName, setFormName] = useState('');
-  const [formDescription, setFormDescription] = useState('');
-  const [formError, setFormError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const MONTHS = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-  ];
-
-  const getDaysInMonth = (year: number, month: number) => {
-    return new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-  };
-
-  const getStartDayOfWeek = (year: number, month: number) => {
-    return new Date(Date.UTC(year, month, 1)).getUTCDay();
-  };
-
-  const daysInMonth = getDaysInMonth(currentYear, currentMonth);
-  const startDayOfWeek = getStartDayOfWeek(currentYear, currentMonth);
-
-  const prevMonth = () => {
-    setFormError(null);
-    setSelectedDay(null);
-    setIsEditing(false);
-    if (currentMonth === 0) {
-      setCurrentMonth(11);
-      setCurrentYear((prev) => prev - 1);
-    } else {
-      setCurrentMonth((prev) => prev - 1);
-    }
-  };
-
-  const nextMonth = () => {
-    setFormError(null);
-    setSelectedDay(null);
-    setIsEditing(false);
-    if (currentMonth === 11) {
-      setCurrentMonth(0);
-      setCurrentYear((prev) => prev + 1);
-    } else {
-      setCurrentMonth((prev) => prev + 1);
-    }
-  };
-
-  const getHolidayForDay = (dayNum: number) => {
-    if (!holidays) return null;
-    const found = holidays.find((h) => {
-      const hDate = new Date(h.date);
-      const hYear = hDate.getUTCFullYear();
-      const hMonth = hDate.getUTCMonth();
-      const hDay = hDate.getUTCDate();
-      return hYear === currentYear && hMonth === currentMonth && hDay === dayNum;
-    });
-    return found || null;
-  };
-
-  const getLeavesForDay = (dayNum: number) => {
-    if (!calendarLeaves || calendarLeaves.length === 0) return [];
-    const dayStart = new Date(Date.UTC(currentYear, currentMonth, dayNum, 0, 0, 0, 0)).getTime();
-    const dayEnd = new Date(Date.UTC(currentYear, currentMonth, dayNum, 23, 59, 59, 999)).getTime();
-    return calendarLeaves.filter((req) => {
-      const from = new Date(req.fromDate).getTime();
-      const to = new Date(req.toDate).getTime();
-      return from <= dayEnd && to >= dayStart;
-    });
-  };
-
-  const handleSelectDay = (dayNum: number) => {
-    setSelectedDay(dayNum);
-    const existingHoliday = getHolidayForDay(dayNum);
-    if (existingHoliday) {
-      setFormName(existingHoliday.name);
-      setFormDescription(existingHoliday.description || '');
-    } else {
-      setFormName('');
-      setFormDescription('');
-    }
-    setIsEditing(false);
-    setFormError(null);
-  };
-
-  const handleSaveHoliday = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedDay) return;
-
-    if (!formName.trim()) {
-      setFormError('Holiday name is required.');
-      return;
-    }
-
-    setIsSubmitting(true);
-    setFormError(null);
-
-    const dateString = new Date(Date.UTC(currentYear, currentMonth, selectedDay)).toISOString();
-    const existingHoliday = getHolidayForDay(selectedDay);
-
-    try {
-      if (existingHoliday) {
-        await holidayApi.updateHoliday(existingHoliday.id, {
-          name: formName,
-          date: dateString,
-          description: formDescription,
-        });
-      } else {
-        await holidayApi.createHoliday({
-          name: formName,
-          date: dateString,
-          description: formDescription,
-        });
-      }
-      setIsEditing(false);
-      await mutate();
-    } catch (err: any) {
-      setFormError(err.message || 'An error occurred while saving the holiday.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDeleteHoliday = async () => {
-    if (!selectedDay) return;
-    const existingHoliday = getHolidayForDay(selectedDay);
-    if (!existingHoliday) return;
-
-    if (!confirm(`Are you sure you want to delete the holiday "${existingHoliday.name}"?`)) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    setFormError(null);
-
-    try {
-      await holidayApi.deleteHoliday(existingHoliday.id);
-      setSelectedDay(null);
-      setIsEditing(false);
-      setFormName('');
-      setFormDescription('');
-      await mutate();
-    } catch (err: any) {
-      setFormError(err.message || 'An error occurred while deleting the holiday.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const calendarCells = [];
-  for (let i = 0; i < startDayOfWeek; i++) {
-    calendarCells.push(null);
-  }
-  for (let i = 1; i <= daysInMonth; i++) {
-    calendarCells.push(i);
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Spinner label="Loading calendar..." />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-medium text-slate-800">Company Holiday Calendar</h2>
-        <p className="text-sm text-slate-500">
-          View official non-working days.{' '}
-          {canManageHolidays ? 'Add, edit, or remove holidays.' : 'Sundays are automatic weekly holidays.'}
-        </p>
-      </div>
-
-      {fetchError && <Alert tone="error">{fetchError.message}</Alert>}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 p-6 flex flex-col justify-between">
-          <div>
-            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-              <div className="flex items-center gap-3">
-                <Dropdown
-                  showArrow={false}
-                  value={String(currentMonth)}
-                  onChange={(val) => {
-                    setFormError(null);
-                    setSelectedDay(null);
-                    setIsEditing(false);
-                    setCurrentMonth(Number(val));
-                  }}
-                  options={MONTHS.map((month, index) => ({
-                    value: String(index),
-                    label: month,
-                  }))}
-                  triggerClassName="px-3 py-1.5 text-sm font-semibold min-w-[120px]"
-                />
-                <Dropdown
-                  showArrow={false}
-                  value={String(currentYear)}
-                  onChange={(val) => {
-                    setFormError(null);
-                    setSelectedDay(null);
-                    setIsEditing(false);
-                    setCurrentYear(Number(val));
-                  }}
-                  options={[2024, 2025, 2026, 2027, 2028, 2029, 2030].map((yr) => ({
-                    value: String(yr),
-                    label: String(yr),
-                  }))}
-                  triggerClassName="px-3 py-1.5 text-sm font-semibold min-w-[85px]"
-                />
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={prevMonth}
-                  className="flex items-center px-3 py-1.5 rounded-lg text-sm font-semibold text-[#8B2424] transition hover:bg-[#F9DADA] border border-gray-200"
-                >
-                  ‹ Prev
-                </button>
-                <button
-                  type="button"
-                  onClick={nextMonth}
-                  className="flex items-center px-3 py-1.5 rounded-lg text-sm font-semibold text-[#8B2424] transition hover:bg-[#F9DADA] border border-gray-200"
-                >
-                  Next ›
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-7 gap-1 text-center font-semibold text-xs text-slate-500 border-b pb-2 mb-2">
-              <div className="text-red-500">SUN</div>
-              <div>MON</div>
-              <div>TUE</div>
-              <div>WED</div>
-              <div>THU</div>
-              <div>FRI</div>
-              <div>SAT</div>
-            </div>
-
-            <div className="grid grid-cols-7 gap-2">
-              {calendarCells.map((dayNum, idx) => {
-                if (dayNum === null) {
-                  return <div key={`empty-${idx}`} className="min-h-[4.5rem] bg-slate-50/50 rounded-lg"></div>;
-                }
-
-                const dayOfWeek = idx % 7;
-                const isSunday = dayOfWeek === 0;
-                const holiday = getHolidayForDay(dayNum);
-                const dayLeaves = getLeavesForDay(dayNum);
-                const isSelected = selectedDay === dayNum;
-
-                let cellBg = 'bg-white hover:bg-[#F9DADA]/50 hover:text-[#8B2424]';
-                let borderStyle = 'border border-slate-200';
-                let textStyle = 'text-slate-800';
-
-                if (isSunday) {
-                  cellBg = 'bg-red-50/50 hover:bg-red-50';
-                  textStyle = 'text-red-600 font-semibold';
-                }
-
-                if (holiday) {
-                  cellBg = 'bg-emerald-50 hover:bg-emerald-100';
-                  textStyle = 'text-emerald-700 font-bold';
-                  borderStyle = 'border-2 border-emerald-300';
-                } else if (dayLeaves.length > 0) {
-                  cellBg = 'bg-[#FFF5F5] hover:bg-[#F9DADA]/60';
-                  borderStyle = 'border border-[#F9DADA]';
-                }
-
-                if (isSelected) {
-                  borderStyle = 'border-2 border-[#8B2424] ring-2 ring-[#F9DADA]';
-                }
-
-                return (
-                  <button
-                    key={`day-${dayNum}`}
-                    type="button"
-                    onClick={() => handleSelectDay(dayNum)}
-                    className={`min-h-[4.5rem] p-1.5 rounded-lg flex flex-col justify-between items-start transition-all relative text-left ${cellBg} ${borderStyle}`}
-                  >
-                    <span className={`text-xs ${textStyle}`}>{dayNum}</span>
-                    <div className="w-full space-y-0.5 mt-0.5">
-                      {holiday && (
-                        <span className="block w-full text-[10px] truncate text-emerald-800 font-medium" title={holiday.name}>
-                          {holiday.name}
-                        </span>
-                      )}
-                      {dayLeaves.length > 0 && (
-                        <span
-                          className="inline-flex items-center px-1 py-0.5 text-[9px] font-semibold bg-[#F9DADA] text-[#8B2424] rounded truncate max-w-full"
-                          title={dayLeaves.map((l) => `${l.employeeName || 'Staff'} (${l.leaveTypeName || 'Leave'})`).join(', ')}
-                        >
-                          {dayLeaves.length === 1
-                            ? (dayLeaves[0].employeeName?.split(' ')[0] || '1 on leave')
-                            : `${dayLeaves.length} on leave`}
-                        </span>
-                      )}
-                      {isSunday && !holiday && <span className="block text-[8px] text-red-400 font-normal">Weekly</span>}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          {selectedDay === null ? (
-            <div className="flex flex-col items-center justify-center h-full text-center py-12">
-              <div className="text-slate-400 text-3xl mb-2">📅</div>
-              <p className="font-semibold text-slate-700">No date selected</p>
-              <p className="text-xs text-slate-400 mt-1 max-w-[200px]">
-                Click on any calendar day to view holiday details, approved leaves, or add new holidays.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b pb-2">
-                <h3 className="font-bold text-slate-800">
-                  {MONTHS[currentMonth]} {selectedDay}, {currentYear}
-                </h3>
-                <Button variant="ghost" className="h-8 w-8 !p-0" onClick={() => setSelectedDay(null)}>
-                  ✕
-                </Button>
-              </div>
-
-              {formError && <Alert tone="error">{formError}</Alert>}
-
-              {(() => {
-                const holiday = getHolidayForDay(selectedDay);
-                const dayLeaves = getLeavesForDay(selectedDay);
-                const dayDate = new Date(Date.UTC(currentYear, currentMonth, selectedDay));
-                const isSunday = dayDate.getUTCDay() === 0;
-
-                if (isEditing && canManageHolidays) {
-                  return (
-                    <form onSubmit={handleSaveHoliday} className="space-y-4">
-                      <h4 className="text-sm font-semibold text-slate-700">
-                        {holiday ? 'Edit Holiday' : 'Add Holiday'}
-                      </h4>
-                      <Field
-                        label="Holiday Name"
-                        placeholder="e.g. Independence Day"
-                        value={formName}
-                        onChange={(e) => setFormName(e.target.value)}
-                        required
-                        disabled={isSubmitting}
-                      />
-
-                      <TextAreaField
-                        label="Description (Optional)"
-                        placeholder="Short description of the holiday..."
-                        value={formDescription}
-                        onChange={(e) => setFormDescription(e.target.value)}
-                        disabled={isSubmitting}
-                        rows={3}
-                      />
-
-                      <div className="flex gap-2 pt-2">
-                        <Button type="submit" className="flex-1" isLoading={isSubmitting}>
-                          {holiday ? 'Update' : 'Save'}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          onClick={() => {
-                            if (holiday) {
-                              setFormName(holiday.name);
-                              setFormDescription(holiday.description || '');
-                            }
-                            setIsEditing(false);
-                          }}
-                          disabled={isSubmitting}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    </form>
-                  );
-                }
-
-                return (
-                  <div className="space-y-4">
-                    {/* Holiday Section */}
-                    {holiday ? (
-                      <div className="space-y-3">
-                        <div>
-                          <span className="text-xs text-slate-400 uppercase tracking-wider">Holiday Name</span>
-                          <p className="font-semibold text-slate-800 text-lg">{holiday.name}</p>
-                        </div>
-
-                        {holiday.description && (
-                          <div>
-                            <span className="text-xs text-slate-400 uppercase tracking-wider">Description</span>
-                            <p className="text-sm text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100 mt-1">
-                              {holiday.description}
-                            </p>
-                          </div>
-                        )}
-
-                        <div className="pt-1 flex flex-wrap gap-2">
-                          {isSunday && <Badge>Sunday Weekly Holiday</Badge>}
-                          {!isSunday && <Badge>Company Public Holiday</Badge>}
-                        </div>
-
-                        {canManageHolidays && (
-                          <div className="flex gap-2 pt-3 border-t">
-                            <Button variant="secondary" className="flex-1" onClick={() => setIsEditing(true)}>
-                              Edit
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              className="text-red-600 hover:bg-red-50"
-                              onClick={handleDeleteHoliday}
-                              disabled={isSubmitting}
-                            >
-                              Delete
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <div>
-                          <p className="font-semibold text-slate-700">{isSunday ? 'Sunday Weekly Holiday' : 'Regular Workday'}</p>
-                          <p className="text-xs text-slate-500 mt-0.5">
-                            {isSunday
-                              ? 'Sundays are automatically treated as weekly non-working days.'
-                              : 'No official holiday is scheduled for this date.'}
-                          </p>
-                        </div>
-                        {canManageHolidays && (
-                          <Button
-                            variant="secondary"
-                            className="h-9 px-3 text-xs"
-                            onClick={() => {
-                              setFormName('');
-                              setFormDescription('');
-                              setIsEditing(true);
-                            }}
-                          >
-                            + Add Holiday
-                          </Button>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Approved Leaves Section */}
-                    <div className="pt-4 border-t border-slate-200">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                          On Leave ({dayLeaves.length})
-                        </span>
-                      </div>
-                      {dayLeaves.length > 0 ? (
-                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                          {dayLeaves.map((l) => (
-                            <div key={l.id} className="p-2.5 rounded-lg bg-blue-50/70 border border-blue-100 text-xs">
-                              <div className="flex items-center justify-between">
-                                <p className="font-semibold text-blue-900">{l.employeeName || 'Employee'}</p>
-                                <span className="text-[10px] px-1.5 py-0.5 bg-blue-200/70 text-blue-800 rounded font-medium">
-                                  {l.leaveTypeName || 'Leave'}
-                                </span>
-                              </div>
-                              <p className="text-slate-500 text-[11px] mt-1">
-                                {new Date(l.fromDate).toLocaleDateString()} &ndash; {new Date(l.toDate).toLocaleDateString()} ({l.days} day{l.days > 1 ? 's' : ''})
-                              </p>
-                              {l.reason && (
-                                <p className="text-slate-600 text-[11px] italic mt-1 line-clamp-2">
-                                  &ldquo;{l.reason}&rdquo;
-                                </p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-slate-400">No employees on approved leave.</p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-        </Card>
-      </div>
-    </div>
-  );
+function daysLabel(n: number) {
+  return `${n} day${n === 1 ? '' : 's'}`;
 }
 
-// ----------------------------------------------------------------- Leave Types Tab
+/** "1 day every month (12 a year). Up to 5 unused days carry over and must be used by 31 March." */
+function describePolicy(p: {
+  quotaPeriod: QuotaPeriod;
+  quotaDays: number;
+  carryForward: boolean;
+  maxCarryForward: number;
+  carryForwardExpiryMonths: number | null;
+}): { quota: string; carry: string | null } {
+  let quota: string;
+  if (p.quotaPeriod === 'Unlimited') quota = 'No limit — taken as needed';
+  else if (p.quotaPeriod === 'Monthly') quota = `${daysLabel(p.quotaDays)} every month (${Math.round(p.quotaDays * 12 * 2) / 2} a year)`;
+  else quota = `${daysLabel(p.quotaDays)} per year`;
+
+  if (!p.carryForward || p.quotaPeriod === 'Unlimited') return { quota, carry: null };
+  const amount = p.maxCarryForward > 0 ? `Up to ${daysLabel(p.maxCarryForward)}` : 'All unused days';
+  const until = p.carryForwardExpiryMonths ? `must be used by ${MONTH_END[p.carryForwardExpiryMonths - 1]}` : 'can be used all next year';
+  return { quota, carry: `${amount} carry into next year and ${until}` };
+}
+
 function LeaveTypesTab() {
   const { user } = useAuth();
   const isAdminOrHr = user?.role === 'admin' || user?.role === 'hr';
@@ -1326,55 +888,64 @@ function LeaveTypesTab() {
   const [editingType, setEditingType] = useState<LeaveType | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState<PolicyForm>(EMPTY_POLICY);
 
-  const [formData, setFormData] = useState({
-    name: '',
-    code: '',
-    annualQuota: null as number | null,
-    carryForward: false,
-    maxCarryForward: 0,
-    encashable: false,
-    requiresDocument: false,
+  const set = <K extends keyof PolicyForm>(key: K, value: PolicyForm[K]) => setForm((f) => ({ ...f, [key]: value }));
+
+  const activeTypes = (leaveTypes ?? []).filter((t: LeaveType) => t.status === 'Active');
+  const quotaDays = Number(form.quotaDays) || 0;
+  const preview = describePolicy({
+    quotaPeriod: form.quotaPeriod,
+    quotaDays,
+    carryForward: form.carryForward,
+    maxCarryForward: Number(form.maxCarryForward) || 0,
+    carryForwardExpiryMonths: form.carryForwardExpiryMonths,
   });
 
   const handleEdit = (type: LeaveType) => {
     setEditingType(type);
-    setFormData({
+    setForm({
       name: type.name,
-      code: type.code,
-      annualQuota: type.annualQuota,
+      quotaPeriod: type.quotaPeriod ?? (type.annualQuota == null ? 'Unlimited' : 'Yearly'),
+      quotaDays: String(type.quotaDays ?? type.annualQuota ?? 0),
       carryForward: type.carryForward,
-      maxCarryForward: type.maxCarryForward,
+      maxCarryForward: type.maxCarryForward ? String(type.maxCarryForward) : '',
+      carryForwardExpiryMonths: type.carryForwardExpiryMonths ?? null,
       encashable: type.encashable,
       requiresDocument: type.requiresDocument,
     });
+    setError(null);
     setShowForm(true);
   };
 
   const handleCancel = () => {
     setShowForm(false);
     setEditingType(null);
-    setFormData({
-      name: '',
-      code: '',
-      annualQuota: null,
-      carryForward: false,
-      maxCarryForward: 0,
-      encashable: false,
-      requiresDocument: false,
-    });
+    setForm(EMPTY_POLICY);
+    setError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (form.name.trim().length < 2) return setError('Give the leave a name, e.g. "Casual Leave".');
+    if (form.quotaPeriod !== 'Unlimited' && quotaDays <= 0) return setError('Enter how many days this leave gives.');
+    if (form.quotaPeriod !== 'Unlimited' && !Number.isInteger(quotaDays * 2)) return setError('Days must be whole or half days (e.g. 1 or 1.5).');
+
     setSubmitting(true);
     setError(null);
+    const payload: Partial<LeaveType> = {
+      name: form.name.trim(),
+      quotaPeriod: form.quotaPeriod,
+      quotaDays: form.quotaPeriod === 'Unlimited' ? 0 : quotaDays,
+      carryForward: form.quotaPeriod !== 'Unlimited' && form.carryForward,
+      maxCarryForward: form.carryForward ? Math.max(0, Math.floor(Number(form.maxCarryForward) || 0)) : 0,
+      carryForwardExpiryMonths: form.carryForward ? form.carryForwardExpiryMonths : null,
+      encashable: form.encashable,
+      requiresDocument: form.requiresDocument,
+    };
     try {
-      if (editingType) {
-        await leaveApi.updateLeaveType(editingType.id, formData);
-      } else {
-        await leaveApi.createLeaveType(formData);
-      }
+      if (editingType) await leaveApi.updateLeaveType(editingType.id, payload);
+      else await leaveApi.createLeaveType(payload);
       await mutate();
       handleCancel();
     } catch (err: any) {
@@ -1384,119 +955,168 @@ function LeaveTypesTab() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to deactivate/delete this leave type?')) {
-      return;
-    }
+  const handleDelete = async (type: LeaveType) => {
+    if (!confirm(`Delete "${type.name}"? If anyone has already used it, it's kept for history but no longer offered.`)) return;
     setError(null);
     try {
-      await leaveApi.deleteLeaveType(id);
+      await leaveApi.deleteLeaveType(type.id);
       await mutate();
     } catch (err: any) {
       setError(err instanceof Error ? err.message : 'Failed to delete leave type');
     }
   };
 
+  const periodOptions: { value: QuotaPeriod; label: string; hint: string }[] = [
+    { value: 'Monthly', label: 'Every month', hint: 'Builds up month by month' },
+    { value: 'Yearly', label: 'Every year', hint: 'Full amount from January' },
+    { value: 'Unlimited', label: 'Unlimited', hint: 'e.g. Leave Without Pay' },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-medium text-slate-800">Leave Policies</h2>
-          <p className="text-sm text-slate-500">Manage leave policies and quotas.</p>
+          <p className="text-sm text-slate-500">
+            The leaves your company gives. Balances update automatically for every employee.
+          </p>
         </div>
-        {isAdminOrHr && (
-          <Button onClick={() => {
-            if (showForm) {
-              handleCancel();
-            } else {
-              setShowForm(true);
-            }
-          }}>{showForm ? 'Cancel' : 'Add Leave Type'}</Button>
-        )}
+        {isAdminOrHr && !showForm && <Button onClick={() => setShowForm(true)}>Add Leave Type</Button>}
       </div>
 
       {showForm && isAdminOrHr && (
         <Card className="p-6">
-          <h3 className="text-lg font-medium text-slate-800 mb-4">{editingType ? 'Edit Leave Type' : 'New Leave Type'}</h3>
-          {error && <Alert tone="error">{error}</Alert>}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+          <h3 className="text-lg font-medium text-slate-800 mb-4">
+            {editingType ? `Edit ${editingType.name}` : 'New leave type'}
+          </h3>
+          {error && (
+            <div className="mb-4">
+              <Alert tone="error">{error}</Alert>
+            </div>
+          )}
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2">
               <Field
                 label="Name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="e.g. Casual Leave"
+                value={form.name}
+                onChange={(e) => set('name', e.target.value)}
                 required
               />
-              <Field
-                label="Code (e.g., SL, AL, LWP)"
-                value={formData.code}
-                onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                required
-                disabled={!!editingType}
-              />
-              <Field
-                type="number"
-                label="Annual Quota (Days)"
-                value={formData.annualQuota ?? ''}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    annualQuota: e.target.value === '' ? null : Number(e.target.value),
-                  })
-                }
-                min={0}
-              />
-              <div className="flex items-center space-x-2 pt-8">
-                <input
-                  type="checkbox"
-                  id="carryForward"
-                  checked={formData.carryForward}
-                  onChange={(e) => setFormData({ ...formData, carryForward: e.target.checked })}
-                />
-                <label htmlFor="carryForward" className="text-sm text-slate-700">
-                  Carry Forward Allowed
-                </label>
-              </div>
-              {formData.carryForward && (
-                <Field
-                  type="number"
-                  label="Max Carry Forward"
-                  value={formData.maxCarryForward}
-                  onChange={(e) => setFormData({ ...formData, maxCarryForward: Number(e.target.value) })}
-                  min={0}
-                />
+              {editingType && (
+                <Field label="Code" value={editingType.code} disabled onChange={() => undefined} />
               )}
-              <div className="flex items-center space-x-2 pt-8">
-                <input
-                  type="checkbox"
-                  id="encashable"
-                  checked={formData.encashable}
-                  onChange={(e) => setFormData({ ...formData, encashable: e.target.checked })}
-                />
-                <label htmlFor="encashable" className="text-sm text-slate-700">
-                  Encashable
-                </label>
-              </div>
-              <div className="flex items-center space-x-2 pt-8">
-                <input
-                  type="checkbox"
-                  id="requiresDocument"
-                  checked={formData.requiresDocument}
-                  onChange={(e) => setFormData({ ...formData, requiresDocument: e.target.checked })}
-                />
-                <label htmlFor="requiresDocument" className="text-sm text-slate-700">
-                  Requires Document (e.g., Medical Cert)
-                </label>
+            </div>
+
+            {/* How is it given? */}
+            <div>
+              <p className="text-sm font-medium text-slate-700 mb-2">How often is it given?</p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {periodOptions.map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => set('quotaPeriod', o.value)}
+                    className={`text-left rounded-xl border p-3 transition-colors ${
+                      form.quotaPeriod === o.value
+                        ? 'border-[#8B2424] bg-[#FFF5F5] ring-1 ring-[#8B2424]'
+                        : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <span className="block text-sm font-semibold text-slate-800">{o.label}</span>
+                    <span className="block text-xs text-slate-500">{o.hint}</span>
+                  </button>
+                ))}
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-4">
-              {editingType && (
-                <Button type="button" variant="secondary" onClick={handleCancel}>
-                  Cancel
-                </Button>
-              )}
+
+            {form.quotaPeriod !== 'Unlimited' && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  type="number"
+                  label={form.quotaPeriod === 'Monthly' ? 'Days given every month' : 'Days given per year'}
+                  value={form.quotaDays}
+                  onChange={(e) => set('quotaDays', e.target.value)}
+                  min={0}
+                  step={0.5}
+                  hint={
+                    form.quotaPeriod === 'Monthly'
+                      ? `= ${Math.round(quotaDays * 12 * 2) / 2} days a year. New joiners start from their joining month.`
+                      : 'New joiners get a share for the months left in the year.'
+                  }
+                />
+              </div>
+            )}
+
+            {/* Carry forward */}
+            {form.quotaPeriod !== 'Unlimited' && (
+              <div className="rounded-xl border border-slate-200 p-4 space-y-4">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={form.carryForward}
+                    onChange={(e) => set('carryForward', e.target.checked)}
+                  />
+                  <span>
+                    <span className="block text-sm font-semibold text-slate-800">Carry unused days into next year</span>
+                    <span className="block text-xs text-slate-500">Leftover days at year end move to the next year.</span>
+                  </span>
+                </label>
+                {form.carryForward && (
+                  <div className="grid gap-4 sm:grid-cols-2 pl-7">
+                    <Field
+                      type="number"
+                      label="Most days that can carry over"
+                      placeholder="No limit"
+                      value={form.maxCarryForward}
+                      onChange={(e) => set('maxCarryForward', e.target.value)}
+                      min={0}
+                      hint="Leave empty for no limit."
+                    />
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">Carried days expire</label>
+                      <select
+                        className="w-full h-11 px-3 rounded-lg border border-slate-300 bg-white text-sm"
+                        value={form.carryForwardExpiryMonths ?? ''}
+                        onChange={(e) => set('carryForwardExpiryMonths', e.target.value ? Number(e.target.value) : null)}
+                      >
+                        <option value="">Never — usable all next year</option>
+                        {[1, 2, 3, 6, 9].map((m) => (
+                          <option key={m} value={m}>
+                            Use by {MONTH_END[m - 1]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-6">
+              <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                <input type="checkbox" checked={form.requiresDocument} onChange={(e) => set('requiresDocument', e.target.checked)} />
+                Needs a document (e.g. medical certificate)
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                <input type="checkbox" checked={form.encashable} onChange={(e) => set('encashable', e.target.checked)} />
+                Can be encashed
+              </label>
+            </div>
+
+            {/* Live summary */}
+            <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-700">
+              <span className="font-semibold">{form.name.trim() || 'This leave'}:</span> {preview.quota}.
+              {preview.carry && <> {preview.carry}.</>}
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={handleCancel} disabled={submitting}>
+                Cancel
+              </Button>
               <Button type="submit" isLoading={submitting}>
-                {editingType ? 'Update Leave Type' : 'Create Leave Type'}
+                {editingType ? 'Save changes' : 'Create leave type'}
               </Button>
             </div>
           </form>
@@ -1510,59 +1130,72 @@ function LeaveTypesTab() {
           <div className="flex h-64 items-center justify-center">
             <Spinner />
           </div>
+        ) : activeTypes.length === 0 ? (
+          <div className="py-10">
+            <EmptyState
+              title="No leave types yet"
+              description={
+                isAdminOrHr
+                  ? 'Add the leaves your company offers — for example "Casual Leave, 1 day every month" or "Sick Leave, 6 days a year".'
+                  : 'HR has not set up any leave types yet.'
+              }
+            />
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <th className="px-4 py-3 font-medium text-slate-600">Name</th>
-                  <th className="px-4 py-3 font-medium text-slate-600">Code</th>
-                  <th className="px-4 py-3 font-medium text-slate-600">Annual Quota</th>
-                  <th className="px-4 py-3 font-medium text-slate-600">Carry Forward</th>
-                  <th className="px-4 py-3 font-medium text-slate-600">Flags</th>
-                  {isAdminOrHr && <th className="px-4 py-3 font-medium text-slate-600">Actions</th>}
+                  <th className="px-4 py-3 font-medium text-slate-600">Leave</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">How much</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">Carry forward</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">Rules</th>
+                  {isAdminOrHr && <th className="px-4 py-3 font-medium text-slate-600 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {leaveTypes?.filter((type: LeaveType) => type.status === 'Active').map((type: LeaveType) => (
-                  <tr key={type.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-slate-800">{type.name}</td>
-                    <td className="px-4 py-3 text-slate-600">{type.code}</td>
-                    <td className="px-4 py-3 text-slate-800">
-                      {type.annualQuota === null ? 'Unlimited' : `${type.annualQuota} days`}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {type.carryForward ? `Yes (Max: ${type.maxCarryForward})` : 'No'}
-                    </td>
-                    <td className="px-4 py-3 flex gap-2">
-                      {type.encashable && <Badge>Encashable</Badge>}
-                      {type.requiresDocument && <Badge>Requires Doc</Badge>}
-                      <Badge>{type.status}</Badge>
-                    </td>
-                    {isAdminOrHr && (
+                {activeTypes.map((type: LeaveType) => {
+                  const d = describePolicy({
+                    quotaPeriod: type.quotaPeriod ?? (type.annualQuota == null ? 'Unlimited' : 'Yearly'),
+                    quotaDays: type.quotaDays ?? type.annualQuota ?? 0,
+                    carryForward: type.carryForward,
+                    maxCarryForward: type.maxCarryForward,
+                    carryForwardExpiryMonths: type.carryForwardExpiryMonths ?? null,
+                  });
+                  return (
+                    <tr key={type.id} className="hover:bg-slate-50 transition-colors align-top">
                       <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          <Button variant="secondary" className="!h-8 !px-2.5 !text-xs" onClick={() => handleEdit(type)}>
-                            Edit
-                          </Button>
-                          <Button variant="ghost" className="!h-8 !px-2.5 !text-xs text-red-600 hover:bg-red-50" onClick={() => handleDelete(type.id)}>
-                            Delete
-                          </Button>
+                        <p className="font-medium text-slate-800">{type.name}</p>
+                        <p className="text-xs text-slate-400">{type.code}</p>
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">{d.quota}</td>
+                      <td className="px-4 py-3 text-slate-600 max-w-xs">{d.carry ?? 'No — unused days lapse at year end'}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1.5">
+                          {type.requiresDocument && <Badge>Needs document</Badge>}
+                          {type.encashable && <Badge>Encashable</Badge>}
+                          {!type.requiresDocument && !type.encashable && <span className="text-xs text-slate-400">—</span>}
                         </div>
                       </td>
-                    )}
-                  </tr>
-                ))}
-                {(!leaveTypes || leaveTypes.filter((t: LeaveType) => t.status === 'Active').length === 0) && (
-                  <tr>
-                    <td colSpan={isAdminOrHr ? 6 : 5} className="px-4 py-8">
-                      <EmptyState
-                        title="No leave types configured"
-                        description="Add a leave type to define the company policy."
-                      />
-                    </td>
-                  </tr>
-                )}
+                      {isAdminOrHr && (
+                        <td className="px-4 py-3">
+                          <div className="flex gap-2 justify-end">
+                            <Button variant="secondary" className="!h-8 !px-2.5 !text-xs" onClick={() => handleEdit(type)}>
+                              Edit
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              className="!h-8 !px-2.5 !text-xs text-red-600 hover:bg-red-50"
+                              onClick={() => handleDelete(type)}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

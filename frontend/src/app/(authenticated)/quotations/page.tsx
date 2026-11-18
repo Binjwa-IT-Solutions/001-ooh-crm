@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   FileText,
   CreditCard,
@@ -37,6 +37,7 @@ function formatRupees(paise: number): string {
 
 function QuotationsContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { user, hasPermission } = useAuth();
   const isManagerOrAdmin = ["admin", "manager"].includes(user?.role?.toLowerCase() || "");
   const canCreate = hasPermission("quotations.create");
@@ -95,7 +96,10 @@ function QuotationsContent() {
     }
   }, [isManagerOrAdmin]);
 
-  // Check URL query params for step or id
+  // Apply ?step / ?id from the URL. Runs only when the URL changes: it used to also
+  // re-run whenever the quotation list reloaded (e.g. right after "Save Changes"),
+  // which forced the page back to ?step=2 and made saving look like it did nothing.
+  const urlKey = searchParams.toString();
   useEffect(() => {
     const queryStep = searchParams.get("step");
     const queryId = searchParams.get("id");
@@ -111,7 +115,9 @@ function QuotationsContent() {
       }
     }
 
-    if (queryId) {
+    // Already showing this quote (e.g. just saved it) — don't swap in an older copy from the list
+    const alreadyActive = activeQuote && (activeQuote._id === queryId || activeQuote.quoteNumber === queryId);
+    if (queryId && !alreadyActive) {
       const found = quotations.find((q) => q._id === queryId || q.quoteNumber === queryId);
       if (found) {
         setActiveQuote(found);
@@ -124,7 +130,8 @@ function QuotationsContent() {
           .catch(() => {});
       }
     }
-  }, [searchParams, quotations]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately keyed on the URL only
+  }, [urlKey]);
 
   // Compute Top 4 Sales & Financial KPIs
   const metrics = useMemo(() => {
@@ -525,8 +532,10 @@ function QuotationsContent() {
             }}
             onSuccess={(savedQuote) => {
               setActiveQuote(savedQuote);
-              loadQuotations();
               setCurrentStep(3); // Moves straight to Step 3 Details
+              // Replace ?step=2&leadId=… so the form doesn't come back on refresh
+              router.replace(`/quotations?step=3&id=${savedQuote._id || savedQuote.id}`);
+              loadQuotations();
             }}
           />
         ) : (

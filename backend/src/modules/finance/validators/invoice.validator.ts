@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { COMPANY } from '../../../config/company.js';
 import { INVOICE_TYPES, INVOICE_STATUSES } from '../models/invoice.model.js';
 import { PAYMENT_IN_METHODS } from '../models/paymentIn.model.js';
 
@@ -30,7 +31,7 @@ export const createInvoiceSchema = z.object({
   billingAddress: z.string().optional().default(''),
   shippingAddress: z.string().optional().default(''),
   gstin: z.string().optional().default(''),
-  placeOfSupply: z.string().optional().default('Maharashtra (27)'),
+  placeOfSupply: z.string().optional().default(COMPANY.defaultPlaceOfSupply),
   contactPerson: z.string().optional().default(''),
   contactMobile: z.string().optional().default(''),
   contactEmail: z.string().optional().default(''),

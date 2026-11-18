@@ -178,6 +178,22 @@ export class EmployeesController {
     const result = await employeeService.deactivate(id, context(req));
     res.status(200).json({ message: 'Employee deactivated', ...result });
   }
+
+  /** POST /api/employees/:id/documents */
+  static async uploadDocument(req: Request, res: Response) {
+    const { id } = employeeIdSchema.parse(req.params);
+    const title = typeof req.body.title === 'string' ? req.body.title : undefined;
+    const employee = await employeeService.attachDocument(id, req.file, title, context(req));
+    res.status(200).json({ message: 'Document uploaded', employee });
+  }
+
+  /** DELETE /api/employees/:id/documents/:docId */
+  static async deleteDocument(req: Request, res: Response) {
+    const { id } = employeeIdSchema.parse(req.params);
+    const docId = String(req.params.docId);
+    const employee = await employeeService.deleteDocument(id, docId, context(req));
+    res.status(200).json({ message: 'Document deleted', employee });
+  }
 }
 
 

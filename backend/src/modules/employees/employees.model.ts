@@ -39,6 +39,17 @@ export const SENSITIVE_FIELDS = [
   'annualCtc',
 ] as const;
 
+export interface IEmployeeDocument {
+  _id?: Types.ObjectId;
+  name: string;
+  fileKey: string;
+  fileUrl?: string;
+  fileSize?: number;
+  mimeType?: string;
+  uploadedAt?: Date;
+  uploadedBy?: Types.ObjectId | null;
+}
+
 export interface IEmployee extends BaseDocument {
   employeeCode: string;
   userId?: Types.ObjectId | null;
@@ -47,6 +58,7 @@ export interface IEmployee extends BaseDocument {
   workEmail: string;
   personalEmail?: string;
   mobile?: string;
+  personalMobile?: string;
   dateOfBirth?: Date | null;
 
   department?: Department | null;
@@ -78,6 +90,7 @@ export interface IEmployee extends BaseDocument {
     mobile?: string;
   };
   address?: string;
+  documents?: IEmployeeDocument[];
 }
 
 const employeeSchema = new Schema<IEmployee>({
@@ -92,6 +105,7 @@ const employeeSchema = new Schema<IEmployee>({
   workEmail: { type: String, required: true, unique: true, lowercase: true, trim: true },
   personalEmail: { type: String, lowercase: true, trim: true },
   mobile: { type: String, trim: true, default: '', index: true },
+  personalMobile: { type: String, trim: true, default: '' },
   dateOfBirth: { type: Date, default: null },
 
   department: { type: String, enum: [...DEPARTMENTS, null], default: null, index: true },
@@ -123,6 +137,17 @@ const employeeSchema = new Schema<IEmployee>({
     mobile: { type: String, trim: true },
   },
   address: { type: String, trim: true },
+  documents: [
+    {
+      name: { type: String, required: true, trim: true },
+      fileKey: { type: String, required: true, trim: true },
+      fileUrl: { type: String, trim: true },
+      fileSize: { type: Number },
+      mimeType: { type: String, trim: true },
+      uploadedAt: { type: Date, default: Date.now },
+      uploadedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    },
+  ],
 });
 
 // createdAt / updatedAt / createdBy / updatedBy / deletedAt

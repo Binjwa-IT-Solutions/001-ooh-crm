@@ -311,8 +311,9 @@ test('carry forward limit limits transfer and lapses overflow', async () => {
   );
 
   assert.equal(balanceDto.carriedForward, 10, 'Carried forward must be capped at maxCarryForward');
-  assert.equal(balanceDto.allocated, 15, 'Allocated must be full quota');
-  assert.equal(balanceDto.balance, 25, 'Balance must be allocated + carriedForward');
+  // `allocated` is everything usable this year: this year's quota (15) + carried days (10).
+  assert.equal(balanceDto.allocated - balanceDto.carriedForward, 15, "This year's quota must be the full 15 days");
+  assert.equal(balanceDto.balance, 25, 'Balance must be quota + carriedForward');
 });
 
 test('Leave Without Pay does not block due to balance and deduction is bypassed', async () => {

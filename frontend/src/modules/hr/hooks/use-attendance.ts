@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { attendanceApi } from '../api';
 import { Attendance } from '../types';
 
@@ -6,16 +6,13 @@ export function useMyAttendance(filters?: Record<string, any>) {
   const [data, setData] = useState<Attendance[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const filtersRef = useRef(filters);
 
-  useEffect(() => {
-    filtersRef.current = filters;
-  }, [filters]);
+  // Refetch only when the filter values change — depending on `data` here caused an endless refetch loop.
+  const filtersKey = JSON.stringify(filters ?? {});
 
   const fetchData = useCallback(async () => {
     try {
-      if (!data) setIsLoading(true);
-      const res = await attendanceApi.getMyAttendance(filtersRef.current);
+      const res = await attendanceApi.getMyAttendance(JSON.parse(filtersKey));
       setData(res);
       setError(null);
     } catch (err: any) {
@@ -23,7 +20,7 @@ export function useMyAttendance(filters?: Record<string, any>) {
     } finally {
       setIsLoading(false);
     }
-  }, [data]);
+  }, [filtersKey]);
 
   useEffect(() => {
     void fetchData();
@@ -74,16 +71,14 @@ export function useTeamAttendance(filters?: Record<string, any>) {
   const [data, setData] = useState<Attendance[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const filtersRef = useRef(filters);
 
-  useEffect(() => {
-    filtersRef.current = filters;
-  }, [filters]);
+  // Refetch only when the filter values actually change (not on every render / every response)
+  const filtersKey = JSON.stringify(filters ?? {});
 
   const fetchData = useCallback(async () => {
     try {
-      if (!data) setIsLoading(true);
-      const res = await attendanceApi.getTeamAttendance(filtersRef.current);
+      setIsLoading(true);
+      const res = await attendanceApi.getTeamAttendance(JSON.parse(filtersKey));
       setData(res);
       setError(null);
     } catch (err: any) {
@@ -91,7 +86,7 @@ export function useTeamAttendance(filters?: Record<string, any>) {
     } finally {
       setIsLoading(false);
     }
-  }, [data]);
+  }, [filtersKey]);
 
   useEffect(() => {
     void fetchData();

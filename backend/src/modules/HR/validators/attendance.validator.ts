@@ -23,3 +23,8 @@ export const checkOutSchema = z.object({
   gps: gpsSchema,
   breaks: z.array(breakItemSchema).optional(),
 });
+/** HR / admin correction: check someone in/out, or undo a check-out. */
+export const hrPunchSchema = z.object({
+  time: z.coerce.date().optional(),
+  reason: z.string().trim().max(300).optional(),
+});
