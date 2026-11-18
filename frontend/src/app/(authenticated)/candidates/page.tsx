@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Plus,
@@ -8,6 +8,7 @@ import {
   Filter,
   Loader2,
   FileText,
+  ChevronLeft,
   ChevronRight,
   Download,
   ExternalLink,
@@ -33,9 +34,15 @@ export default function CandidatesListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
+
   // Filters
   const [statusFilter, setStatusFilter] = useState<CandidateStatus | ''>('');
   const [positionFilter, setPositionFilter] = useState('');
+  const [debouncedPosition, setDebouncedPosition] = useState('');
   const [resumeFilter, setResumeFilter] = useState<'all' | 'available' | 'none'>('all');
 
   // Resume In-App Preview Modal State
@@ -47,6 +54,16 @@ export default function CandidatesListPage() {
   const [resumeIsPdf, setResumeIsPdf] = useState(true);
   const [downloadingResume, setDownloadingResume] = useState(false);
 
+  // Debounce search by position
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedPosition(positionFilter);
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(handler);
+  }, [positionFilter]);
+
+  // Fetch candidates from API with pagination
   useEffect(() => {
     async function fetchCandidates() {
       setLoading(true);
@@ -54,9 +71,13 @@ export default function CandidatesListPage() {
       try {
         const res = await candidatesApi.list({
           status: statusFilter || undefined,
-          position: positionFilter || undefined,
+          position: debouncedPosition || undefined,
+          resume: resumeFilter !== 'all' ? resumeFilter : undefined,
+          page,
+          pageSize,
         });
         setCandidates(res.data || []);
+        setTotal(res.total ?? (res.data || []).length);
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Failed to fetch candidates');
       } finally {
@@ -64,7 +85,7 @@ export default function CandidatesListPage() {
       }
     }
     fetchCandidates();
-  }, [statusFilter, positionFilter]);
+  }, [statusFilter, debouncedPosition, resumeFilter, page, pageSize]);
 
   // Clean up object URLs when modal closes or unmounts
   const cleanupBlobUrl = useCallback(() => {
@@ -160,16 +181,6 @@ export default function CandidatesListPage() {
     }
   }, []);
 
-  // Filter candidates by resume availability
-  const filteredCandidates = useMemo(() => {
-    return candidates.filter((c) => {
-      const hasResume = Boolean(c.resumeFileKey || c.resumeUrl);
-      if (resumeFilter === 'available') return hasResume;
-      if (resumeFilter === 'none') return !hasResume;
-      return true;
-    });
-  }, [candidates, resumeFilter]);
-
   if (!hasPermission('candidates.view')) {
     return (
       <div className="p-8 text-center text-red-500">
@@ -185,6 +196,8 @@ export default function CandidatesListPage() {
     Rejected: 'bg-rose-50 text-rose-700 border-rose-200',
     'On Hold': 'bg-slate-50 text-slate-700 border-slate-200',
   };
+
+  const totalPages = Math.ceil(total / pageSize) || 1;
 
   return (
     <div className="space-y-6">
@@ -218,7 +231,10 @@ export default function CandidatesListPage() {
             <Dropdown
               showArrow={false}
               value={statusFilter}
-              onChange={(val) => setStatusFilter(val as CandidateStatus | '')}
+              onChange={(val) => {
+                setStatusFilter(val as CandidateStatus | '');
+                setPage(1);
+              }}
               options={[
                 { value: '', label: 'All Statuses' },
                 { value: 'Scheduled', label: 'Scheduled' },
@@ -236,7 +252,10 @@ export default function CandidatesListPage() {
             <Dropdown
               showArrow={false}
               value={resumeFilter}
-              onChange={(val) => setResumeFilter(val as 'all' | 'available' | 'none')}
+              onChange={(val) => {
+                setResumeFilter(val as 'all' | 'available' | 'none');
+                setPage(1);
+              }}
               options={[
                 { value: 'all', label: 'All Candidates' },
                 { value: 'available', label: 'Resume Available' },
@@ -260,7 +279,7 @@ export default function CandidatesListPage() {
         </div>
 
         <div className="text-xs font-medium text-slate-500">
-          Showing <span className="font-bold text-slate-800">{filteredCandidates.length}</span> of {candidates.length} Candidates
+          Showing <span className="font-bold text-slate-800">{total === 0 ? 0 : (page - 1) * pageSize + 1} - {Math.min(page * pageSize, total)}</span> of <span className="font-bold text-slate-800">{total}</span> Candidates
         </div>
       </div>
 
@@ -291,14 +310,14 @@ export default function CandidatesListPage() {
                     {error}
                   </td>
                 </tr>
-              ) : filteredCandidates.length === 0 ? (
+              ) : candidates.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
                     No candidates found matching the selected criteria.
                   </td>
                 </tr>
               ) : (
-                filteredCandidates.map((c) => {
+                candidates.map((c) => {
                   const hasResume = Boolean(c.resumeFileKey || c.resumeUrl);
 
                   return (
@@ -408,6 +427,91 @@ export default function CandidatesListPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination Footer */}
+        <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between bg-slate-50/60">
+          <div className="text-xs text-slate-500 font-medium">
+            Showing <span className="font-bold text-slate-800">{total === 0 ? 0 : (page - 1) * pageSize + 1}</span> to{' '}
+            <span className="font-bold text-slate-800">{Math.min(page * pageSize, total)}</span> of{' '}
+            <span className="font-bold text-slate-800">{total}</span> candidates
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
+              <span>Rows per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-[#6E1D1D]/20 focus:border-[#6E1D1D] shadow-2xs cursor-pointer"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1 || loading}
+                className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer shadow-2xs"
+                title="Previous page"
+                aria-label="Previous page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+
+              {/* Page Number Chips */}
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                .reduce<(number | string)[]>((acc, p, idx, arr) => {
+                  if (idx > 0 && (p as number) - (arr[idx - 1] as number) > 1) {
+                    acc.push('...');
+                  }
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((item, idx) =>
+                  typeof item === 'string' ? (
+                    <span key={`dots-${idx}`} className="px-1 text-xs text-slate-400 font-bold select-none">
+                      ...
+                    </span>
+                  ) : (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => setPage(item)}
+                      disabled={loading}
+                      className={cx(
+                        'min-w-[28px] h-7 rounded-lg text-xs font-bold transition cursor-pointer shadow-2xs px-1',
+                        page === item
+                          ? 'bg-[#6E1D1D] text-white'
+                          : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                      )}
+                    >
+                      {item}
+                    </button>
+                  )
+                )}
+
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages || loading}
+                className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer shadow-2xs"
+                title="Next page"
+                aria-label="Next page"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </div>
       </Card>
 

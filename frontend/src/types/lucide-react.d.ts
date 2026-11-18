@@ -96,6 +96,7 @@ declare module 'lucide-react' {
   export const Copy: LucideIcon;
   export const Edit: LucideIcon;
   export const Eye: LucideIcon;
+  export const EyeOff: LucideIcon;
   export const History: LucideIcon;
   export const PlusCircle: LucideIcon;
   export const Printer: LucideIcon;

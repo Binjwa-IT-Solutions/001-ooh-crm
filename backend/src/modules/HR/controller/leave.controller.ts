@@ -8,6 +8,7 @@ import {
   createLeaveTypeSchema,
   employeeIdParamSchema,
   getBalanceQuerySchema,
+  summaryQuerySchema,
   leaveApprovalSchema,
   leaveRequestIdSchema,
   leaveTypeIdSchema,
@@ -295,4 +296,15 @@ export class LeaveRequestController {
   static create = applyLeave;
   static approve = approveLeave;
   static reject = rejectLeave;
+}
+
+/** GET /api/leave-requests/employee/:id/summary?year= — leave & attendance for the employee profile. */
+export async function getEmployeeLeaveSummary(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = employeeIdParamSchema.parse(req.params);
+    const query = summaryQuerySchema.parse(req.query);
+    res.json(await service.getEmployeeLeaveSummary(id, query.year, getContext(req)));
+  } catch (err) {
+    next(err);
+  }
 }

@@ -6,6 +6,7 @@ import { formatPaise, formatDate } from '@/modules/employees/format';
 import type { Payroll } from '../types';
 import { payrollApi } from '../api';
 import { X, Download, FileText, Building2, CheckCircle2, Printer } from 'lucide-react';
+import { COMPANY } from '@/shared/company';
 
 interface PayslipModalProps {
   payroll: Payroll;
@@ -102,7 +103,7 @@ export function PayslipModal({ payroll, onClose }: PayslipModalProps) {
                   MEDIA OCTUS PVT LTD
                 </h1>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Trade Tower, Bandra Kurla Complex, Mumbai - 400051
+                  {COMPANY.address}
                 </p>
                 <p className="text-xs text-slate-500">accounts@mediaoctus.com</p>
               </div>

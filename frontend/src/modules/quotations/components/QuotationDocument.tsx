@@ -15,6 +15,7 @@ import {
 import type { Quotation } from "../types";
 import { quotationsApi } from "../api";
 import ShareProposalModal from "./ShareProposalModal";
+import { COMPANY } from '@/shared/company';
 
 function PrinterIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
   return (
@@ -213,7 +214,7 @@ export default function QuotationDocument({ quotation, onBack, onNext, onRefresh
               </span>
             </div>
             <div className="mt-1 text-xs text-gray-500">
-              Media Octus Private Limited &bull; Indore, Madhya Pradesh
+              Media Octus Private Limited &bull; {COMPANY.address}
             </div>
             <div className="text-[11px] text-gray-400">
               Web: www.mediaoctus.com &bull; Email: sales@mediaoctus.com

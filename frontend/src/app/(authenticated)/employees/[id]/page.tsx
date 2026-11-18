@@ -14,7 +14,8 @@ import { employeesApi } from '@/modules/employees/api';
 import { formatDate, formatPaise, initials, tenure } from '@/modules/employees/format';
 import type { Employee } from '@/modules/employees/types';
 import { EmployeeSalaryTab } from '@/modules/payroll/components/EmployeeSalaryTab';
-import { User, Clock, CalendarDays, CreditCard, ArrowUpRight } from 'lucide-react';
+import { EmployeeLeaveAttendance } from '@/modules/hr/components/employee-leave-attendance';
+import { User, Clock, CreditCard, FileText, ExternalLink } from 'lucide-react';
 
 /**
  * REFERENCE MODULE — the detail screen.
@@ -23,6 +24,13 @@ import { User, Clock, CalendarDays, CreditCard, ArrowUpRight } from 'lucide-reac
  * present in the response, not just what the current role is. The server has
  * already stripped it, so absence is the source of truth.
  */
+
+function formatFileSize(bytes?: number): string {
+  if (!bytes) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -260,8 +268,9 @@ function EmployeeDetail({ id }: { id: string }) {
           <div className="grid gap-4 lg:grid-cols-2">
             <Panel title="Contact">
               <Row label="Work email">{employee.workEmail}</Row>
-              <Row label="Personal email">{employee.personalEmail}</Row>
-              <Row label="Mobile">{employee.mobile || '—'}</Row>
+              <Row label="Personal email">{employee.personalEmail || '—'}</Row>
+              <Row label="Office mobile">{employee.mobile || '—'}</Row>
+              <Row label="Personal mobile">{employee.personalMobile || '—'}</Row>
               <Row label="Work location">{employee.workLocation || '—'}</Row>
               <Row label="Date of birth">{formatDate(employee.dateOfBirth)}</Row>
               <Row label="Address">{employee.address || '—'}</Row>
@@ -306,6 +315,39 @@ function EmployeeDetail({ id }: { id: string }) {
               <Row label="Relationship">{employee.emergencyContact?.relationship}</Row>
               <Row label="Mobile">{employee.emergencyContact?.mobile}</Row>
             </Panel>
+
+            <Panel title="Documents">
+              {employee.documents && employee.documents.length > 0 ? (
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {employee.documents.map((doc) => (
+                    <div key={doc.id || doc.fileKey} className="flex items-center justify-between py-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-[#6E1D1D] shrink-0" />
+                        <div>
+                          <p className="font-medium text-slate-800 dark:text-slate-200">{doc.name}</p>
+                          <p className="text-xs text-slate-400">
+                            {formatFileSize(doc.fileSize)} · {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : ''}
+                          </p>
+                        </div>
+                      </div>
+                      {doc.fileUrl && (
+                        <a
+                          href={doc.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-[#6E1D1D] hover:underline font-medium"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          View
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500 py-1">No documents attached.</p>
+              )}
+            </Panel>
           </div>
 
           <Card>
@@ -338,49 +380,7 @@ function EmployeeDetail({ id }: { id: string }) {
       )}
 
       {activeTab === 'attendance' && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Card className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  Attendance Records
-                </h3>
-                <p className="mt-1 text-xs text-slate-500">
-                  Check-ins, check-outs, and monthly attendance register.
-                </p>
-              </div>
-              <Clock className="h-5 w-5 text-[#6E1D1D]" />
-            </div>
-            <div className="mt-4">
-              <Link href={`/attendance?tab=reports`}>
-                <Button variant="secondary" className="w-full text-xs flex items-center justify-center gap-1.5">
-                  View Attendance Reports <ArrowUpRight className="h-3.5 w-3.5" />
-                </Button>
-              </Link>
-            </div>
-          </Card>
-
-          <Card className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  Leave & Balances
-                </h3>
-                <p className="mt-1 text-xs text-slate-500">
-                  Employee leave history, balances, and request status.
-                </p>
-              </div>
-              <CalendarDays className="h-5 w-5 text-[#6E1D1D]" />
-            </div>
-            <div className="mt-4">
-              <Link href={`/leave`}>
-                <Button variant="secondary" className="w-full text-xs flex items-center justify-center gap-1.5">
-                  View Leave Records <ArrowUpRight className="h-3.5 w-3.5" />
-                </Button>
-              </Link>
-            </div>
-          </Card>
-        </div>
+        <EmployeeLeaveAttendance employeeId={employee.id} employeeName={employee.fullName} />
       )}
 
       {activeTab === 'salary' && canViewSalary && (

@@ -24,6 +24,7 @@ import { RecentPricesWidget } from './RecentPricesWidget';
 import { BankAccountModal } from './BankAccountModal';
 import { api } from '@/shared/api/client';
 import { formatCurrency } from '../utils/formatters';
+import { DEFAULT_PLACE_OF_SUPPLY, placeOfSupplyFromGstin } from '@/shared/company';
 
 interface LineItemState {
   name: string;
@@ -70,7 +71,7 @@ export function InvoiceForm({ initialInvoice, defaultType = 'sales_invoice', isE
   const [billingAddress, setBillingAddress] = useState(initialInvoice?.billingAddress || '');
   const [shippingAddress, setShippingAddress] = useState(initialInvoice?.shippingAddress || '');
   const [gstin, setGstin] = useState(initialInvoice?.gstin || '');
-  const [placeOfSupply, setPlaceOfSupply] = useState(initialInvoice?.placeOfSupply || 'Maharashtra (27)');
+  const [placeOfSupply, setPlaceOfSupply] = useState(initialInvoice?.placeOfSupply || DEFAULT_PLACE_OF_SUPPLY);
   const [contactPerson, setContactPerson] = useState(initialInvoice?.contactPerson || '');
   const [contactMobile, setContactMobile] = useState(initialInvoice?.contactMobile || '');
   const [contactEmail, setContactEmail] = useState(initialInvoice?.contactEmail || '');
@@ -163,7 +164,7 @@ export function InvoiceForm({ initialInvoice, defaultType = 'sales_invoice', isE
   );
   const [termsAndConditions, setTermsAndConditions] = useState(
     initialInvoice?.termsAndConditions ||
-      '1. Payment due within the stipulated due date.\n2. Invoices overdue beyond 15 days will incur 18% p.a. interest.\n3. All disputes subject to Mumbai jurisdiction.'
+      '1. Payment due within the stipulated due date.\n2. Invoices overdue beyond 15 days will incur 18% p.a. interest.\n3. All disputes subject to Indore jurisdiction.'
   );
   const [notes, setNotes] = useState(initialInvoice?.notes || '');
   const [editNote, setEditNote] = useState('');
@@ -245,9 +246,10 @@ export function InvoiceForm({ initialInvoice, defaultType = 'sales_invoice', isE
       if (lead.contactPerson) setContactPerson(lead.contactPerson);
       if (lead.mobile) setContactMobile(lead.mobile);
       if (lead.email) setContactEmail(lead.email);
-      if (lead.city) {
-        setPlaceOfSupply(`${lead.city}, Maharashtra (27)`);
-      }
+      // Place of supply = the client's state. The GSTIN's first two digits tell us which one.
+      const fromGstin = placeOfSupplyFromGstin(lead.gstin);
+      if (fromGstin) setPlaceOfSupply(fromGstin);
+      else if (lead.city) setPlaceOfSupply(lead.city);
     }
   };
 
@@ -595,7 +597,7 @@ export function InvoiceForm({ initialInvoice, defaultType = 'sales_invoice', isE
                 type="text"
                 value={placeOfSupply}
                 onChange={(e) => setPlaceOfSupply(e.target.value)}
-                placeholder="Maharashtra (27)"
+                placeholder="Madhya Pradesh (23)"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:border-[#6E1D1D] focus:ring-1 focus:ring-[#6E1D1D] outline-none"
               />
             </div>

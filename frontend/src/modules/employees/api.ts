@@ -50,6 +50,8 @@ function toPayload(values: EmployeeFormValues): Record<string, unknown> {
 
   const optional: Array<[string, string | undefined]> = [
     ['personalEmail', values.personalEmail],
+    ['personalMobile', values.personalMobile],
+    ['personalMobile', values.personalMobile],
     ['dateOfBirth', values.dateOfBirth],
     ['dateOfExit', values.dateOfExit],
     ['reportingManagerId', values.reportingManagerId],
@@ -89,6 +91,7 @@ export type SelfProfileValues = Pick<
   EmployeeFormValues,
   | 'fullName'
   | 'mobile'
+  | 'personalMobile'
   | 'personalEmail'
   | 'dateOfBirth'
   | 'workLocation'
@@ -216,5 +219,19 @@ export const employeesApi = {
       .then((res) => res.employee),
 
   deactivate: (id: string) => api.delete<{ id: string }>(`/api/employees/${id}`),
+
+  uploadDocument: (id: string, file: File, title?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (title) formData.append('title', title);
+    return api
+      .post<{ message: string; employee: Employee }>(`/api/employees/${id}/documents`, formData)
+      .then((res) => res.employee);
+  },
+
+  deleteDocument: (id: string, docId: string) =>
+    api
+      .delete<{ message: string; employee: Employee }>(`/api/employees/${id}/documents/${docId}`)
+      .then((res) => res.employee),
 };
 

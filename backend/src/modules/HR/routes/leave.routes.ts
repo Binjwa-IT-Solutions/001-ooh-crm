@@ -22,6 +22,11 @@ leaveRoutes.get('/me', requirePermission('leave.self'), asyncHandler(controller.
 leaveRoutes.get('/team', requirePermission('leave.manage'), asyncHandler(controller.getTeamRequests));
 leaveRoutes.get('/pending', requirePermission('leave.manage'), asyncHandler(controller.getTeamRequests));
 leaveRoutes.get('/calendar', requirePermission('leave.self'), asyncHandler(controller.getCalendarLeaves));
+leaveRoutes.get(
+  '/employee/:id/summary',
+  requirePermission('leave.self'), // the service allows HR/admin, the person themselves, or their manager
+  asyncHandler(controller.getEmployeeLeaveSummary)
+);
 
 // Request lifecycle actions
 leaveRoutes.post('/:id/approve', requirePermission('leave.manage'), asyncHandler(controller.approveLeave));

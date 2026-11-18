@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import PDFDocument from 'pdfkit';
+import { COMPANY } from '../../config/company.js';
 
 /**
  * PDF GENERATION SCAFFOLD.
@@ -28,10 +29,10 @@ export interface PdfBrand {
   gstin?: string;
 }
 
-/** Replace with the client's real details once branding is signed off. */
+/** Default letterhead for generated PDFs — address comes from config/company.ts. */
 export const DEFAULT_BRAND: PdfBrand = {
-  companyName: 'Media Octus',
-  addressLines: ['Mumbai, Maharashtra', 'India'],
+  companyName: COMPANY.name,
+  addressLines: [...COMPANY.addressLines],
   email: 'hello@mediaoctus.com',
 };
 
@@ -429,10 +430,7 @@ export function renderQuotationBillBookPdf(options: QuotationBillBookPdfOptions)
 
   const seller = {
     companyName: options.seller?.companyName || 'Media Octus',
-    addressLines: options.seller?.addressLines || [
-      '4th floor Gargi Aura Building near Scheme no114',
-      'Indore, Madhya Pradesh 452010',
-    ],
+    addressLines: options.seller?.addressLines || [...COMPANY.addressLines],
     gstin: options.seller?.gstin || '23DRHPS3516P1ZZ',
     pan: options.seller?.pan || 'DRHPS3516P',
     email: options.seller?.email || 'mediaoctus005@gmail.com',

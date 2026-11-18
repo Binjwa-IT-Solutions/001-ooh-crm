@@ -21,6 +21,7 @@ import {
   TrendingUp,
   Clock,
   CalendarDays,
+  CalendarCheck,
   ShieldCheck,
   AlertTriangle,
   CreditCard,
@@ -35,6 +36,8 @@ import { useAuth } from '../auth/auth-context';
 import { ROLE_LABELS } from '../auth/types';
 import { Button, cx } from '../ui';
 import NotificationBell from './NotificationBell';
+import { ChatbotNavButton } from '../chatbot/ChatbotNavButton';
+import { AttendanceNavButton } from '@/modules/hr/components/attendance-nav-button';
 import ProfileMenu from './ProfileMenu';
 import { PageHeaderProvider } from './page-header-context';
 import { PageHeader } from './page-header';
@@ -54,7 +57,11 @@ interface NavGroup {
 export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Overview',
-    items: [{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }],
+    items: [
+      { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      // Holidays & approved leave — for everyone
+      { href: '/calendar', label: 'Calendar', icon: CalendarCheck },
+    ],
   },
   {
     label: 'SALES',
@@ -126,7 +133,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: '/security/approvals',
         label: 'Login approvals',
         icon: ShieldCheck,
-        roles: ['admin'],
+        roles: ['admin', 'hr'],
       },
     ],
   },
@@ -287,6 +294,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                     />
                   </div>
                 </form>
+
+                {/* Check in / Check out — always visible */}
+                <AttendanceNavButton />
+
+                {/* Ask Octus AI Navbar Button */}
+                <ChatbotNavButton />
 
                 <div className="flex items-center gap-x-3">
                   {/* Notification Bell */}

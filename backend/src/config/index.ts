@@ -153,6 +153,19 @@ export const config = {
       .filter(Boolean),
   },
 
+  /** Public URL of the web app — used to build links in emails (e.g. password reset). */
+  appUrl: (
+    process.env.APP_URL ??
+    (process.env.CORS_ORIGINS ?? 'http://localhost:3000').split(',')[0]?.trim() ??
+    'http://localhost:3000'
+  ).replace(/\/+$/, ''),
+
+  passwordReset: {
+    ttlMinutes: num('PASSWORD_RESET_TTL_MINUTES', 30),
+    /** Minimum gap between two reset emails for the same account. */
+    cooldownSeconds: num('PASSWORD_RESET_COOLDOWN_SECONDS', 60),
+  },
+
   jwt: {
     secret: required('JWT_SECRET', 'dev-only-jwt-secret-change-me'),
     // Short-lived access token; the refresh token carries the long session.

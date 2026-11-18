@@ -10,6 +10,7 @@ import { NotFoundError, ValidationError, ForbiddenError } from '../../../core/er
 import { toObjectId } from '../../../core/db/basePlugin.js';
 import type { RequestContext } from '../../../core/context.js';
 import { renderPdf, formatPaise, lineItemsTable, horizontalRule, type TableColumn } from '../../../core/pdf/index.js';
+import { COMPANY } from '../../../config/company.js';
 import type {
   CreateInvoiceInput,
   UpdateInvoiceInput,
@@ -259,7 +260,7 @@ function toInvoiceDto(doc: any, linkedPayments: any[] = []): InvoiceDto {
     billingAddress: doc.billingAddress || '',
     shippingAddress: doc.shippingAddress || '',
     gstin: doc.gstin || '',
-    placeOfSupply: doc.placeOfSupply || 'Maharashtra (27)',
+    placeOfSupply: doc.placeOfSupply || COMPANY.defaultPlaceOfSupply,
     contactPerson: doc.contactPerson || '',
     contactMobile: doc.contactMobile || '',
     contactEmail: doc.contactEmail || '',
@@ -381,7 +382,7 @@ export const invoiceService = {
       billingAddress: input.billingAddress || '',
       shippingAddress: input.shippingAddress || '',
       gstin: input.gstin || '',
-      placeOfSupply: input.placeOfSupply || 'Maharashtra (27)',
+      placeOfSupply: input.placeOfSupply || COMPANY.defaultPlaceOfSupply,
       contactPerson: input.contactPerson || '',
       contactMobile: input.contactMobile || '',
       contactEmail: input.contactEmail || '',

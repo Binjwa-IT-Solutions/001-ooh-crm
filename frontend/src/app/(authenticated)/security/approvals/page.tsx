@@ -174,7 +174,8 @@ function ApprovalsPageContent() {
   const [reloadVersion, setReloadVersion] = useState(0);
 
   useEffect(() => {
-    if (user?.role !== 'admin') return;
+    // Admins and HR can both review login approvals (the API allows both roles).
+    if (user?.role !== 'admin' && user?.role !== 'hr') return;
     let cancelled = false;
 
     async function fetchApprovals() {
@@ -201,9 +202,9 @@ function ApprovalsPageContent() {
     };
   }, [reloadVersion, user?.role]);
 
-  if (user?.role !== 'admin') {
+  if (user?.role !== 'admin' && user?.role !== 'hr') {
     return (
-      <Alert tone="error" title="Admin access required">
+      <Alert tone="error" title="Access required">
         You do not have permission to review login requests.
       </Alert>
     );

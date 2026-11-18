@@ -134,3 +134,17 @@ export type ListUsersInput = z.infer<typeof listUsersSchema>;
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
+
+export const forgotPasswordSchema = z.object({ email });
+
+const resetToken = z
+  .string()
+  .trim()
+  .regex(/^[0-9a-f]{64}$/, 'This reset link is invalid or has expired. Please request a new one.');
+
+export const resetPasswordSchema = z.object({
+  token: resetToken,
+  password,
+});
+
+export const resetTokenParamSchema = z.object({ token: resetToken });

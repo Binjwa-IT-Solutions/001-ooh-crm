@@ -1,3 +1,4 @@
+import { fileService } from '../../core/files/index.js';
 import { Types } from 'mongoose';
 
 import type { RequestContext } from '../../core/context.js';
@@ -37,6 +38,16 @@ import type {
  */
 
 /** What the API returns. Sensitive fields are absent unless the caller may see them. */
+export interface EmployeeDocumentDto {
+  id: string;
+  name: string;
+  fileKey: string;
+  fileUrl?: string;
+  fileSize?: number;
+  mimeType?: string;
+  uploadedAt?: string;
+}
+
 export interface EmployeeDto {
   id: string;
   employeeCode: string;
@@ -44,6 +55,7 @@ export interface EmployeeDto {
   workEmail: string;
   personalEmail?: string;
   mobile: string;
+  personalMobile?: string;
   dateOfBirth: string | null;
   department: string;
   designation: string;
@@ -59,6 +71,7 @@ export interface EmployeeDto {
   address?: string;
   createdAt: string;
   updatedAt: string;
+  documents?: EmployeeDocumentDto[];
 
   // Present only when the caller holds `employees.sensitive`.
   panNumber?: string;
@@ -158,6 +171,7 @@ function toDto(employee: IEmployee, includeSensitive: boolean): EmployeeDto {
     workEmail: employee.workEmail,
     personalEmail: employee.personalEmail,
     mobile: employee.mobile || '',
+    personalMobile: employee.personalMobile || '',
     dateOfBirth: iso(employee.dateOfBirth),
     department: employee.department || '',
     designation: employee.designation || '',
@@ -177,6 +191,15 @@ function toDto(employee: IEmployee, includeSensitive: boolean): EmployeeDto {
     isProfileComplete,
     emergencyContact: employee.emergencyContact,
     address: employee.address,
+    documents: (employee.documents || []).map((d: any) => ({
+      id: String(d._id || d.id),
+      name: d.name,
+      fileKey: d.fileKey,
+      fileUrl: d.fileUrl || (d.fileKey ? `/files/${d.fileKey}` : ''),
+      fileSize: d.fileSize,
+      mimeType: d.mimeType,
+      uploadedAt: iso(d.uploadedAt) as string,
+    })),
     createdAt: iso(employee.createdAt) as string,
     updatedAt: iso(employee.updatedAt) as string,
   };
@@ -1834,5 +1857,65 @@ export const employeeService = {
     await newEmployee.populate('reportingManagerId', 'fullName designation');
     return newEmployee;
   },
-};
+  async attachDocument(
+    id: string,
+    file: Express.Multer.File | undefined,
+    title: string | undefined,
+    ctx: RequestContext,
+  ): Promise<EmployeeDto> {
+    if (!file) throw new ValidationError('No file was uploaded');
+    const MAX_10MB = 10 * 1024 * 1024;
+    if (file.size > MAX_10MB) {
+      throw new ValidationError('File size must be less than 10 MB');
+    }
 
+    const employee = await Employee.findById(id);
+    if (!employee) throw new NotFoundError('Employee not found');
+
+    const stored = await fileService.save(file, { folder: 'employees', ctx });
+
+    const newDoc = {
+      name: title?.trim() || file.originalname,
+      fileKey: stored.key,
+      fileUrl: stored.url,
+      fileSize: stored.size,
+      mimeType: stored.contentType,
+      uploadedAt: new Date(),
+      uploadedBy: toObjectId(ctx.user.id),
+    };
+
+    employee.documents = employee.documents || [];
+    employee.documents.push(newDoc as any);
+    await employee.save();
+
+    return toDto(employee, canSeeSensitive(ctx));
+  },
+
+  async deleteDocument(
+    id: string,
+    docId: string,
+    ctx: RequestContext,
+  ): Promise<EmployeeDto> {
+    const employee = await Employee.findById(id);
+    if (!employee) throw new NotFoundError('Employee not found');
+
+    const docIndex = (employee.documents || []).findIndex(
+      (d: any) => String(d._id) === docId || String(d.id) === docId,
+    );
+    if (docIndex === -1) throw new NotFoundError('Document not found');
+
+    const doc = employee.documents![docIndex];
+    if (doc.fileKey) {
+      try {
+        await fileService.remove(doc.fileKey);
+      } catch {
+        // Continue even if file already absent from storage
+      }
+    }
+
+    employee.documents!.splice(docIndex, 1);
+    await employee.save();
+
+    return toDto(employee, canSeeSensitive(ctx));
+  },
+};

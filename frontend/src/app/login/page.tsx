@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState, type FormEvent } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -100,7 +101,7 @@ function LoginForm() {
           setResendIn(result.challenge.resendAvailableInSeconds);
           setApprovalRequestId(null);
           setApprovalPollToken(null);
-          setNotice('An administrator approved your login. Complete verification to continue.');
+          setNotice('Your login request was approved. Complete verification to continue.');
           setStep('otp');
           return;
         }
@@ -110,7 +111,7 @@ function LoginForm() {
           setApprovalPollToken(null);
           setError(
             result.status === 'denied'
-              ? 'An administrator denied this login request.'
+              ? 'An administrator or HR reviewer denied this login request.'
               : 'This login approval request expired. Please sign in again.',
           );
           setStep('credentials');
@@ -134,8 +135,12 @@ function LoginForm() {
 
   const displayedNotice =
     notice ??
-    (searchParams.get('reason') === 'expired' && step === 'credentials' && !error
-      ? 'Your session expired. Please sign in again.'
+    (step === 'credentials' && !error
+      ? searchParams.get('reason') === 'expired'
+        ? 'Your session expired. Please sign in again.'
+        : searchParams.get('reason') === 'password-reset'
+          ? 'Your password has been reset. Sign in with your new password.'
+          : null
       : null);
 
   function applyError(err: unknown) {
@@ -432,9 +437,16 @@ function LoginForm() {
                       </div>
 
                       <div className="text-sm">
-                        <a href="#" className="font-semibold text-slate-800 hover:text-[#6a1b21]">
+                        <Link
+                          href={
+                            email.trim()
+                              ? `/forgot-password?email=${encodeURIComponent(email.trim())}`
+                              : '/forgot-password'
+                          }
+                          className="font-semibold text-slate-800 hover:text-[#6a1b21]"
+                        >
                           Forgot Password?
-                        </a>
+                        </Link>
                       </div>
                     </div>
 
@@ -635,9 +647,9 @@ function LoginForm() {
                     <ShieldCheck className="h-6 w-6" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-slate-900">Admin approval required</h2>
+                    <h2 className="text-xl font-bold text-slate-900">Approval required</h2>
                     <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                      This device or location needs administrator approval. An administrator has
+                      This device or location needs administrator or HR approval. A reviewer has
                       been alerted. After approval, you’ll still need to complete your authenticator
                       verification. Location is requested once for this sign-in only.
                     </p>
@@ -645,7 +657,7 @@ function LoginForm() {
                   {error && <Alert tone="error">{error}</Alert>}
                   <div className="flex items-center justify-center gap-2 text-sm font-medium text-slate-600">
                     <Spinner className="h-4 w-4" />
-                    Waiting for an administrator
+                    Waiting for approval from an administrator or HR
                   </div>
                   <button
                     type="button"

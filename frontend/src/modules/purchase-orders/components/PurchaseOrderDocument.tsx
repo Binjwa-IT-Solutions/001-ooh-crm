@@ -32,6 +32,7 @@ function ShareIcon({ className = "h-4 w-4" }: { className?: string }) {
 }
 
 import type { PurchaseOrder } from "../types";
+import { COMPANY } from '@/shared/company';
 import {
   formatDate,
   getCampaignName,
@@ -397,8 +398,7 @@ export default function PurchaseOrderDocument({
                 {order.companyName || "MEDIA OCTUS"}
               </p>
               <p className="text-gray-600 leading-relaxed whitespace-pre-line">
-                {order.companyAddress ||
-                  "4th floor Gargi Aura Building, Indore,\nMadhya Pradesh, 452010"}
+                {order.companyAddress || COMPANY.addressLines.join('\n')}
               </p>
               <p className="pt-1 text-gray-700">
                 <span className="font-semibold">GSTIN :</span>{" "}

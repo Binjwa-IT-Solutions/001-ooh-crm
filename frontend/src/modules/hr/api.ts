@@ -3,6 +3,7 @@ import {
   Attendance,
   BreakRecord,
   LeaveType,
+  EmployeeLeaveSummary,
   LeaveRequest,
   LeaveBalance,
   WorkType,
@@ -37,6 +38,15 @@ export const attendanceApi = {
     }>(`/api/attendance/me/summary?month=${month}&year=${year}`, { skipAuth: false });
     return res;
   },
+  /** HR / admin: punch in for someone whose device isn't working. */
+  hrCheckIn: (employeeId: string, data: { time?: string; reason?: string } = {}) =>
+    api.post<Attendance>(`/api/attendance/employees/${employeeId}/check-in`, data),
+  /** HR / admin: punch out for someone. */
+  hrCheckOut: (employeeId: string, data: { time?: string; reason?: string } = {}) =>
+    api.post<Attendance>(`/api/attendance/employees/${employeeId}/check-out`, data),
+  /** HR / admin: undo a mistaken check-out — the person is still working. */
+  hrResume: (employeeId: string, data: { reason?: string } = {}) =>
+    api.post<Attendance>(`/api/attendance/employees/${employeeId}/resume`, data),
   getTeamAttendance: async (params?: Record<string, string | number | boolean>) => {
     const qs = params ? new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString() : '';
     const res = await api.get<Attendance[]>(`/api/attendance/team${qs ? `?${qs}` : ''}`, { skipAuth: false });
@@ -52,10 +62,12 @@ export const leaveApi = {
   createLeaveType: async (data: Partial<LeaveType>) => {
     const res = await api.post<{ leaveType: LeaveType }>('/api/leave-types', {
       name: data.name,
-      code: data.code,
-      annualQuota: data.annualQuota ?? null,
+      ...(data.code ? { code: data.code } : {}), // generated from the name when empty
+      quotaPeriod: data.quotaPeriod ?? 'Yearly',
+      quotaDays: data.quotaDays ?? 0,
       carryForward: data.carryForward ?? false,
       maxCarryForward: data.maxCarryForward ?? 0,
+      carryForwardExpiryMonths: data.carryForwardExpiryMonths ?? null,
       encashable: data.encashable ?? false,
       requiresDocument: data.requiresDocument ?? false,
     });
@@ -69,6 +81,10 @@ export const leaveApi = {
     const res = await api.delete<{ message: string; leaveType: LeaveType }>(`/api/leave-types/${id}`);
     return res.leaveType;
   },
+  /** Leave & attendance for one employee (profile → Attendance tab). */
+  getEmployeeSummary: async (employeeId: string, year = new Date().getFullYear()) =>
+    api.get<EmployeeLeaveSummary>(`/api/leave-requests/employee/${employeeId}/summary?year=${year}`),
+
   getBalance: async (employeeId?: string, year = new Date().getFullYear()) => {
     if (!employeeId) {
       const res = await api.get<{ balances: LeaveBalance[] } | LeaveBalance[]>('/api/leave-requests/balance');
@@ -208,6 +224,7 @@ export const candidatesApi = {
       if (query.status) params.set('status', query.status);
       if (query.position) params.set('position', query.position);
       if (query.search) params.set('search', query.search);
+      if (query.resume && query.resume !== 'all') params.set('resume', query.resume);
       if (query.startDate) params.set('startDate', query.startDate);
       if (query.endDate) params.set('endDate', query.endDate);
       if (query.page) params.set('page', String(query.page));
@@ -229,7 +246,40 @@ export const candidatesApi = {
     return await api.post<{ data: Candidate }>('/api/candidates', formData);
   },
 
-  update: async (id: string, data: { status?: CandidateStatus; notes?: string }) => {
+  update: async (id: string, data: Partial<Candidate> | FormData | Record<string, any>) => {
     return await api.patch<{ data: Candidate }>(`/api/candidates/${id}`, data);
+  },
+
+  addRound: async (
+    id: string,
+    round: {
+      roundNumber?: number;
+      roundName?: string;
+      interviewDate: string;
+      interviewedBy: string;
+      notes?: string;
+      status?: string;
+    }
+  ) => {
+    return await api.post<{ data: Candidate }>(`/api/candidates/${id}/rounds`, round);
+  },
+
+  updateRound: async (
+    id: string,
+    roundId: string,
+    round: {
+      roundNumber?: number;
+      roundName?: string;
+      interviewDate?: string;
+      interviewedBy?: string;
+      notes?: string;
+      status?: string;
+    }
+  ) => {
+    return await api.patch<{ data: Candidate }>(`/api/candidates/${id}/rounds/${roundId}`, round);
+  },
+
+  deleteRound: async (id: string, roundId: string) => {
+    return await api.delete<{ data: Candidate }>(`/api/candidates/${id}/rounds/${roundId}`);
   },
 };

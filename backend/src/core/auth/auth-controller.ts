@@ -16,7 +16,11 @@ import {
   updateUserSchema,
   userIdParamSchema,
   verifyOtpSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  resetTokenParamSchema,
 } from './auth-validator.js';
+import { checkPasswordResetToken, requestPasswordReset, resetPassword } from './password-reset.js';
 import { auditService } from '../audit/index.js';
 
 /**
@@ -206,3 +210,32 @@ export class AuthController {
     res.status(200).json({ user });
   }
 }
+
+/**
+ * Self-service password reset (public, no auth). Kept separate from AuthController's
+ * login flow — see core/auth/password-reset.ts for the security notes.
+ */
+export const PasswordResetController = {
+  /** POST /api/auth/forgot-password */
+  async forgotPassword(req: Request, res: Response) {
+    const { email } = forgotPasswordSchema.parse(req.body);
+    const result = await requestPasswordReset(email, { ip: req.ip });
+    res.status(200).json(result);
+  },
+
+  /** GET /api/auth/reset-password/:token — is the link still usable? */
+  async checkResetToken(req: Request, res: Response) {
+    const parsed = resetTokenParamSchema.safeParse(req.params);
+    if (!parsed.success) {
+      res.status(200).json({ valid: false });
+      return;
+    }
+    res.status(200).json(await checkPasswordResetToken(parsed.data.token));
+  },
+
+  /** POST /api/auth/reset-password */
+  async resetPassword(req: Request, res: Response) {
+    const { token, password } = resetPasswordSchema.parse(req.body);
+    res.status(200).json(await resetPassword(token, password));
+  },
+};

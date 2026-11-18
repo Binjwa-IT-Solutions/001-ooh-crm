@@ -5,6 +5,7 @@ import { Download, Printer, AlertCircle, Loader2, Building2, CreditCard } from '
 import { invoicesApi } from '@/modules/finance/api';
 import type { Invoice } from '@/modules/finance/types';
 import { formatCurrency, formatDate } from '@/modules/finance/utils/formatters';
+import { COMPANY, DEFAULT_PLACE_OF_SUPPLY } from '@/shared/company';
 
 interface PublicShareInvoicePageProps {
   params: Promise<{ token: string }>;
@@ -112,9 +113,9 @@ export default function PublicShareInvoicePage({ params }: PublicShareInvoicePag
               <img src="/logo.png?v=4" alt="Media Octus" className="h-12 w-auto object-contain mb-3" />
               <h2 className="text-base font-bold text-slate-900">Media Octus Pvt Ltd</h2>
               <p className="text-xs text-slate-500 leading-relaxed max-w-xs">
-                Trade Tower, 4th Floor, Bandra Kurla Complex,
+                {COMPANY.addressLines[0]},
                 <br />
-                Mumbai, Maharashtra - 400051, India
+                {COMPANY.addressLines[1]}, India
                 <br />
                 GSTIN: 27AABCM8899K1ZZ · Email: accounts@mediaoctus.com
                 <br />
@@ -138,7 +139,7 @@ export default function PublicShareInvoicePage({ params }: PublicShareInvoicePag
                 </div>
                 <div>
                   <span className="font-medium text-slate-700">Place of Supply: </span>
-                  {invoice.placeOfSupply || 'Maharashtra (27)'}
+                  {invoice.placeOfSupply || DEFAULT_PLACE_OF_SUPPLY}
                 </div>
               </div>
             </div>

@@ -30,7 +30,14 @@ function formatElapsed(ms: number) {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
-export function AttendanceWidget() {
+export function AttendanceWidget({
+  onChange,
+  className = '',
+}: {
+  /** Called after a successful check-in / check-out (e.g. to refresh the nav bar button). */
+  onChange?: () => void;
+  className?: string;
+} = {}) {
   const { data: attendance, isLoading, mutate } = useMyAttendance();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -180,6 +187,7 @@ export function AttendanceWidget() {
       }
 
       await mutate();
+      onChange?.();
       if (gpsFlag) {
         // Optional: show a toast or note about GPS failure, but do not block
       }
@@ -220,7 +228,7 @@ export function AttendanceWidget() {
     : Math.max(0, netWorkingHours - requiredHours);
 
   return (
-    <Card className="p-6 space-y-4">
+    <Card className={`p-6 space-y-4 ${className}`}>
       <div className="flex justify-between  items-center">
         <div>
           <h3 className="text-lg font-semibold text-slate-800">Attendance</h3>

@@ -25,6 +25,9 @@ import type { AuthSessionResponse, AuthUser } from './types';
  * `user` by hand in every component.
  */
 
+/** sessionStorage flag set on a fresh sign-in; read (and cleared) by the check-in reminder. */
+export const JUST_SIGNED_IN_KEY = 'mo.justSignedIn';
+
 interface AuthContextValue {
   user: AuthUser | null;
   /** True until the stored session has been checked on first load. */
@@ -90,6 +93,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [router]);
 
   const completeSignIn = useCallback((session: AuthSessionResponse) => {
+    // Lets the app shell show the "don't forget to check in" reminder right after login.
+    try {
+      window.sessionStorage.setItem(JUST_SIGNED_IN_KEY, '1');
+    } catch {
+      /* storage unavailable — the reminder simply won't auto-open */
+    }
     sessionStore.save({
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,

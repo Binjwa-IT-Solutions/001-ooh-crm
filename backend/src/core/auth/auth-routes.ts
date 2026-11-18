@@ -2,7 +2,7 @@ import { Router } from 'express';
 
 import { asyncHandler } from '../http/asyncHandler.js';
 import { requirePermission, requireRole } from '../rbac/index.js';
-import { AuthController } from './auth-controller.js';
+import { AuthController, PasswordResetController } from './auth-controller.js';
 import { requireAuth } from './auth-middleware.js';
 import { SecurityController } from './security-controller.js';
 
@@ -16,6 +16,11 @@ router.post('/email-fallback', asyncHandler(AuthController.requestEmailFallback)
 router.post('/complete-mfa-enrollment', asyncHandler(AuthController.completeMfaEnrollment));
 router.post('/refresh', asyncHandler(AuthController.refresh));
 
+// Self-service password reset (public)
+router.post('/forgot-password', asyncHandler(PasswordResetController.forgotPassword));
+router.get('/reset-password/:token', asyncHandler(PasswordResetController.checkResetToken));
+router.post('/reset-password', asyncHandler(PasswordResetController.resetPassword));
+
 // Login approval status is polled by the same unauthenticated browser that
 // started the challenge. Approval decisions require admin.
 router.post(
@@ -25,19 +30,19 @@ router.post(
 router.get(
   '/security/login-events',
   requireAuth,
-  requireRole(['admin']),
+  requireRole(['admin', 'hr']),
   asyncHandler(SecurityController.listLoginEvents),
 );
 router.get(
   '/security/login-approvals',
   requireAuth,
-  requireRole(['admin']),
+  requireRole(['admin', 'hr']),
   asyncHandler(SecurityController.listLoginApprovals),
 );
 router.post(
   '/security/login-approvals/:id/decision',
   requireAuth,
-  requireRole(['admin']),
+  requireRole(['admin', 'hr']),
   asyncHandler(SecurityController.decideLoginApproval),
 );
 

@@ -18,6 +18,7 @@ function fromEmployee(employee: Partial<Employee>): SelfProfileValues {
   return {
     fullName: employee.fullName ?? '',
     mobile: employee.mobile ?? '',
+    personalMobile: employee.personalMobile ?? '',
     personalEmail: employee.personalEmail ?? '',
     dateOfBirth: toDateInput(employee.dateOfBirth),
     workLocation: employee.workLocation ?? '',
@@ -97,12 +98,20 @@ export function SelfProfileForm({ employee, onSaved, secondaryAction }: SelfProf
           onChange={(e) => set('fullName', e.target.value)}
         />
         <Field
-          label="Mobile"
+          label="Office mobile"
           inputMode="numeric"
           placeholder="9876543210"
           value={values.mobile}
           error={fieldErrors.mobile}
           onChange={(e) => set('mobile', e.target.value.replace(/\D/g, '').slice(0, 10))}
+        />
+        <Field
+          label="Personal mobile"
+          inputMode="numeric"
+          placeholder="9876543210"
+          value={values.personalMobile}
+          error={fieldErrors.personalMobile}
+          onChange={(e) => set('personalMobile', e.target.value.replace(/\D/g, '').slice(0, 10))}
         />
         <Field
           label="Work email"

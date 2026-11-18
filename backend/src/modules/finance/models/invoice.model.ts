@@ -1,4 +1,5 @@
 import mongoose, { Schema, Types } from 'mongoose';
+import { COMPANY } from '../../../config/company.js';
 import { basePlugin, type BaseDocument } from '../../../core/db/basePlugin.js';
 
 export const INVOICE_TYPES = ['sales_invoice', 'proforma'] as const;
@@ -179,7 +180,7 @@ const invoiceSchema = new Schema<IInvoice>(
     },
     placeOfSupply: {
       type: String,
-      default: 'Maharashtra (27)',
+      default: COMPANY.defaultPlaceOfSupply,
       trim: true,
     },
     contactPerson: {

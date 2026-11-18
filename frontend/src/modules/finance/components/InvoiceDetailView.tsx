@@ -28,6 +28,7 @@ import { invoicesApi } from '../api';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { InvoiceEditHistoryModal } from './InvoiceEditHistoryModal';
 import { PaymentInModal } from './PaymentInModal';
+import { COMPANY, DEFAULT_PLACE_OF_SUPPLY } from '@/shared/company';
 
 interface InvoiceDetailViewProps {
   invoice: Invoice;
@@ -323,9 +324,9 @@ export function InvoiceDetailView({ invoice, onRefresh }: InvoiceDetailViewProps
             <img src="/logo.png?v=4" alt="Media Octus" className="h-12 w-auto object-contain mb-3" />
             <h2 className="text-base font-bold text-slate-900">Media Octus Pvt Ltd</h2>
             <p className="text-xs text-slate-500 leading-relaxed max-w-xs">
-              Trade Tower, 4th Floor, Bandra Kurla Complex,
+              {COMPANY.addressLines[0]},
               <br />
-              Mumbai, Maharashtra - 400051, India
+              {COMPANY.addressLines[1]}, India
               <br />
               GSTIN: 27AABCM8899K1ZZ · Email: accounts@mediaoctus.com
               <br />
@@ -349,7 +350,7 @@ export function InvoiceDetailView({ invoice, onRefresh }: InvoiceDetailViewProps
               </div>
               <div>
                 <span className="font-medium text-slate-700">Place of Supply: </span>
-                {invoice.placeOfSupply || 'Maharashtra (27)'}
+                {invoice.placeOfSupply || DEFAULT_PLACE_OF_SUPPLY}
               </div>
               {invoice.campaignName && (
                 <div>
